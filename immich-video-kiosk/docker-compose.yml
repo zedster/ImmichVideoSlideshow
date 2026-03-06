@@ -1,0 +1,11 @@
+services:
+  immich-video-kiosk:
+    image: php:8.2-apache
+    ports:
+      - "8095:80"
+    env_file:
+      - .env
+    volumes:
+      - ./index.php:/var/www/html/index.php:ro
+      - ./video.php:/var/www/html/video.php:ro
+    restart: unless-stopped
