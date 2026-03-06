@@ -28,6 +28,7 @@ Required variables:
 - `USE_SQLITE_CACHE` - Enable local SQLite metadata cache and random DB selection (default `true`)
 - `SQLITE_PATH` - SQLite database path inside container (default `/var/www/html/data/videos.sqlite`)
 - `SYNC_ON_STARTUP` - Automatically sync metadata when DB is empty/no qualifying videos (default `true`)
+- `SHOW_SYNC_STATUS` - Show live sync/import status page and auto-reload when done (default `true`)
 - `SYNC_PAGE_SIZE` - Number of videos to request per sync page from Immich (default `200`)
 - `SYNC_MAX_PAGES` - Maximum pages to scan per sync run (default `200`)
 - `DEBUG` - Set to `true` to show debug overlay in `index.php` and enable PHP error display (default `false`)
@@ -65,6 +66,7 @@ docker compose logs -f
   - `http://localhost:8095/?sync=1`
 
 This triggers a fresh metadata sync from Immich into SQLite (videos + duration + exif/location + faces count), then picks a random qualifying video from DB.
+If `SHOW_SYNC_STATUS=true`, you will see a live progress log page during sync and it will auto-reload back to slideshow when complete.
 
 ## How it works
 
