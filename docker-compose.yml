@@ -8,6 +8,7 @@ services:
     volumes:
       - ./index.php:/var/www/html/index.php:ro
       - ./video.php:/var/www/html/video.php:ro
+      - ./watch.php:/var/www/html/watch.php:ro
       - ./apache-kiosk.conf:/etc/apache2/conf-enabled/zzz-kiosk.conf:ro
       - ./data:/var/www/html/data
     restart: unless-stopped

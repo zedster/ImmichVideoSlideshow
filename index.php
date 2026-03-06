@@ -211,67 +211,58 @@ function sqlitePathDiagnostics(string $path): array
 }
 
 /**
- * Try opening SQLite at preferred and fallback paths.
- * Creates directories/files where possible and returns detailed diagnostics.
+ * Open SQLite at exactly the configured path.
+ * Creates parent directory and file if possible, otherwise throws with diagnostics.
  */
-function openSqliteWithFallback(string $preferredPath, string $requestId): array
+function openSqliteAtPath(string $path, string $requestId): array
 {
-    $paths = [$preferredPath];
-    if ($preferredPath !== '/tmp/videos.sqlite') {
-        $paths[] = '/tmp/videos.sqlite';
+    $dir = dirname($path);
+    $diag = sqlitePathDiagnostics($path);
+
+    if (!is_dir($dir)) {
+        $created = @mkdir($dir, 0777, true);
+        $diag['mkdir_attempted'] = true;
+        $diag['mkdir_ok'] = $created;
+        clearstatcache();
+        $diag = array_merge($diag, sqlitePathDiagnostics($path));
     }
 
-    $attempts = [];
-    foreach ($paths as $path) {
-        $dir = dirname($path);
-        $diag = sqlitePathDiagnostics($path);
-
-        if (!is_dir($dir)) {
-            $created = @mkdir($dir, 0777, true);
-            $diag['mkdir_attempted'] = true;
-            $diag['mkdir_ok'] = $created;
-            clearstatcache();
-            $diag = array_merge($diag, sqlitePathDiagnostics($path));
-        }
-
-        if (!file_exists($path) && is_dir($dir) && is_writable($dir)) {
-            $touchOk = @touch($path);
-            $diag['touch_attempted'] = true;
-            $diag['touch_ok'] = $touchOk;
-            clearstatcache();
-            $diag = array_merge($diag, sqlitePathDiagnostics($path));
-        }
-
-        try {
-            $pdo = new PDO('sqlite:' . $path);
-            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            $pdo->exec('PRAGMA journal_mode = WAL');
-            $pdo->exec('PRAGMA synchronous = NORMAL');
-
-            kioskLog('SQLite opened successfully', [
-                'request_id' => $requestId,
-                'path' => $path,
-                'diag' => $diag,
-            ]);
-
-            return [
-                'pdo' => $pdo,
-                'path' => $path,
-                'diagnostics' => $attempts,
-                'selected_diag' => $diag,
-            ];
-        } catch (Throwable $e) {
-            $diag['open_error'] = $e->getMessage();
-            $attempts[] = $diag;
-            kioskLog('SQLite open failed for path', [
-                'request_id' => $requestId,
-                'path' => $path,
-                'diag' => $diag,
-            ]);
-        }
+    if (!file_exists($path) && is_dir($dir) && is_writable($dir)) {
+        $touchOk = @touch($path);
+        $diag['touch_attempted'] = true;
+        $diag['touch_ok'] = $touchOk;
+        clearstatcache();
+        $diag = array_merge($diag, sqlitePathDiagnostics($path));
     }
 
-    throw new RuntimeException('Unable to open SQLite database file for any candidate path');
+    try {
+        $pdo = new PDO('sqlite:' . $path);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo->exec('PRAGMA journal_mode = WAL');
+        $pdo->exec('PRAGMA synchronous = NORMAL');
+
+        kioskLog('SQLite opened successfully', [
+            'request_id' => $requestId,
+            'path' => $path,
+            'diag' => $diag,
+        ]);
+
+        return [
+            'pdo' => $pdo,
+            'path' => $path,
+            'diagnostics' => [array_merge(['selected' => true], $diag)],
+        ];
+    } catch (Throwable $e) {
+        $diag['open_error'] = $e->getMessage();
+        kioskLog('SQLite open failed for configured path', [
+            'request_id' => $requestId,
+            'path' => $path,
+            'diag' => $diag,
+        ]);
+        throw new RuntimeException(
+            'Unable to open SQLite at configured SQLITE_PATH: ' . $path . ' | diagnostics=' . json_encode($diag)
+        );
+    }
 }
 
 function initSchema(PDO $pdo): void
@@ -289,6 +280,7 @@ function initSchema(PDO $pdo): void
             latitude REAL,
             longitude REAL,
             faces_count INTEGER NOT NULL DEFAULT 0,
+            watched_count INTEGER NOT NULL DEFAULT 0,
             metadata_json TEXT,
             updated_at TEXT NOT NULL
         )'
@@ -308,6 +300,17 @@ function initSchema(PDO $pdo): void
         $pdo->exec('ALTER TABLE videos ADD COLUMN capture_date TEXT');
     }
 
+    $hasWatchedCount = false;
+    foreach ($columns as $column) {
+        if (($column['name'] ?? '') === 'watched_count') {
+            $hasWatchedCount = true;
+            break;
+        }
+    }
+    if (!$hasWatchedCount) {
+        $pdo->exec('ALTER TABLE videos ADD COLUMN watched_count INTEGER NOT NULL DEFAULT 0');
+    }
+
     $pdo->exec(
         'CREATE TABLE IF NOT EXISTS sync_state (
             key TEXT PRIMARY KEY,
@@ -320,9 +323,9 @@ function upsertVideo(PDO $pdo, array $video): void
 {
     $stmt = $pdo->prepare(
         'INSERT INTO videos (
-            asset_id, duration, duration_raw, capture_date, file_name, original_path, city, country, latitude, longitude, faces_count, metadata_json, updated_at
+            asset_id, duration, duration_raw, capture_date, file_name, original_path, city, country, latitude, longitude, faces_count, watched_count, metadata_json, updated_at
         ) VALUES (
-            :asset_id, :duration, :duration_raw, :capture_date, :file_name, :original_path, :city, :country, :latitude, :longitude, :faces_count, :metadata_json, :updated_at
+            :asset_id, :duration, :duration_raw, :capture_date, :file_name, :original_path, :city, :country, :latitude, :longitude, :faces_count, :watched_count, :metadata_json, :updated_at
         )
         ON CONFLICT(asset_id) DO UPDATE SET
             duration=excluded.duration,
@@ -351,6 +354,7 @@ function upsertVideo(PDO $pdo, array $video): void
         ':latitude' => $video['latitude'],
         ':longitude' => $video['longitude'],
         ':faces_count' => $video['faces_count'],
+        ':watched_count' => 0,
         ':metadata_json' => $video['metadata_json'],
         ':updated_at' => gmdate('c'),
     ]);
@@ -390,7 +394,7 @@ function countQualifyingVideos(PDO $pdo, float $minDuration): int
 function selectRandomVideo(PDO $pdo, float $minDuration): ?array
 {
     $stmt = $pdo->prepare(
-        'SELECT asset_id, duration, duration_raw, capture_date, file_name, original_path, city, country, latitude, longitude, faces_count
+        'SELECT asset_id, duration, duration_raw, capture_date, file_name, original_path, city, country, latitude, longitude, faces_count, watched_count
          FROM videos
          WHERE duration >= :min_duration
          ORDER BY RANDOM()
@@ -649,17 +653,11 @@ $forcedSync = isset($_GET['sync']) && $_GET['sync'] === '1';
 
 if ($useSqlite && extension_loaded('pdo_sqlite')) {
     try {
-        $sqliteOpen = openSqliteWithFallback($sqlitePath, $requestId);
+        $sqliteOpen = openSqliteAtPath($sqlitePath, $requestId);
         /** @var PDO $pdo */
         $pdo = $sqliteOpen['pdo'];
         $sqlitePath = (string) $sqliteOpen['path'];
         $sqliteDiagnostics = $sqliteOpen['diagnostics'] ?? [];
-        if (isset($sqliteOpen['selected_diag']) && is_array($sqliteOpen['selected_diag'])) {
-            $sqliteDiagnostics[] = array_merge(
-                ['selected' => true],
-                $sqliteOpen['selected_diag']
-            );
-        }
         initSchema($pdo);
 
         $totalBefore = countVideos($pdo);
@@ -709,29 +707,26 @@ if ($useSqlite && extension_loaded('pdo_sqlite')) {
             $dbStats['last_sync_at'] = getSyncState($pdo, 'last_sync_at');
         }
     } catch (Throwable $e) {
-        kioskLog('SQLite mode failed, falling back to live mode', [
+        kioskLog('SQLite mode failed and cannot continue', [
             'request_id' => $requestId,
             'error' => $e->getMessage(),
             'sqlite_path' => $sqlitePath,
             'sqlite_diagnostics' => $sqliteDiagnostics,
         ]);
-        $useSqlite = false;
-        $attemptTrace[] = [
-            'attempt' => 0,
-            'status' => 'sqlite_error',
-            'error' => $e->getMessage(),
-            'sqlite_path' => $sqlitePath,
-            'sqlite_diagnostics' => $sqliteDiagnostics,
-        ];
+        http_response_code(500);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo "SQLite initialization failed.\n";
+        echo "Configured SQLITE_PATH: {$sqlitePath}\n";
+        echo "Reason: " . $e->getMessage() . "\n";
+        echo "Diagnostics: " . json_encode($sqliteDiagnostics) . "\n";
+        exit;
     }
 } elseif ($useSqlite) {
-    $attemptTrace[] = [
-        'attempt' => 0,
-        'status' => 'sqlite_unavailable',
-        'error' => 'pdo_sqlite_extension_not_loaded',
-        'sqlite_path' => $sqlitePath,
-    ];
-    $useSqlite = false;
+    http_response_code(500);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo "SQLite is required but pdo_sqlite extension is not loaded.\n";
+    echo "Configured SQLITE_PATH: {$sqlitePath}\n";
+    exit;
 }
 
 if (!$useSqlite) {
@@ -846,6 +841,7 @@ $metadataPayload = [
     'latitude' => isset($selected['latitude']) ? (string) $selected['latitude'] : '',
     'longitude' => isset($selected['longitude']) ? (string) $selected['longitude'] : '',
     'faces_count' => (string) ($selected['faces_count'] ?? ''),
+    'watched_count' => (string) ($selected['watched_count'] ?? ''),
     'original_path' => (string) ($selected['original_path'] ?? ''),
 ];
 $statsPayload = [
@@ -1054,6 +1050,7 @@ $statsPayload = [
         `duration: ${data.duration || '-'}s`,
         `duration_raw: ${data.duration_raw || '-'}`,
         `faces_count: ${data.faces_count || '0'}`,
+        `watched_count: ${data.watched_count || '0'}`,
         `city: ${data.city || '-'}`,
         `country: ${data.country || '-'}`,
         `latitude: ${data.latitude || '-'}`,
@@ -1106,7 +1103,11 @@ $statsPayload = [
       updateMuteButton();
     });
     player.addEventListener('ended', () => {
-      window.location.reload();
+      const encodedId = encodeURIComponent(metadata.asset_id || '');
+      fetch(`/watch.php?id=${encodedId}`, { method: 'POST', keepalive: true }).catch(() => {});
+      setTimeout(() => {
+        window.location.reload();
+      }, 120);
     });
 
     player.muted = readMutedPreference();

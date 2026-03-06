@@ -41,6 +41,7 @@ docker compose up -d
 
 This uses the stock `php:8.2-apache` image and mounts `index.php` and `video.php` into Apache.
 It also mounts `./data` for persistent SQLite cache storage.
+SQLite must be writable at `SQLITE_PATH`; the app now errors clearly if it cannot create/open that exact path.
 
 ## 4) Open slideshow
 
@@ -73,6 +74,7 @@ If `SHOW_SYNC_STATUS=true`, you will see a live progress log page during sync an
 - `index.php` syncs video metadata from `POST /api/search/metadata` into local SQLite.
 - Cached fields include:
   - `id`, `duration`, `originalFileName`, `originalPath`
+  - `watched_count` (incremented when a video reaches `ended`)
   - location fields from `exifInfo` (when present)
   - faces count from `people` (when present)
 - Playback selection is:
