@@ -176,12 +176,55 @@ function normalizeVideoItem(array $item): ?array
         }
     }
 
+    $cameraMake = isset($exif['make']) && is_string($exif['make']) ? trim($exif['make']) : '';
+    $cameraModel = isset($exif['model']) && is_string($exif['model']) ? trim($exif['model']) : '';
+    $cameraLens = isset($exif['lensModel']) && is_string($exif['lensModel']) ? trim($exif['lensModel']) : '';
+
+    $videoCodec = '';
+    foreach (['videoCodec', 'codec', 'codecName'] as $k) {
+        if (isset($exif[$k]) && is_string($exif[$k]) && trim($exif[$k]) !== '') {
+            $videoCodec = trim($exif[$k]);
+            break;
+        }
+    }
+
+    $videoFps = null;
+    foreach (['fps', 'videoFps', 'frameRate'] as $k) {
+        if (isset($exif[$k]) && is_numeric($exif[$k])) {
+            $videoFps = (float) $exif[$k];
+            break;
+        }
+    }
+
+    $videoWidth = null;
+    foreach (['imageWidth', 'exifImageWidth', 'width'] as $k) {
+        if (isset($exif[$k]) && is_numeric($exif[$k])) {
+            $videoWidth = (int) $exif[$k];
+            break;
+        }
+    }
+
+    $videoHeight = null;
+    foreach (['imageHeight', 'exifImageHeight', 'height'] as $k) {
+        if (isset($exif[$k]) && is_numeric($exif[$k])) {
+            $videoHeight = (int) $exif[$k];
+            break;
+        }
+    }
+
     return [
         'asset_id' => $id,
         'duration' => $duration,
         'duration_raw' => is_scalar($durationRaw) ? (string) $durationRaw : gettype($durationRaw),
         'is_favorite' => !empty($item['isFavorite']) ? 1 : 0,
         'capture_date' => $captureDate,
+        'camera_make' => $cameraMake,
+        'camera_model' => $cameraModel,
+        'camera_lens' => $cameraLens,
+        'video_codec' => $videoCodec,
+        'video_fps' => $videoFps,
+        'video_width' => $videoWidth,
+        'video_height' => $videoHeight,
         'file_name' => isset($item['originalFileName']) && is_string($item['originalFileName']) ? $item['originalFileName'] : '',
         'original_path' => isset($item['originalPath']) && is_string($item['originalPath']) ? $item['originalPath'] : '',
         'city' => $city,
@@ -275,6 +318,13 @@ function initSchema(PDO $pdo): void
             duration_raw TEXT,
             is_favorite INTEGER NOT NULL DEFAULT 0,
             capture_date TEXT,
+            camera_make TEXT,
+            camera_model TEXT,
+            camera_lens TEXT,
+            video_codec TEXT,
+            video_fps REAL,
+            video_width INTEGER,
+            video_height INTEGER,
             file_name TEXT,
             original_path TEXT,
             city TEXT,
@@ -324,6 +374,27 @@ function initSchema(PDO $pdo): void
         $pdo->exec('ALTER TABLE videos ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0');
     }
 
+    $requiredColumns = [
+        'camera_make' => 'TEXT',
+        'camera_model' => 'TEXT',
+        'camera_lens' => 'TEXT',
+        'video_codec' => 'TEXT',
+        'video_fps' => 'REAL',
+        'video_width' => 'INTEGER',
+        'video_height' => 'INTEGER',
+    ];
+    $existing = [];
+    foreach ($columns as $column) {
+        if (isset($column['name']) && is_string($column['name'])) {
+            $existing[$column['name']] = true;
+        }
+    }
+    foreach ($requiredColumns as $name => $type) {
+        if (!isset($existing[$name])) {
+            $pdo->exec("ALTER TABLE videos ADD COLUMN {$name} {$type}");
+        }
+    }
+
     $pdo->exec(
         'CREATE TABLE IF NOT EXISTS sync_state (
             key TEXT PRIMARY KEY,
@@ -336,15 +407,22 @@ function upsertVideo(PDO $pdo, array $video): void
 {
     $stmt = $pdo->prepare(
         'INSERT INTO videos (
-            asset_id, duration, duration_raw, is_favorite, capture_date, file_name, original_path, city, country, latitude, longitude, faces_count, watched_count, metadata_json, updated_at
+            asset_id, duration, duration_raw, is_favorite, capture_date, camera_make, camera_model, camera_lens, video_codec, video_fps, video_width, video_height, file_name, original_path, city, country, latitude, longitude, faces_count, watched_count, metadata_json, updated_at
         ) VALUES (
-            :asset_id, :duration, :duration_raw, :is_favorite, :capture_date, :file_name, :original_path, :city, :country, :latitude, :longitude, :faces_count, :watched_count, :metadata_json, :updated_at
+            :asset_id, :duration, :duration_raw, :is_favorite, :capture_date, :camera_make, :camera_model, :camera_lens, :video_codec, :video_fps, :video_width, :video_height, :file_name, :original_path, :city, :country, :latitude, :longitude, :faces_count, :watched_count, :metadata_json, :updated_at
         )
         ON CONFLICT(asset_id) DO UPDATE SET
             duration=excluded.duration,
             duration_raw=excluded.duration_raw,
             is_favorite=excluded.is_favorite,
             capture_date=excluded.capture_date,
+            camera_make=excluded.camera_make,
+            camera_model=excluded.camera_model,
+            camera_lens=excluded.camera_lens,
+            video_codec=excluded.video_codec,
+            video_fps=excluded.video_fps,
+            video_width=excluded.video_width,
+            video_height=excluded.video_height,
             file_name=excluded.file_name,
             original_path=excluded.original_path,
             city=excluded.city,
@@ -362,6 +440,13 @@ function upsertVideo(PDO $pdo, array $video): void
         ':duration_raw' => $video['duration_raw'],
         ':is_favorite' => (int) ($video['is_favorite'] ?? 0),
         ':capture_date' => $video['capture_date'],
+        ':camera_make' => $video['camera_make'],
+        ':camera_model' => $video['camera_model'],
+        ':camera_lens' => $video['camera_lens'],
+        ':video_codec' => $video['video_codec'],
+        ':video_fps' => $video['video_fps'],
+        ':video_width' => $video['video_width'],
+        ':video_height' => $video['video_height'],
         ':file_name' => $video['file_name'],
         ':original_path' => $video['original_path'],
         ':city' => $video['city'],
@@ -422,11 +507,51 @@ function countTotalWatchedVideos(PDO $pdo): int
     return $result === false ? 0 : (int) $result;
 }
 
+function topCameras(PDO $pdo, int $limit = 5): array
+{
+    $stmt = $pdo->prepare(
+        'SELECT
+            CASE
+              WHEN TRIM(COALESCE(camera_make, \'\') || \' \' || COALESCE(camera_model, \'\')) = \'\' THEN \'Unknown\'
+              ELSE TRIM(COALESCE(camera_make, \'\') || \' \' || COALESCE(camera_model, \'\'))
+            END AS camera_name,
+            COUNT(*) AS cnt
+         FROM videos
+         GROUP BY camera_name
+         ORDER BY cnt DESC, camera_name ASC
+         LIMIT :limit'
+    );
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    return is_array($rows) ? $rows : [];
+}
+
+function topCodecs(PDO $pdo, int $limit = 5): array
+{
+    $stmt = $pdo->prepare(
+        'SELECT
+            CASE
+              WHEN TRIM(COALESCE(video_codec, \'\')) = \'\' THEN \'Unknown\'
+              ELSE TRIM(video_codec)
+            END AS codec_name,
+            COUNT(*) AS cnt
+         FROM videos
+         GROUP BY codec_name
+         ORDER BY cnt DESC, codec_name ASC
+         LIMIT :limit'
+    );
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    return is_array($rows) ? $rows : [];
+}
+
 function selectRandomVideo(PDO $pdo, float $minDuration, bool $onlyFavorites = false): ?array
 {
     if ($onlyFavorites) {
         $stmt = $pdo->prepare(
-            'SELECT asset_id, duration, duration_raw, is_favorite, capture_date, file_name, original_path, city, country, latitude, longitude, faces_count, watched_count
+            'SELECT asset_id, duration, duration_raw, is_favorite, capture_date, camera_make, camera_model, camera_lens, video_codec, video_fps, video_width, video_height, file_name, original_path, city, country, latitude, longitude, faces_count, watched_count
              FROM videos
              WHERE duration >= :min_duration AND is_favorite = 1
              ORDER BY RANDOM()
@@ -434,7 +559,7 @@ function selectRandomVideo(PDO $pdo, float $minDuration, bool $onlyFavorites = f
         );
     } else {
         $stmt = $pdo->prepare(
-            'SELECT asset_id, duration, duration_raw, is_favorite, capture_date, file_name, original_path, city, country, latitude, longitude, faces_count, watched_count
+            'SELECT asset_id, duration, duration_raw, is_favorite, capture_date, camera_make, camera_model, camera_lens, video_codec, video_fps, video_width, video_height, file_name, original_path, city, country, latitude, longitude, faces_count, watched_count
              FROM videos
              WHERE duration >= :min_duration
              ORDER BY RANDOM()
@@ -747,6 +872,8 @@ if ($useSqlite && extension_loaded('pdo_sqlite')) {
             'db_qualifying_videos' => countQualifyingVideos($pdo, $minDuration, $onlyFavorites),
             'db_favorite_videos' => countFavoriteVideos($pdo),
             'db_total_watched' => countTotalWatchedVideos($pdo),
+            'db_top_cameras' => topCameras($pdo, 5),
+            'db_top_codecs' => topCodecs($pdo, 5),
             'last_sync_at' => getSyncState($pdo, 'last_sync_at'),
         ];
 
@@ -757,6 +884,8 @@ if ($useSqlite && extension_loaded('pdo_sqlite')) {
             $dbStats['db_qualifying_videos'] = countQualifyingVideos($pdo, $minDuration, $onlyFavorites);
             $dbStats['db_favorite_videos'] = countFavoriteVideos($pdo);
             $dbStats['db_total_watched'] = countTotalWatchedVideos($pdo);
+            $dbStats['db_top_cameras'] = topCameras($pdo, 5);
+            $dbStats['db_top_codecs'] = topCodecs($pdo, 5);
             $dbStats['last_sync_at'] = getSyncState($pdo, 'last_sync_at');
         }
     } catch (Throwable $e) {
@@ -917,6 +1046,13 @@ $metadataPayload = [
     'file_name' => (string) ($selected['file_name'] ?? ''),
     'is_favorite' => (string) ((int) ($selected['is_favorite'] ?? 0)),
     'capture_date' => (string) ($selected['capture_date'] ?? ''),
+    'camera_make' => (string) ($selected['camera_make'] ?? ''),
+    'camera_model' => (string) ($selected['camera_model'] ?? ''),
+    'camera_lens' => (string) ($selected['camera_lens'] ?? ''),
+    'video_codec' => (string) ($selected['video_codec'] ?? ''),
+    'video_fps' => isset($selected['video_fps']) ? (string) $selected['video_fps'] : '',
+    'video_width' => isset($selected['video_width']) ? (string) $selected['video_width'] : '',
+    'video_height' => isset($selected['video_height']) ? (string) $selected['video_height'] : '',
     'duration' => (string) ($selected['duration'] ?? ''),
     'duration_raw' => (string) ($selected['duration_raw'] ?? ''),
     'city' => (string) ($selected['city'] ?? ''),
@@ -938,6 +1074,8 @@ $statsPayload = [
     'db_qualifying_videos' => isset($dbStats['db_qualifying_videos']) ? (string) $dbStats['db_qualifying_videos'] : '',
     'db_favorite_videos' => isset($dbStats['db_favorite_videos']) ? (string) $dbStats['db_favorite_videos'] : '',
     'db_total_watched' => isset($dbStats['db_total_watched']) ? (string) $dbStats['db_total_watched'] : '',
+    'db_top_cameras' => isset($dbStats['db_top_cameras']) ? json_encode($dbStats['db_top_cameras']) : '[]',
+    'db_top_codecs' => isset($dbStats['db_top_codecs']) ? json_encode($dbStats['db_top_codecs']) : '[]',
     'last_sync_at' => isset($dbStats['last_sync_at']) ? (string) $dbStats['last_sync_at'] : '',
 ];
 ?>
@@ -1209,6 +1347,7 @@ $statsPayload = [
   <button id="adminTrigger" class="admin-trigger" type="button" title="Admin">~</button>
   <div id="adminPanel" class="admin-panel" role="dialog" aria-modal="false" aria-label="Admin panel">
     <div class="admin-title">Admin Panel</div>
+    <div id="adminLastSync" style="font:12px/1.3 monospace; margin-bottom:10px; color:#d0d0d0;"></div>
     <div class="admin-row">
       <button id="adminCloseBtn" class="admin-btn" type="button">Close</button>
       <button id="syncNowBtn" class="admin-btn primary" type="button">Sync With Immich</button>
@@ -1252,6 +1391,7 @@ $statsPayload = [
     const adminTrigger = document.getElementById('adminTrigger');
     const adminPanel = document.getElementById('adminPanel');
     const adminCloseBtn = document.getElementById('adminCloseBtn');
+    const adminLastSync = document.getElementById('adminLastSync');
     const syncNowBtn = document.getElementById('syncNowBtn');
     const nextCountdown = document.getElementById('nextCountdown');
     const metadata = <?= json_encode($metadataPayload, JSON_UNESCAPED_SLASHES) ?>;
@@ -1360,11 +1500,18 @@ $statsPayload = [
     };
 
     const formatMetadataText = (data) => {
+      const cameraName = [data.camera_make || '', data.camera_model || ''].join(' ').trim();
+      const resolution = (data.video_width && data.video_height) ? `${data.video_width}x${data.video_height}` : '-';
       return [
         `asset_id: ${data.asset_id || '-'}`,
         `file_name: ${data.file_name || '-'}`,
         `is_favorite: ${data.is_favorite === '1' ? 'yes' : 'no'}`,
         `capture_date: ${data.capture_date || '-'}`,
+        `camera: ${cameraName || '-'}`,
+        `lens: ${data.camera_lens || '-'}`,
+        `codec: ${data.video_codec || '-'}`,
+        `fps: ${data.video_fps || '-'}`,
+        `resolution: ${resolution}`,
         `duration: ${data.duration || '-'}s`,
         `duration_raw: ${data.duration_raw || '-'}`,
         `faces_count: ${data.faces_count || '0'}`,
@@ -1387,7 +1534,21 @@ $statsPayload = [
 
     const formatStats = (data) => {
       const shownThisSession = String(getShownThisSession());
-      return [
+      let topCameras = [];
+      let topCodecs = [];
+      try {
+        topCameras = JSON.parse(data.db_top_cameras || '[]');
+      } catch (e) {
+        topCameras = [];
+      }
+      try {
+        topCodecs = JSON.parse(data.db_top_codecs || '[]');
+      } catch (e) {
+        topCodecs = [];
+      }
+      const topCameraLines = topCameras.map((row, i) => `${i + 1}. ${(row.camera_name || 'Unknown')} (${row.cnt || 0})`);
+      const topCodecLines = topCodecs.map((row, i) => `${i + 1}. ${(row.codec_name || 'Unknown')} (${row.cnt || 0})`);
+      const lines = [
         `use_sqlite: ${data.use_sqlite}`,
         `only_favorites: ${data.only_favorites}`,
         `min_duration: ${data.min_duration}s`,
@@ -1396,8 +1557,21 @@ $statsPayload = [
         `favorites: ${data.db_favorite_videos || '-'}`,
         `shown_this_session: ${shownThisSession}`,
         `shown_total: ${data.db_total_watched || '-'}`,
-        `last_sync_at: ${data.last_sync_at || '-'}`
-      ].join('\n');
+        `last_sync_at: ${data.last_sync_at || '-'}`,
+        `top_5_cameras:`
+      ];
+      if (topCameraLines.length > 0) {
+        lines.push(...topCameraLines);
+      } else {
+        lines.push('-');
+      }
+      lines.push('top_5_codecs:');
+      if (topCodecLines.length > 0) {
+        lines.push(...topCodecLines);
+      } else {
+        lines.push('-');
+      }
+      return lines.join('\n');
     };
 
     const updateFavoriteButton = () => {
@@ -1531,6 +1705,7 @@ $statsPayload = [
 
     metadataPanel.innerHTML = renderMetadataPanel(metadata);
     statsPanel.textContent = formatStats(stats);
+    adminLastSync.textContent = `Last synced: ${stats.last_sync_at || '-'}`;
     metadataPanel.classList.toggle('visible', readMetadataPreference());
     updateFavoriteButton();
     updateFavoriteFilterButton();
