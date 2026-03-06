@@ -24,6 +24,13 @@ Required variables:
 - `IMMICH_URL` - Base URL of your Immich server, e.g. `http://immich:2283`
 - `IMMICH_API_KEY` - Your Immich API key
 - `MIN_DURATION` - Minimum video length in seconds (default `10`)
+- `RANDOM_BATCH_SIZE` - Fallback live mode batch size if SQLite cache is disabled/unavailable (default `20`)
+- `USE_SQLITE_CACHE` - Enable local SQLite metadata cache and random DB selection (default `true`)
+- `SQLITE_PATH` - SQLite database path inside container (default `/var/www/html/data/videos.sqlite`)
+- `SYNC_ON_STARTUP` - Automatically sync metadata when DB is empty/no qualifying videos (default `true`)
+- `SYNC_PAGE_SIZE` - Number of videos to request per sync page from Immich (default `200`)
+- `SYNC_MAX_PAGES` - Maximum pages to scan per sync run (default `200`)
+- `DEBUG` - Set to `true` to show debug overlay in `index.php` and enable PHP error display (default `false`)
 
 ## 3) Run
 
@@ -32,6 +39,7 @@ docker compose up -d
 ```
 
 This uses the stock `php:8.2-apache` image and mounts `index.php` and `video.php` into Apache.
+It also mounts `./data` for persistent SQLite cache storage.
 
 ## 4) Open slideshow
 
@@ -39,11 +47,35 @@ Browse to:
 
 - http://localhost:8095
 
+## Logs and debug output
+
+- Application logs are written with `error_log()` and go to container logs.
+- View logs with:
+
+```bash
+docker compose logs -f
+```
+
+- Set `DEBUG=true` in `.env` for on-screen debug details (request ID, selected asset, duration, attempts).
+- Keep `DEBUG=false` for normal kiosk usage.
+
+## Force a metadata resync
+
+- Open:
+  - `http://localhost:8095/?sync=1`
+
+This triggers a fresh metadata sync from Immich into SQLite (videos + duration + exif/location + faces count), then picks a random qualifying video from DB.
+
 ## How it works
 
-- `index.php` calls `POST /api/search/metadata` with:
-  - `{"type":"VIDEO","size":1,"random":true}`
-- It retries up to 20 times until it finds a video with `duration >= MIN_DURATION`.
+- `index.php` syncs video metadata from `POST /api/search/metadata` into local SQLite.
+- Cached fields include:
+  - `id`, `duration`, `originalFileName`, `originalPath`
+  - location fields from `exifInfo` (when present)
+  - faces count from `people` (when present)
+- Playback selection is:
+  - `SELECT ... WHERE duration >= MIN_DURATION ORDER BY RANDOM() LIMIT 1`
+- If SQLite is disabled/unavailable, it falls back to live random batch API selection.
 - The browser plays `/video.php?id=<assetId>` fullscreen.
 - `video.php` proxies Immich playback from:
   - `GET /api/assets/{id}/video/playback`

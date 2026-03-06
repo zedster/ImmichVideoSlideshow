@@ -1,6 +1,23 @@
 <?php
 declare(strict_types=1);
 
+function envFlag(string $name, bool $default = false): bool
+{
+    $raw = getenv($name);
+    if ($raw === false) {
+        return $default;
+    }
+
+    $value = strtolower(trim((string) $raw));
+    return in_array($value, ['1', 'true', 'yes', 'on'], true);
+}
+
+function kioskLog(string $message, array $context = []): void
+{
+    $encoded = $context === [] ? '' : ' ' . json_encode($context);
+    error_log('[immich-video-kiosk][video] ' . $message . $encoded);
+}
+
 function buildApiUrl(string $baseUrl, string $path): string
 {
     return rtrim($baseUrl, '/') . '/' . ltrim($path, '/');
@@ -9,8 +26,24 @@ function buildApiUrl(string $baseUrl, string $path): string
 $immichUrl = getenv('IMMICH_URL') ?: '';
 $apiKey = getenv('IMMICH_API_KEY') ?: '';
 $assetId = $_GET['id'] ?? '';
+$debug = envFlag('DEBUG', false);
+$requestId = bin2hex(random_bytes(6));
+
+ini_set('log_errors', '1');
+error_reporting(E_ALL);
+ini_set('display_errors', $debug ? '1' : '0');
+
+kioskLog('Incoming playback proxy request', [
+    'request_id' => $requestId,
+    'asset_id' => is_string($assetId) ? $assetId : '',
+    'range' => $_SERVER['HTTP_RANGE'] ?? '',
+    'remote_addr' => $_SERVER['REMOTE_ADDR'] ?? '',
+]);
 
 if ($immichUrl === '' || $apiKey === '') {
+    kioskLog('Missing required environment variables', [
+        'request_id' => $requestId,
+    ]);
     http_response_code(500);
     header('Content-Type: text/plain; charset=utf-8');
     echo 'Server misconfiguration: missing IMMICH_URL or IMMICH_API_KEY.';
@@ -18,6 +51,9 @@ if ($immichUrl === '' || $apiKey === '') {
 }
 
 if (!is_string($assetId) || $assetId === '') {
+    kioskLog('Missing required asset id query string', [
+        'request_id' => $requestId,
+    ]);
     http_response_code(400);
     header('Content-Type: text/plain; charset=utf-8');
     echo 'Missing required query parameter: id';
@@ -98,11 +134,23 @@ curl_setopt_array($ch, [
 
 $ok = curl_exec($ch);
 if ($ok === false) {
+    kioskLog('Immich playback proxy failed', [
+        'request_id' => $requestId,
+        'asset_id' => $assetId,
+        'curl_error' => curl_error($ch),
+    ]);
     if (!headers_sent()) {
         http_response_code(502);
         header('Content-Type: text/plain; charset=utf-8');
     }
     echo 'Failed to stream video from Immich.';
+} else {
+    $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    kioskLog('Immich playback proxy completed', [
+        'request_id' => $requestId,
+        'asset_id' => $assetId,
+        'status' => $status,
+    ]);
 }
 
 curl_close($ch);
