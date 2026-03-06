@@ -824,6 +824,7 @@ $syncStats = null;
 $dbStats = [];
 $sqliteDiagnostics = [];
 $forcedSync = isset($_GET['sync']) && $_GET['sync'] === '1';
+$asJsonNext = isset($_GET['next']) && $_GET['next'] === '1';
 
 if ($useSqlite && extension_loaded('pdo_sqlite')) {
     try {
@@ -838,7 +839,7 @@ if ($useSqlite && extension_loaded('pdo_sqlite')) {
         $qualifyingBefore = countQualifyingVideos($pdo, $minDuration, $onlyFavorites);
         $needsSync = $forcedSync || ($syncOnStartup && ($totalBefore === 0 || $qualifyingBefore === 0));
 
-        if ($needsSync && $showSyncStatus) {
+        if ($needsSync && $showSyncStatus && !$asJsonNext) {
             startSyncStatusOutput($requestId, $sqlitePath);
             syncStatusLog("Initial DB state: total={$totalBefore}, qualifying={$qualifyingBefore}, min_duration={$minDuration}");
             $syncStats = syncVideosFromImmich(
@@ -976,42 +977,60 @@ if ($selected === null) {
         'attempt_trace' => $attemptTrace,
     ]);
 
-    http_response_code(503);
-    header('Content-Type: text/plain; charset=utf-8');
-    echo "Could not find a qualifying video.\n";
-    echo "request_id: {$requestId}\n";
-    echo "min_duration: {$minDuration}\n";
-    echo "only_favorites: " . ($onlyFavorites ? 'true' : 'false') . "\n";
-    echo "use_sqlite: " . ($useSqlite ? 'true' : 'false') . "\n";
-    echo "sqlite_path: {$sqlitePath}\n";
-    if ($sqliteDiagnostics !== []) {
-        echo "sqlite_diagnostics: " . json_encode($sqliteDiagnostics) . "\n";
-    }
-    if ($dbStats !== []) {
-        echo "db_total_videos: " . ($dbStats['db_total_videos'] ?? 0) . "\n";
-        echo "db_qualifying_videos: " . ($dbStats['db_qualifying_videos'] ?? 0) . "\n";
-        echo "last_sync_at: " . ($dbStats['last_sync_at'] ?? '-') . "\n";
-    }
-    if (is_array($syncStats)) {
-        echo "sync_pages_fetched: " . ($syncStats['pages_fetched'] ?? 0) . "\n";
-        echo "sync_rows_upserted: " . ($syncStats['rows_upserted'] ?? 0) . "\n";
-        $syncErrors = $syncStats['errors'] ?? [];
-        echo "sync_errors: " . json_encode($syncErrors) . "\n";
-    }
-    echo "attempted metadata:\n";
-    foreach ($attemptTrace as $row) {
-        $line = sprintf(
-            'attempt=%d status=%s asset_id=%s file_name=%s duration=%s raw=%s path=%s error=%s',
-            (int) ($row['attempt'] ?? 0),
-            (string) ($row['status'] ?? ''),
-            (string) ($row['asset_id'] ?? '-'),
-            (string) ($row['file_name'] ?? '-'),
-            isset($row['duration']) ? (string) $row['duration'] : '-',
-            (string) ($row['duration_raw'] ?? '-'),
-            (string) ($row['original_path'] ?? '-'),
-            (string) ($row['error'] ?? '-')
-        );
-        echo $line . "\n";
+    if ($asJsonNext) {
+        http_response_code(503);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'ok' => false,
+            'error' => 'Could not find a qualifying video',
+            'request_id' => $requestId,
+            'min_duration' => $minDuration,
+            'only_favorites' => $onlyFavorites,
+            'use_sqlite' => $useSqlite,
+            'sqlite_path' => $sqlitePath,
+            'sqlite_diagnostics' => $sqliteDiagnostics,
+            'db_stats' => $dbStats,
+            'sync_stats' => $syncStats,
+            'attempt_trace' => $attemptTrace,
+        ]);
+    } else {
+        http_response_code(503);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo "Could not find a qualifying video.\n";
+        echo "request_id: {$requestId}\n";
+        echo "min_duration: {$minDuration}\n";
+        echo "only_favorites: " . ($onlyFavorites ? 'true' : 'false') . "\n";
+        echo "use_sqlite: " . ($useSqlite ? 'true' : 'false') . "\n";
+        echo "sqlite_path: {$sqlitePath}\n";
+        if ($sqliteDiagnostics !== []) {
+            echo "sqlite_diagnostics: " . json_encode($sqliteDiagnostics) . "\n";
+        }
+        if ($dbStats !== []) {
+            echo "db_total_videos: " . ($dbStats['db_total_videos'] ?? 0) . "\n";
+            echo "db_qualifying_videos: " . ($dbStats['db_qualifying_videos'] ?? 0) . "\n";
+            echo "last_sync_at: " . ($dbStats['last_sync_at'] ?? '-') . "\n";
+        }
+        if (is_array($syncStats)) {
+            echo "sync_pages_fetched: " . ($syncStats['pages_fetched'] ?? 0) . "\n";
+            echo "sync_rows_upserted: " . ($syncStats['rows_upserted'] ?? 0) . "\n";
+            $syncErrors = $syncStats['errors'] ?? [];
+            echo "sync_errors: " . json_encode($syncErrors) . "\n";
+        }
+        echo "attempted metadata:\n";
+        foreach ($attemptTrace as $row) {
+            $line = sprintf(
+                'attempt=%d status=%s asset_id=%s file_name=%s duration=%s raw=%s path=%s error=%s',
+                (int) ($row['attempt'] ?? 0),
+                (string) ($row['status'] ?? ''),
+                (string) ($row['asset_id'] ?? '-'),
+                (string) ($row['file_name'] ?? '-'),
+                isset($row['duration']) ? (string) $row['duration'] : '-',
+                (string) ($row['duration_raw'] ?? '-'),
+                (string) ($row['original_path'] ?? '-'),
+                (string) ($row['error'] ?? '-')
+            );
+            echo $line . "\n";
+        }
     }
     exit;
 }
@@ -1041,6 +1060,7 @@ if ($cityValue !== '' && $countryValue !== '') {
 } elseif ($countryValue !== '') {
     $locationLabel = $countryValue;
 }
+$captionText = trim($captureYear . ($locationLabel !== '' ? "\n" . $locationLabel : ''));
 $metadataPayload = [
     'asset_id' => (string) ($selected['asset_id'] ?? $selected['id'] ?? ''),
     'file_name' => (string) ($selected['file_name'] ?? ''),
@@ -1078,6 +1098,19 @@ $statsPayload = [
     'db_top_codecs' => isset($dbStats['db_top_codecs']) ? json_encode($dbStats['db_top_codecs']) : '[]',
     'last_sync_at' => isset($dbStats['last_sync_at']) ? (string) $dbStats['last_sync_at'] : '',
 ];
+
+if ($asJsonNext) {
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'ok' => true,
+        'asset_id' => (string) ($selected['asset_id'] ?? $selected['id'] ?? ''),
+        'video_src' => $videoSrc,
+        'metadata' => $metadataPayload,
+        'stats' => $statsPayload,
+        'caption_text' => $captionText,
+    ]);
+    exit;
+}
 ?>
 <!doctype html>
 <html lang="en">
@@ -1218,6 +1251,10 @@ $statsPayload = [
       white-space: pre-line;
     }
 
+    .video-caption.hidden {
+      display: none;
+    }
+
     .metadata-panel .metadata-pre {
       white-space: pre-wrap;
       margin-bottom: 10px;
@@ -1337,13 +1374,11 @@ $statsPayload = [
     <button id="favoriteToggle" class="action-btn" type="button" title="Toggle favorite">♡</button>
     <button id="muteToggle" class="mute-toggle" type="button" title="Mute toggle" aria-label="Mute toggle">🔇</button>
   </div>
-  <?php if ($captureYear !== '' || $locationLabel !== ''): ?>
-  <div class="video-caption"><?= htmlspecialchars(
-      trim($captureYear . ($locationLabel !== '' ? "\n" . $locationLabel : '')),
+  <div id="videoCaption" class="video-caption<?= $captionText === '' ? ' hidden' : '' ?>"><?= htmlspecialchars(
+      $captionText,
       ENT_QUOTES,
       'UTF-8'
   ) ?></div>
-  <?php endif; ?>
   <button id="adminTrigger" class="admin-trigger" type="button" title="Admin">~</button>
   <div id="adminPanel" class="admin-panel" role="dialog" aria-modal="false" aria-label="Admin panel">
     <div class="admin-title">Admin Panel</div>
