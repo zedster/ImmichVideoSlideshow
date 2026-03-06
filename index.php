@@ -959,6 +959,8 @@ $statsPayload = [
     video {
       width: 100vw;
       height: 100vh;
+      width: 100dvw;
+      height: 100dvh;
       object-fit: contain;
       background: #000;
       display: block;
@@ -1102,6 +1104,86 @@ $statsPayload = [
       text-decoration: underline;
       word-break: break-word;
     }
+
+    .next-countdown {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 10000;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid #666;
+      border-radius: 10px;
+      padding: 14px 18px;
+      font: 700 28px/1.1 sans-serif;
+      text-align: center;
+      display: none;
+      pointer-events: none;
+      -webkit-text-stroke: 1px #000;
+      text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+    }
+
+    .next-countdown.visible {
+      display: block;
+    }
+
+    .admin-trigger {
+      position: fixed;
+      right: 8px;
+      bottom: 6px;
+      z-index: 10001;
+      background: transparent;
+      border: none;
+      color: rgba(255, 255, 255, 0.25);
+      font: 700 18px/1 monospace;
+      cursor: pointer;
+      padding: 4px 6px;
+    }
+
+    .admin-panel {
+      position: fixed;
+      right: 12px;
+      bottom: 28px;
+      z-index: 10002;
+      width: 280px;
+      background: rgba(0, 0, 0, 0.88);
+      border: 1px solid #666;
+      color: #fff;
+      padding: 12px;
+      display: none;
+      border-radius: 8px;
+    }
+
+    .admin-panel.visible {
+      display: block;
+    }
+
+    .admin-title {
+      font: 700 14px/1.2 sans-serif;
+      margin-bottom: 10px;
+    }
+
+    .admin-row {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .admin-btn {
+      border: 1px solid #666;
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+      font: 12px/1.2 sans-serif;
+      padding: 7px 9px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+
+    .admin-btn.primary {
+      border-color: #2f7f2f;
+      background: rgba(47, 127, 47, 0.3);
+    }
   </style>
 </head>
 <body>
@@ -1124,6 +1206,15 @@ $statsPayload = [
       'UTF-8'
   ) ?></div>
   <?php endif; ?>
+  <button id="adminTrigger" class="admin-trigger" type="button" title="Admin">~</button>
+  <div id="adminPanel" class="admin-panel" role="dialog" aria-modal="false" aria-label="Admin panel">
+    <div class="admin-title">Admin Panel</div>
+    <div class="admin-row">
+      <button id="adminCloseBtn" class="admin-btn" type="button">Close</button>
+      <button id="syncNowBtn" class="admin-btn primary" type="button">Sync With Immich</button>
+    </div>
+  </div>
+  <div id="nextCountdown" class="next-countdown"></div>
   <div id="metadataPanel" class="metadata-panel"></div>
   <div id="statsPanel" class="stats-panel"></div>
   <?php if ($debug): ?>
@@ -1158,6 +1249,11 @@ $statsPayload = [
     const muteToggle = document.getElementById('muteToggle');
     const metadataPanel = document.getElementById('metadataPanel');
     const statsPanel = document.getElementById('statsPanel');
+    const adminTrigger = document.getElementById('adminTrigger');
+    const adminPanel = document.getElementById('adminPanel');
+    const adminCloseBtn = document.getElementById('adminCloseBtn');
+    const syncNowBtn = document.getElementById('syncNowBtn');
+    const nextCountdown = document.getElementById('nextCountdown');
     const metadata = <?= json_encode($metadataPayload, JSON_UNESCAPED_SLASHES) ?>;
     const stats = <?= json_encode($statsPayload, JSON_UNESCAPED_SLASHES) ?>;
     const muteStorageKey = 'immichVideoKioskMuted';
@@ -1165,6 +1261,10 @@ $statsPayload = [
     const sessionShownStorageKey = 'immichVideoKioskShownThisSession';
     let isFavorite = metadata.is_favorite === '1';
     let onlyFavoritesMode = stats.only_favorites === 'true';
+    let suppressMutePersist = false;
+    let userInteracted = false;
+    let nextTimerInterval = null;
+    let nextTimerTimeout = null;
 
     const readMutedPreference = () => {
       try {
@@ -1228,6 +1328,31 @@ $statsPayload = [
       muteToggle.setAttribute('aria-label', player.muted ? 'Unmute' : 'Mute');
     };
 
+    const isLandscapePhone = () => {
+      const isCoarse = window.matchMedia('(pointer: coarse)').matches;
+      const isLandscape = window.matchMedia('(orientation: landscape)').matches;
+      const isPhoneLike = Math.max(window.screen.width, window.screen.height) <= 1366;
+      return isCoarse && isLandscape && isPhoneLike;
+    };
+
+    const tryEnterFullscreenForMobile = () => {
+      if (!isLandscapePhone()) {
+        return;
+      }
+      if (document.fullscreenElement) {
+        return;
+      }
+      if (typeof player.requestFullscreen === 'function') {
+        player.requestFullscreen().catch(() => {});
+        return;
+      }
+      if (typeof player.webkitEnterFullscreen === 'function') {
+        try {
+          player.webkitEnterFullscreen();
+        } catch (e) {}
+      }
+    };
+
     const escapeHtml = (value) => {
       return String(value ?? '').replace(/[&<>"']/g, (ch) => (
         { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' }[ch]
@@ -1285,6 +1410,45 @@ $statsPayload = [
       favoriteFilterToggle.classList.toggle('favorite-active', onlyFavoritesMode);
       favoriteFilterToggle.title = onlyFavoritesMode ? 'Showing favorites only' : 'Show favorites only';
       favoriteFilterToggle.setAttribute('aria-label', favoriteFilterToggle.title);
+    };
+
+    const setAdminVisible = (visible) => {
+      adminPanel.classList.toggle('visible', visible);
+    };
+
+    const clearNextTimer = () => {
+      if (nextTimerInterval !== null) {
+        window.clearInterval(nextTimerInterval);
+        nextTimerInterval = null;
+      }
+      if (nextTimerTimeout !== null) {
+        window.clearTimeout(nextTimerTimeout);
+        nextTimerTimeout = null;
+      }
+      nextCountdown.classList.remove('visible');
+      nextCountdown.textContent = '';
+    };
+
+    const startNextTimer = () => {
+      clearNextTimer();
+      const durationMs = 3000;
+      const deadline = Date.now() + durationMs;
+      const update = () => {
+        const remainingMs = Math.max(0, deadline - Date.now());
+        const remainingSeconds = Math.ceil(remainingMs / 1000);
+        nextCountdown.textContent = `Next video in ${remainingSeconds}s`;
+        nextCountdown.classList.add('visible');
+      };
+      update();
+      nextTimerInterval = window.setInterval(update, 100);
+      nextTimerTimeout = window.setTimeout(() => {
+        clearNextTimer();
+        const currentShown = getShownThisSession();
+        const nextUrl = setShownThisSession(currentShown + 1);
+        const encodedId = encodeURIComponent(metadata.asset_id || '');
+        fetch(`/watch.php?id=${encodedId}`, { method: 'POST', keepalive: true }).catch(() => {});
+        window.location.href = nextUrl.toString();
+      }, durationMs);
     };
 
     muteToggle.addEventListener('click', () => {
@@ -1351,6 +1515,20 @@ $statsPayload = [
       }
     });
 
+    adminTrigger.addEventListener('click', () => {
+      setAdminVisible(!adminPanel.classList.contains('visible'));
+    });
+
+    adminCloseBtn.addEventListener('click', () => {
+      setAdminVisible(false);
+    });
+
+    syncNowBtn.addEventListener('click', () => {
+      const url = new URL(window.location.href);
+      url.searchParams.set('sync', '1');
+      window.location.href = url.toString();
+    });
+
     metadataPanel.innerHTML = renderMetadataPanel(metadata);
     statsPanel.textContent = formatStats(stats);
     metadataPanel.classList.toggle('visible', readMetadataPreference());
@@ -1361,26 +1539,52 @@ $statsPayload = [
     setShownThisSession(getShownThisSession());
 
     player.addEventListener('volumechange', () => {
-      saveMutedPreference(player.muted);
+      if (!suppressMutePersist) {
+        saveMutedPreference(player.muted);
+      }
       updateMuteButton();
     });
+    player.addEventListener('play', clearNextTimer);
+    player.addEventListener('seeking', clearNextTimer);
     player.addEventListener('ended', () => {
-      const currentShown = getShownThisSession();
-      const nextUrl = setShownThisSession(currentShown + 1);
-      const encodedId = encodeURIComponent(metadata.asset_id || '');
-      fetch(`/watch.php?id=${encodedId}`, { method: 'POST', keepalive: true }).catch(() => {});
-      setTimeout(() => {
-        window.location.href = nextUrl.toString();
-      }, 120);
+      startNextTimer();
     });
 
-    player.muted = readMutedPreference();
+    const preferredMuted = readMutedPreference();
+    player.muted = preferredMuted;
     updateMuteButton();
+
+    const markUserInteracted = () => {
+      userInteracted = true;
+      if (!preferredMuted && player.muted) {
+        suppressMutePersist = true;
+        player.muted = false;
+        suppressMutePersist = false;
+        updateMuteButton();
+      }
+      tryEnterFullscreenForMobile();
+    };
+
+    window.addEventListener('pointerdown', markUserInteracted, { passive: true });
+    window.addEventListener('touchstart', markUserInteracted, { passive: true });
+    window.addEventListener('click', markUserInteracted, { passive: true });
+    window.addEventListener('resize', () => {
+      if (userInteracted) {
+        tryEnterFullscreenForMobile();
+      }
+    });
+    window.addEventListener('orientationchange', () => {
+      if (userInteracted) {
+        tryEnterFullscreenForMobile();
+      }
+    });
+
     player.play().catch(() => {
-      // If autoplay is blocked while unmuted, retry muted for compatibility.
-      if (!player.muted) {
+      // Keep preferred unmute state persisted; temporarily mute only to satisfy autoplay policy.
+      if (!preferredMuted) {
+        suppressMutePersist = true;
         player.muted = true;
-        saveMutedPreference(true);
+        suppressMutePersist = false;
         updateMuteButton();
         player.play().catch(() => {});
       }
