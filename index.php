@@ -180,6 +180,7 @@ function normalizeVideoItem(array $item): ?array
         'asset_id' => $id,
         'duration' => $duration,
         'duration_raw' => is_scalar($durationRaw) ? (string) $durationRaw : gettype($durationRaw),
+        'is_favorite' => !empty($item['isFavorite']) ? 1 : 0,
         'capture_date' => $captureDate,
         'file_name' => isset($item['originalFileName']) && is_string($item['originalFileName']) ? $item['originalFileName'] : '',
         'original_path' => isset($item['originalPath']) && is_string($item['originalPath']) ? $item['originalPath'] : '',
@@ -272,6 +273,7 @@ function initSchema(PDO $pdo): void
             asset_id TEXT PRIMARY KEY,
             duration REAL NOT NULL,
             duration_raw TEXT,
+            is_favorite INTEGER NOT NULL DEFAULT 0,
             capture_date TEXT,
             file_name TEXT,
             original_path TEXT,
@@ -311,6 +313,17 @@ function initSchema(PDO $pdo): void
         $pdo->exec('ALTER TABLE videos ADD COLUMN watched_count INTEGER NOT NULL DEFAULT 0');
     }
 
+    $hasIsFavorite = false;
+    foreach ($columns as $column) {
+        if (($column['name'] ?? '') === 'is_favorite') {
+            $hasIsFavorite = true;
+            break;
+        }
+    }
+    if (!$hasIsFavorite) {
+        $pdo->exec('ALTER TABLE videos ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0');
+    }
+
     $pdo->exec(
         'CREATE TABLE IF NOT EXISTS sync_state (
             key TEXT PRIMARY KEY,
@@ -323,13 +336,14 @@ function upsertVideo(PDO $pdo, array $video): void
 {
     $stmt = $pdo->prepare(
         'INSERT INTO videos (
-            asset_id, duration, duration_raw, capture_date, file_name, original_path, city, country, latitude, longitude, faces_count, watched_count, metadata_json, updated_at
+            asset_id, duration, duration_raw, is_favorite, capture_date, file_name, original_path, city, country, latitude, longitude, faces_count, watched_count, metadata_json, updated_at
         ) VALUES (
-            :asset_id, :duration, :duration_raw, :capture_date, :file_name, :original_path, :city, :country, :latitude, :longitude, :faces_count, :watched_count, :metadata_json, :updated_at
+            :asset_id, :duration, :duration_raw, :is_favorite, :capture_date, :file_name, :original_path, :city, :country, :latitude, :longitude, :faces_count, :watched_count, :metadata_json, :updated_at
         )
         ON CONFLICT(asset_id) DO UPDATE SET
             duration=excluded.duration,
             duration_raw=excluded.duration_raw,
+            is_favorite=excluded.is_favorite,
             capture_date=excluded.capture_date,
             file_name=excluded.file_name,
             original_path=excluded.original_path,
@@ -346,6 +360,7 @@ function upsertVideo(PDO $pdo, array $video): void
         ':asset_id' => $video['asset_id'],
         ':duration' => $video['duration'],
         ':duration_raw' => $video['duration_raw'],
+        ':is_favorite' => (int) ($video['is_favorite'] ?? 0),
         ':capture_date' => $video['capture_date'],
         ':file_name' => $video['file_name'],
         ':original_path' => $video['original_path'],
@@ -391,10 +406,16 @@ function countQualifyingVideos(PDO $pdo, float $minDuration): int
     return $result === false ? 0 : (int) $result;
 }
 
+function countFavoriteVideos(PDO $pdo): int
+{
+    $result = $pdo->query('SELECT COUNT(*) FROM videos WHERE is_favorite = 1')->fetchColumn();
+    return $result === false ? 0 : (int) $result;
+}
+
 function selectRandomVideo(PDO $pdo, float $minDuration): ?array
 {
     $stmt = $pdo->prepare(
-        'SELECT asset_id, duration, duration_raw, capture_date, file_name, original_path, city, country, latitude, longitude, faces_count, watched_count
+        'SELECT asset_id, duration, duration_raw, is_favorite, capture_date, file_name, original_path, city, country, latitude, longitude, faces_count, watched_count
          FROM videos
          WHERE duration >= :min_duration
          ORDER BY RANDOM()
@@ -696,6 +717,7 @@ if ($useSqlite && extension_loaded('pdo_sqlite')) {
             'sqlite_path' => $sqlitePath,
             'db_total_videos' => countVideos($pdo),
             'db_qualifying_videos' => countQualifyingVideos($pdo, $minDuration),
+            'db_favorite_videos' => countFavoriteVideos($pdo),
             'last_sync_at' => getSyncState($pdo, 'last_sync_at'),
         ];
 
@@ -704,6 +726,7 @@ if ($useSqlite && extension_loaded('pdo_sqlite')) {
             $selected = selectRandomVideo($pdo, $minDuration);
             $dbStats['db_total_videos'] = countVideos($pdo);
             $dbStats['db_qualifying_videos'] = countQualifyingVideos($pdo, $minDuration);
+            $dbStats['db_favorite_videos'] = countFavoriteVideos($pdo);
             $dbStats['last_sync_at'] = getSyncState($pdo, 'last_sync_at');
         }
     } catch (Throwable $e) {
@@ -830,9 +853,33 @@ if ($selected === null) {
 
 $assetId = rawurlencode((string) ($selected['asset_id'] ?? $selected['id'] ?? ''));
 $videoSrc = '/video.php?id=' . $assetId;
+$assetIdPlain = (string) ($selected['asset_id'] ?? $selected['id'] ?? '');
+$immichAssetUrl = rtrim($immichUrl, '/') . '/photos/' . rawurlencode($assetIdPlain);
+$qrImageUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=' . rawurlencode($immichAssetUrl);
+$captureDateValue = (string) ($selected['capture_date'] ?? '');
+$captureYear = '';
+if ($captureDateValue !== '') {
+    $timestamp = strtotime($captureDateValue);
+    if ($timestamp !== false) {
+        $captureYear = gmdate('Y', $timestamp);
+    } elseif (preg_match('/\b(\d{4})\b/', $captureDateValue, $m) === 1) {
+        $captureYear = $m[1];
+    }
+}
+$cityValue = trim((string) ($selected['city'] ?? ''));
+$countryValue = trim((string) ($selected['country'] ?? ''));
+$locationLabel = '';
+if ($cityValue !== '' && $countryValue !== '') {
+    $locationLabel = $cityValue . ', ' . $countryValue;
+} elseif ($cityValue !== '') {
+    $locationLabel = $cityValue;
+} elseif ($countryValue !== '') {
+    $locationLabel = $countryValue;
+}
 $metadataPayload = [
     'asset_id' => (string) ($selected['asset_id'] ?? $selected['id'] ?? ''),
     'file_name' => (string) ($selected['file_name'] ?? ''),
+    'is_favorite' => (string) ((int) ($selected['is_favorite'] ?? 0)),
     'capture_date' => (string) ($selected['capture_date'] ?? ''),
     'duration' => (string) ($selected['duration'] ?? ''),
     'duration_raw' => (string) ($selected['duration_raw'] ?? ''),
@@ -842,6 +889,8 @@ $metadataPayload = [
     'longitude' => isset($selected['longitude']) ? (string) $selected['longitude'] : '',
     'faces_count' => (string) ($selected['faces_count'] ?? ''),
     'watched_count' => (string) ($selected['watched_count'] ?? ''),
+    'immich_asset_url' => $immichAssetUrl,
+    'qr_image_url' => $qrImageUrl,
     'original_path' => (string) ($selected['original_path'] ?? ''),
 ];
 $statsPayload = [
@@ -849,6 +898,7 @@ $statsPayload = [
     'min_duration' => (string) $minDuration,
     'db_total_videos' => isset($dbStats['db_total_videos']) ? (string) $dbStats['db_total_videos'] : '',
     'db_qualifying_videos' => isset($dbStats['db_qualifying_videos']) ? (string) $dbStats['db_qualifying_videos'] : '',
+    'db_favorite_videos' => isset($dbStats['db_favorite_videos']) ? (string) $dbStats['db_favorite_videos'] : '',
     'last_sync_at' => isset($dbStats['last_sync_at']) ? (string) $dbStats['last_sync_at'] : '',
 ];
 ?>
@@ -917,6 +967,12 @@ $statsPayload = [
       cursor: pointer;
     }
 
+    .action-btn.favorite-active {
+      border-color: #ff5d7b;
+      color: #ff5d7b;
+      font-weight: 700;
+    }
+
     .metadata-panel {
       position: fixed;
       right: 12px;
@@ -958,6 +1014,54 @@ $statsPayload = [
     .stats-panel.visible {
       display: block;
     }
+
+    .video-caption {
+      position: fixed;
+      left: 14px;
+      bottom: 10vh;
+      z-index: 9997;
+      color: #fff;
+      font: 900 34px/1.12 sans-serif;
+      letter-spacing: 0.3px;
+      -webkit-text-stroke: 1.5px #000;
+      text-shadow:
+        -1px -1px 0 #000,
+         1px -1px 0 #000,
+        -1px  1px 0 #000,
+         1px  1px 0 #000,
+         0 2px 4px rgba(0, 0, 0, 0.8);
+      pointer-events: none;
+      user-select: none;
+      white-space: pre-line;
+    }
+
+    .immich-link-panel {
+      position: fixed;
+      left: 14px;
+      top: 12px;
+      z-index: 9996;
+      background: rgba(0, 0, 0, 0.65);
+      border: 1px solid #666;
+      color: #fff;
+      padding: 8px;
+      text-align: center;
+      max-width: 180px;
+    }
+
+    .immich-link-panel img {
+      width: 150px;
+      height: 150px;
+      display: block;
+      margin: 0 auto 6px;
+      background: #fff;
+    }
+
+    .immich-link-panel a {
+      color: #fff;
+      font: 12px/1.2 sans-serif;
+      text-decoration: underline;
+      word-break: break-word;
+    }
   </style>
 </head>
 <body>
@@ -965,11 +1069,23 @@ $statsPayload = [
     <source src="<?= htmlspecialchars($videoSrc, ENT_QUOTES, 'UTF-8') ?>" type="video/mp4">
   </video>
   <div class="action-bar">
-    <button id="skipBtn" class="action-btn" type="button">Skip</button>
-    <button id="statsToggle" class="action-btn" type="button">Stats</button>
-    <button id="metaToggle" class="action-btn" type="button">Metadata</button>
-    <button id="muteToggle" class="mute-toggle" type="button">Unmute</button>
+    <button id="skipBtn" class="action-btn" type="button" title="Skip" aria-label="Skip">⏭</button>
+    <button id="statsToggle" class="action-btn" type="button" title="Stats" aria-label="Stats">📊</button>
+    <button id="metaToggle" class="action-btn" type="button" title="Metadata" aria-label="Metadata">ⓘ</button>
+    <button id="favoriteToggle" class="action-btn" type="button" title="Toggle favorite">♡</button>
+    <button id="muteToggle" class="mute-toggle" type="button" title="Mute toggle" aria-label="Mute toggle">🔇</button>
   </div>
+  <div class="immich-link-panel">
+    <img src="<?= htmlspecialchars($qrImageUrl, ENT_QUOTES, 'UTF-8') ?>" alt="QR code to open asset in Immich">
+    <a href="<?= htmlspecialchars($immichAssetUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer">Open in Immich</a>
+  </div>
+  <?php if ($captureYear !== '' || $locationLabel !== ''): ?>
+  <div class="video-caption"><?= htmlspecialchars(
+      trim($captureYear . ($locationLabel !== '' ? "\n" . $locationLabel : '')),
+      ENT_QUOTES,
+      'UTF-8'
+  ) ?></div>
+  <?php endif; ?>
   <div id="metadataPanel" class="metadata-panel"></div>
   <div id="statsPanel" class="stats-panel"></div>
   <?php if ($debug): ?>
@@ -998,6 +1114,7 @@ $statsPayload = [
     const skipBtn = document.getElementById('skipBtn');
     const statsToggle = document.getElementById('statsToggle');
     const metaToggle = document.getElementById('metaToggle');
+    const favoriteToggle = document.getElementById('favoriteToggle');
     const muteToggle = document.getElementById('muteToggle');
     const metadataPanel = document.getElementById('metadataPanel');
     const statsPanel = document.getElementById('statsPanel');
@@ -1005,6 +1122,7 @@ $statsPayload = [
     const stats = <?= json_encode($statsPayload, JSON_UNESCAPED_SLASHES) ?>;
     const muteStorageKey = 'immichVideoKioskMuted';
     const metadataStorageKey = 'immichVideoKioskShowMetadata';
+    let isFavorite = metadata.is_favorite === '1';
 
     const readMutedPreference = () => {
       try {
@@ -1039,13 +1157,16 @@ $statsPayload = [
     };
 
     const updateMuteButton = () => {
-      muteToggle.textContent = player.muted ? 'Unmute' : 'Mute';
+      muteToggle.textContent = player.muted ? '🔇' : '🔊';
+      muteToggle.title = player.muted ? 'Unmute' : 'Mute';
+      muteToggle.setAttribute('aria-label', player.muted ? 'Unmute' : 'Mute');
     };
 
     const formatMetadata = (data) => {
       return [
         `asset_id: ${data.asset_id || '-'}`,
         `file_name: ${data.file_name || '-'}`,
+        `is_favorite: ${data.is_favorite === '1' ? 'yes' : 'no'}`,
         `capture_date: ${data.capture_date || '-'}`,
         `duration: ${data.duration || '-'}s`,
         `duration_raw: ${data.duration_raw || '-'}`,
@@ -1065,8 +1186,15 @@ $statsPayload = [
         `min_duration: ${data.min_duration}s`,
         `total_videos: ${data.db_total_videos || '-'}`,
         `matching_duration: ${data.db_qualifying_videos || '-'}`,
+        `favorites: ${data.db_favorite_videos || '-'}`,
         `last_sync_at: ${data.last_sync_at || '-'}`
       ].join('\n');
+    };
+
+    const updateFavoriteButton = () => {
+      favoriteToggle.textContent = isFavorite ? '♥' : '♡';
+      favoriteToggle.classList.toggle('favorite-active', isFavorite);
+      favoriteToggle.title = isFavorite ? 'Unfavorite' : 'Favorite';
     };
 
     muteToggle.addEventListener('click', () => {
@@ -1094,9 +1222,34 @@ $statsPayload = [
       saveMetadataPreference(false);
     });
 
+    favoriteToggle.addEventListener('click', async () => {
+      const next = !isFavorite;
+      favoriteToggle.disabled = true;
+      try {
+        const encodedId = encodeURIComponent(metadata.asset_id || '');
+        const resp = await fetch(`/favorite.php?id=${encodedId}&favorite=${next ? '1' : '0'}`, {
+          method: 'POST',
+          keepalive: true
+        });
+        const body = await resp.json().catch(() => ({}));
+        if (!resp.ok || body.ok !== true) {
+          throw new Error(body.error || `HTTP ${resp.status}`);
+        }
+        isFavorite = next;
+        metadata.is_favorite = isFavorite ? '1' : '0';
+        metadataPanel.textContent = formatMetadata(metadata);
+        updateFavoriteButton();
+      } catch (err) {
+        console.error('Favorite toggle failed', err);
+      } finally {
+        favoriteToggle.disabled = false;
+      }
+    });
+
     metadataPanel.textContent = formatMetadata(metadata);
     statsPanel.textContent = formatStats(stats);
     metadataPanel.classList.toggle('visible', readMetadataPreference());
+    updateFavoriteButton();
 
     player.addEventListener('volumechange', () => {
       saveMutedPreference(player.muted);

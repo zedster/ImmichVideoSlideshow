@@ -39,7 +39,7 @@ Required variables:
 docker compose up -d
 ```
 
-This uses the stock `php:8.2-apache` image and mounts `index.php` and `video.php` into Apache.
+This uses the stock `php:8.2-apache` image and mounts `index.php`, `video.php`, `watch.php`, and `favorite.php` into Apache.
 It also mounts `./data` for persistent SQLite cache storage.
 SQLite must be writable at `SQLITE_PATH`; the app now errors clearly if it cannot create/open that exact path.
 
@@ -74,6 +74,7 @@ If `SHOW_SYNC_STATUS=true`, you will see a live progress log page during sync an
 - `index.php` syncs video metadata from `POST /api/search/metadata` into local SQLite.
 - Cached fields include:
   - `id`, `duration`, `originalFileName`, `originalPath`
+  - `is_favorite` (heart toggle, synced to Immich favorite state)
   - `watched_count` (incremented when a video reaches `ended`)
   - location fields from `exifInfo` (when present)
   - faces count from `people` (when present)
@@ -81,6 +82,9 @@ If `SHOW_SYNC_STATUS=true`, you will see a live progress log page during sync an
   - `SELECT ... WHERE duration >= MIN_DURATION ORDER BY RANDOM() LIMIT 1`
 - If SQLite is disabled/unavailable, it falls back to live random batch API selection.
 - The browser plays `/video.php?id=<assetId>` fullscreen.
+- UI controls include `Skip`, `Stats`, `Metadata`, `Favorite` (heart), and `Mute`.
+- Favorite heart updates local DB and attempts to update Immich favorite state via API.
+- A QR code and `Open in Immich` link are shown for the currently playing asset.
 - `video.php` proxies Immich playback from:
   - `GET /api/assets/{id}/video/playback`
 - `video.php` sends `x-api-key` server-side, so the API key is never exposed to the browser.
