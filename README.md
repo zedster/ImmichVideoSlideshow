@@ -29,6 +29,8 @@ Required variables:
 - `SQLITE_PATH` - SQLite database path inside container (default `/var/www/html/data/videos.sqlite`)
 - `SYNC_ON_STARTUP` - Automatically sync metadata when DB is empty/no qualifying videos (default `true`)
 - `SHOW_SYNC_STATUS` - Show live sync/import status page and auto-reload when done (default `true`)
+- `ONLY_FAVORITES` - Default to favorites-only playback (`true` or `false`, default `false`)
+- `SHOW_QR_CODE` - Show/hide QR + "Open in Immich" panel (default `true`)
 - `SYNC_PAGE_SIZE` - Number of videos to request per sync page from Immich (default `200`)
 - `SYNC_MAX_PAGES` - Maximum pages to scan per sync run (default `200`)
 - `DEBUG` - Set to `true` to show debug overlay in `index.php` and enable PHP error display (default `false`)
@@ -83,6 +85,7 @@ If `SHOW_SYNC_STATUS=true`, you will see a live progress log page during sync an
 - If SQLite is disabled/unavailable, it falls back to live random batch API selection.
 - The browser plays `/video.php?id=<assetId>` fullscreen.
 - UI controls include `Skip`, `Stats`, `Metadata`, `Favorite` (heart), and `Mute`.
+- `⭐` control toggles favorites-only playback mode (`favOnly=1` in URL).
 - Favorite heart updates local DB and attempts to update Immich favorite state via API.
 - A QR code and `Open in Immich` link are shown for the currently playing asset.
 - `video.php` proxies Immich playback from:

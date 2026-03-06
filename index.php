@@ -398,9 +398,13 @@ function countVideos(PDO $pdo): int
     return $result === false ? 0 : (int) $result;
 }
 
-function countQualifyingVideos(PDO $pdo, float $minDuration): int
+function countQualifyingVideos(PDO $pdo, float $minDuration, bool $onlyFavorites = false): int
 {
-    $stmt = $pdo->prepare('SELECT COUNT(*) FROM videos WHERE duration >= :min_duration');
+    if ($onlyFavorites) {
+        $stmt = $pdo->prepare('SELECT COUNT(*) FROM videos WHERE duration >= :min_duration AND is_favorite = 1');
+    } else {
+        $stmt = $pdo->prepare('SELECT COUNT(*) FROM videos WHERE duration >= :min_duration');
+    }
     $stmt->execute([':min_duration' => $minDuration]);
     $result = $stmt->fetchColumn();
     return $result === false ? 0 : (int) $result;
@@ -412,15 +416,25 @@ function countFavoriteVideos(PDO $pdo): int
     return $result === false ? 0 : (int) $result;
 }
 
-function selectRandomVideo(PDO $pdo, float $minDuration): ?array
+function selectRandomVideo(PDO $pdo, float $minDuration, bool $onlyFavorites = false): ?array
 {
-    $stmt = $pdo->prepare(
-        'SELECT asset_id, duration, duration_raw, is_favorite, capture_date, file_name, original_path, city, country, latitude, longitude, faces_count, watched_count
-         FROM videos
-         WHERE duration >= :min_duration
-         ORDER BY RANDOM()
-         LIMIT 1'
-    );
+    if ($onlyFavorites) {
+        $stmt = $pdo->prepare(
+            'SELECT asset_id, duration, duration_raw, is_favorite, capture_date, file_name, original_path, city, country, latitude, longitude, faces_count, watched_count
+             FROM videos
+             WHERE duration >= :min_duration AND is_favorite = 1
+             ORDER BY RANDOM()
+             LIMIT 1'
+        );
+    } else {
+        $stmt = $pdo->prepare(
+            'SELECT asset_id, duration, duration_raw, is_favorite, capture_date, file_name, original_path, city, country, latitude, longitude, faces_count, watched_count
+             FROM videos
+             WHERE duration >= :min_duration
+             ORDER BY RANDOM()
+             LIMIT 1'
+        );
+    }
     $stmt->execute([':min_duration' => $minDuration]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     return is_array($row) ? $row : null;
@@ -469,7 +483,7 @@ function finishSyncStatusOutput(bool $success): void
 {
     $msg = $success ? 'Sync complete. Reloading slideshow...' : 'Sync finished with errors. Reloading slideshow...';
     echo '<script>addLog(' . jsString($msg) . ');';
-    echo 'setTimeout(()=>{window.location.href=window.location.origin+window.location.pathname;},1200);';
+    echo 'setTimeout(()=>{const p=new URLSearchParams(window.location.search);const next=new URL(window.location.origin+window.location.pathname);if(p.get("favOnly")==="1"){next.searchParams.set("favOnly","1");}window.location.href=next.toString();},1200);';
     echo '</script></div></body></html>';
     @flush();
 }
@@ -622,6 +636,12 @@ $syncPageSize = (int) (getenv('SYNC_PAGE_SIZE') ?: '200');
 $syncMaxPages = (int) (getenv('SYNC_MAX_PAGES') ?: '200');
 $syncOnStartup = envFlag('SYNC_ON_STARTUP', true);
 $showSyncStatus = envFlag('SHOW_SYNC_STATUS', true);
+$defaultOnlyFavorites = envFlag('ONLY_FAVORITES', false);
+$showQrCode = envFlag('SHOW_QR_CODE', true);
+$onlyFavorites = $defaultOnlyFavorites;
+if (isset($_GET['favOnly'])) {
+    $onlyFavorites = ((string) $_GET['favOnly']) === '1';
+}
 $requestId = bin2hex(random_bytes(6));
 
 ini_set('log_errors', '1');
@@ -653,6 +673,8 @@ kioskLog('Incoming slideshow request', [
     'min_duration' => $minDuration,
     'batch_size' => $batchSize,
     'use_sqlite' => $useSqlite,
+    'only_favorites' => $onlyFavorites,
+    'show_qr_code' => $showQrCode,
     'sqlite_path' => $sqlitePath,
     'remote_addr' => $_SERVER['REMOTE_ADDR'] ?? '',
 ]);
@@ -682,7 +704,7 @@ if ($useSqlite && extension_loaded('pdo_sqlite')) {
         initSchema($pdo);
 
         $totalBefore = countVideos($pdo);
-        $qualifyingBefore = countQualifyingVideos($pdo, $minDuration);
+        $qualifyingBefore = countQualifyingVideos($pdo, $minDuration, $onlyFavorites);
         $needsSync = $forcedSync || ($syncOnStartup && ($totalBefore === 0 || $qualifyingBefore === 0));
 
         if ($needsSync && $showSyncStatus) {
@@ -700,7 +722,7 @@ if ($useSqlite && extension_loaded('pdo_sqlite')) {
                 }
             );
             $totalAfter = countVideos($pdo);
-            $qualifyingAfter = countQualifyingVideos($pdo, $minDuration);
+            $qualifyingAfter = countQualifyingVideos($pdo, $minDuration, $onlyFavorites);
             syncStatusLog("Sync summary: pages={$syncStats['pages_fetched']}, upserted={$syncStats['rows_upserted']}, errors=" . count($syncStats['errors'] ?? []));
             syncStatusLog("DB after sync: total={$totalAfter}, qualifying={$qualifyingAfter}");
             finishSyncStatusOutput(count($syncStats['errors'] ?? []) === 0);
@@ -711,21 +733,21 @@ if ($useSqlite && extension_loaded('pdo_sqlite')) {
             $syncStats = syncVideosFromImmich($pdo, $immichUrl, $apiKey, $requestId, $syncPageSize, $syncMaxPages);
         }
 
-        $selected = selectRandomVideo($pdo, $minDuration);
+        $selected = selectRandomVideo($pdo, $minDuration, $onlyFavorites);
         $dbStats = [
             'sqlite_enabled' => true,
             'sqlite_path' => $sqlitePath,
             'db_total_videos' => countVideos($pdo),
-            'db_qualifying_videos' => countQualifyingVideos($pdo, $minDuration),
+            'db_qualifying_videos' => countQualifyingVideos($pdo, $minDuration, $onlyFavorites),
             'db_favorite_videos' => countFavoriteVideos($pdo),
             'last_sync_at' => getSyncState($pdo, 'last_sync_at'),
         ];
 
         if ($selected === null && !$forcedSync) {
             $syncStats = syncVideosFromImmich($pdo, $immichUrl, $apiKey, $requestId, $syncPageSize, $syncMaxPages);
-            $selected = selectRandomVideo($pdo, $minDuration);
+            $selected = selectRandomVideo($pdo, $minDuration, $onlyFavorites);
             $dbStats['db_total_videos'] = countVideos($pdo);
-            $dbStats['db_qualifying_videos'] = countQualifyingVideos($pdo, $minDuration);
+            $dbStats['db_qualifying_videos'] = countQualifyingVideos($pdo, $minDuration, $onlyFavorites);
             $dbStats['db_favorite_videos'] = countFavoriteVideos($pdo);
             $dbStats['last_sync_at'] = getSyncState($pdo, 'last_sync_at');
         }
@@ -774,6 +796,10 @@ if (!$useSqlite) {
             }
             $seenAssetIds[$candidateId] = true;
 
+            if ($onlyFavorites && ((int) ($candidate['is_favorite'] ?? 0) !== 1)) {
+                continue;
+            }
+
             if (($candidate['duration'] ?? 0.0) >= $minDuration) {
                 $selected = $candidate;
                 $attemptTrace[] = [
@@ -805,6 +831,7 @@ if ($selected === null) {
     kioskLog('Failed to find qualifying video', [
         'request_id' => $requestId,
         'min_duration' => $minDuration,
+        'only_favorites' => $onlyFavorites,
         'use_sqlite' => $useSqlite,
         'sync_stats' => $syncStats,
         'db_stats' => $dbStats,
@@ -817,6 +844,7 @@ if ($selected === null) {
     echo "Could not find a qualifying video.\n";
     echo "request_id: {$requestId}\n";
     echo "min_duration: {$minDuration}\n";
+    echo "only_favorites: " . ($onlyFavorites ? 'true' : 'false') . "\n";
     echo "use_sqlite: " . ($useSqlite ? 'true' : 'false') . "\n";
     echo "sqlite_path: {$sqlitePath}\n";
     if ($sqliteDiagnostics !== []) {
@@ -895,6 +923,7 @@ $metadataPayload = [
 ];
 $statsPayload = [
     'use_sqlite' => $useSqlite ? 'true' : 'false',
+    'only_favorites' => $onlyFavorites ? 'true' : 'false',
     'min_duration' => (string) $minDuration,
     'db_total_videos' => isset($dbStats['db_total_videos']) ? (string) $dbStats['db_total_videos'] : '',
     'db_qualifying_videos' => isset($dbStats['db_qualifying_videos']) ? (string) $dbStats['db_qualifying_videos'] : '',
@@ -1070,15 +1099,18 @@ $statsPayload = [
   </video>
   <div class="action-bar">
     <button id="skipBtn" class="action-btn" type="button" title="Skip" aria-label="Skip">⏭</button>
+    <button id="favoriteFilterToggle" class="action-btn" type="button" title="Favorites only" aria-label="Favorites only">⭐</button>
     <button id="statsToggle" class="action-btn" type="button" title="Stats" aria-label="Stats">📊</button>
     <button id="metaToggle" class="action-btn" type="button" title="Metadata" aria-label="Metadata">ⓘ</button>
     <button id="favoriteToggle" class="action-btn" type="button" title="Toggle favorite">♡</button>
     <button id="muteToggle" class="mute-toggle" type="button" title="Mute toggle" aria-label="Mute toggle">🔇</button>
   </div>
+  <?php if ($showQrCode): ?>
   <div class="immich-link-panel">
     <img src="<?= htmlspecialchars($qrImageUrl, ENT_QUOTES, 'UTF-8') ?>" alt="QR code to open asset in Immich">
     <a href="<?= htmlspecialchars($immichAssetUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer">Open in Immich</a>
   </div>
+  <?php endif; ?>
   <?php if ($captureYear !== '' || $locationLabel !== ''): ?>
   <div class="video-caption"><?= htmlspecialchars(
       trim($captureYear . ($locationLabel !== '' ? "\n" . $locationLabel : '')),
@@ -1112,6 +1144,7 @@ $statsPayload = [
   <script>
     const player = document.getElementById('player');
     const skipBtn = document.getElementById('skipBtn');
+    const favoriteFilterToggle = document.getElementById('favoriteFilterToggle');
     const statsToggle = document.getElementById('statsToggle');
     const metaToggle = document.getElementById('metaToggle');
     const favoriteToggle = document.getElementById('favoriteToggle');
@@ -1123,6 +1156,7 @@ $statsPayload = [
     const muteStorageKey = 'immichVideoKioskMuted';
     const metadataStorageKey = 'immichVideoKioskShowMetadata';
     let isFavorite = metadata.is_favorite === '1';
+    let onlyFavoritesMode = stats.only_favorites === 'true';
 
     const readMutedPreference = () => {
       try {
@@ -1183,6 +1217,7 @@ $statsPayload = [
     const formatStats = (data) => {
       return [
         `use_sqlite: ${data.use_sqlite}`,
+        `only_favorites: ${data.only_favorites}`,
         `min_duration: ${data.min_duration}s`,
         `total_videos: ${data.db_total_videos || '-'}`,
         `matching_duration: ${data.db_qualifying_videos || '-'}`,
@@ -1197,6 +1232,12 @@ $statsPayload = [
       favoriteToggle.title = isFavorite ? 'Unfavorite' : 'Favorite';
     };
 
+    const updateFavoriteFilterButton = () => {
+      favoriteFilterToggle.classList.toggle('favorite-active', onlyFavoritesMode);
+      favoriteFilterToggle.title = onlyFavoritesMode ? 'Showing favorites only' : 'Show favorites only';
+      favoriteFilterToggle.setAttribute('aria-label', favoriteFilterToggle.title);
+    };
+
     muteToggle.addEventListener('click', () => {
       player.muted = !player.muted;
       saveMutedPreference(player.muted);
@@ -1206,6 +1247,13 @@ $statsPayload = [
     skipBtn.addEventListener('click', () => {
       const url = new URL(window.location.href);
       url.searchParams.set('skip', Date.now().toString());
+      window.location.href = url.toString();
+    });
+
+    favoriteFilterToggle.addEventListener('click', () => {
+      onlyFavoritesMode = !onlyFavoritesMode;
+      const url = new URL(window.location.href);
+      url.searchParams.set('favOnly', onlyFavoritesMode ? '1' : '0');
       window.location.href = url.toString();
     });
 
@@ -1250,6 +1298,7 @@ $statsPayload = [
     statsPanel.textContent = formatStats(stats);
     metadataPanel.classList.toggle('visible', readMetadataPreference());
     updateFavoriteButton();
+    updateFavoriteFilterButton();
 
     player.addEventListener('volumechange', () => {
       saveMutedPreference(player.muted);
