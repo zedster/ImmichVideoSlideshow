@@ -416,6 +416,12 @@ function countFavoriteVideos(PDO $pdo): int
     return $result === false ? 0 : (int) $result;
 }
 
+function countTotalWatchedVideos(PDO $pdo): int
+{
+    $result = $pdo->query('SELECT COALESCE(SUM(watched_count), 0) FROM videos')->fetchColumn();
+    return $result === false ? 0 : (int) $result;
+}
+
 function selectRandomVideo(PDO $pdo, float $minDuration, bool $onlyFavorites = false): ?array
 {
     if ($onlyFavorites) {
@@ -740,6 +746,7 @@ if ($useSqlite && extension_loaded('pdo_sqlite')) {
             'db_total_videos' => countVideos($pdo),
             'db_qualifying_videos' => countQualifyingVideos($pdo, $minDuration, $onlyFavorites),
             'db_favorite_videos' => countFavoriteVideos($pdo),
+            'db_total_watched' => countTotalWatchedVideos($pdo),
             'last_sync_at' => getSyncState($pdo, 'last_sync_at'),
         ];
 
@@ -749,6 +756,7 @@ if ($useSqlite && extension_loaded('pdo_sqlite')) {
             $dbStats['db_total_videos'] = countVideos($pdo);
             $dbStats['db_qualifying_videos'] = countQualifyingVideos($pdo, $minDuration, $onlyFavorites);
             $dbStats['db_favorite_videos'] = countFavoriteVideos($pdo);
+            $dbStats['db_total_watched'] = countTotalWatchedVideos($pdo);
             $dbStats['last_sync_at'] = getSyncState($pdo, 'last_sync_at');
         }
     } catch (Throwable $e) {
@@ -919,6 +927,7 @@ $metadataPayload = [
     'watched_count' => (string) ($selected['watched_count'] ?? ''),
     'immich_asset_url' => $immichAssetUrl,
     'qr_image_url' => $qrImageUrl,
+    'show_qr_code' => $showQrCode ? '1' : '0',
     'original_path' => (string) ($selected['original_path'] ?? ''),
 ];
 $statsPayload = [
@@ -928,6 +937,7 @@ $statsPayload = [
     'db_total_videos' => isset($dbStats['db_total_videos']) ? (string) $dbStats['db_total_videos'] : '',
     'db_qualifying_videos' => isset($dbStats['db_qualifying_videos']) ? (string) $dbStats['db_qualifying_videos'] : '',
     'db_favorite_videos' => isset($dbStats['db_favorite_videos']) ? (string) $dbStats['db_favorite_videos'] : '',
+    'db_total_watched' => isset($dbStats['db_total_watched']) ? (string) $dbStats['db_total_watched'] : '',
     'last_sync_at' => isset($dbStats['last_sync_at']) ? (string) $dbStats['last_sync_at'] : '',
 ];
 ?>
@@ -994,6 +1004,10 @@ $statsPayload = [
       font: 13px/1.2 sans-serif;
       padding: 8px 10px;
       cursor: pointer;
+    }
+
+    .action-btn.wide {
+      min-width: 72px;
     }
 
     .action-btn.favorite-active {
@@ -1064,20 +1078,17 @@ $statsPayload = [
       white-space: pre-line;
     }
 
-    .immich-link-panel {
-      position: fixed;
-      left: 14px;
-      top: 12px;
-      z-index: 9996;
-      background: rgba(0, 0, 0, 0.65);
-      border: 1px solid #666;
-      color: #fff;
-      padding: 8px;
-      text-align: center;
-      max-width: 180px;
+    .metadata-panel .metadata-pre {
+      white-space: pre-wrap;
+      margin-bottom: 10px;
     }
 
-    .immich-link-panel img {
+    .metadata-panel .meta-qr {
+      margin-top: 8px;
+      text-align: center;
+    }
+
+    .metadata-panel .meta-qr img {
       width: 150px;
       height: 150px;
       display: block;
@@ -1085,7 +1096,7 @@ $statsPayload = [
       background: #fff;
     }
 
-    .immich-link-panel a {
+    .metadata-panel .meta-qr a {
       color: #fff;
       font: 12px/1.2 sans-serif;
       text-decoration: underline;
@@ -1098,19 +1109,14 @@ $statsPayload = [
     <source src="<?= htmlspecialchars($videoSrc, ENT_QUOTES, 'UTF-8') ?>" type="video/mp4">
   </video>
   <div class="action-bar">
-    <button id="skipBtn" class="action-btn" type="button" title="Skip" aria-label="Skip">⏭</button>
+    <button id="backBtn" class="action-btn wide" type="button" title="Back" aria-label="Back">↩</button>
+    <button id="skipBtn" class="action-btn wide" type="button" title="Skip" aria-label="Skip">⏭</button>
     <button id="favoriteFilterToggle" class="action-btn" type="button" title="Favorites only" aria-label="Favorites only">⭐</button>
     <button id="statsToggle" class="action-btn" type="button" title="Stats" aria-label="Stats">📊</button>
     <button id="metaToggle" class="action-btn" type="button" title="Metadata" aria-label="Metadata">ⓘ</button>
     <button id="favoriteToggle" class="action-btn" type="button" title="Toggle favorite">♡</button>
     <button id="muteToggle" class="mute-toggle" type="button" title="Mute toggle" aria-label="Mute toggle">🔇</button>
   </div>
-  <?php if ($showQrCode): ?>
-  <div class="immich-link-panel">
-    <img src="<?= htmlspecialchars($qrImageUrl, ENT_QUOTES, 'UTF-8') ?>" alt="QR code to open asset in Immich">
-    <a href="<?= htmlspecialchars($immichAssetUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer">Open in Immich</a>
-  </div>
-  <?php endif; ?>
   <?php if ($captureYear !== '' || $locationLabel !== ''): ?>
   <div class="video-caption"><?= htmlspecialchars(
       trim($captureYear . ($locationLabel !== '' ? "\n" . $locationLabel : '')),
@@ -1143,6 +1149,7 @@ $statsPayload = [
 
   <script>
     const player = document.getElementById('player');
+    const backBtn = document.getElementById('backBtn');
     const skipBtn = document.getElementById('skipBtn');
     const favoriteFilterToggle = document.getElementById('favoriteFilterToggle');
     const statsToggle = document.getElementById('statsToggle');
@@ -1155,6 +1162,7 @@ $statsPayload = [
     const stats = <?= json_encode($statsPayload, JSON_UNESCAPED_SLASHES) ?>;
     const muteStorageKey = 'immichVideoKioskMuted';
     const metadataStorageKey = 'immichVideoKioskShowMetadata';
+    const sessionShownStorageKey = 'immichVideoKioskShownThisSession';
     let isFavorite = metadata.is_favorite === '1';
     let onlyFavoritesMode = stats.only_favorites === 'true';
 
@@ -1190,13 +1198,43 @@ $statsPayload = [
       } catch (e) {}
     };
 
+    const getShownThisSession = () => {
+      const url = new URL(window.location.href);
+      const fromUrl = parseInt(url.searchParams.get('shown') || '', 10);
+      if (!Number.isNaN(fromUrl) && fromUrl >= 0) {
+        return fromUrl;
+      }
+      try {
+        const fromStorage = parseInt(window.sessionStorage.getItem(sessionShownStorageKey) || '0', 10);
+        return Number.isNaN(fromStorage) ? 0 : Math.max(0, fromStorage);
+      } catch (e) {
+        return 0;
+      }
+    };
+
+    const setShownThisSession = (value) => {
+      const normalized = Math.max(0, value);
+      try {
+        window.sessionStorage.setItem(sessionShownStorageKey, String(normalized));
+      } catch (e) {}
+      const url = new URL(window.location.href);
+      url.searchParams.set('shown', String(normalized));
+      return url;
+    };
+
     const updateMuteButton = () => {
       muteToggle.textContent = player.muted ? '🔇' : '🔊';
       muteToggle.title = player.muted ? 'Unmute' : 'Mute';
       muteToggle.setAttribute('aria-label', player.muted ? 'Unmute' : 'Mute');
     };
 
-    const formatMetadata = (data) => {
+    const escapeHtml = (value) => {
+      return String(value ?? '').replace(/[&<>"']/g, (ch) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' }[ch]
+      ));
+    };
+
+    const formatMetadataText = (data) => {
       return [
         `asset_id: ${data.asset_id || '-'}`,
         `file_name: ${data.file_name || '-'}`,
@@ -1214,7 +1252,16 @@ $statsPayload = [
       ].join('\n');
     };
 
+    const renderMetadataPanel = (data) => {
+      const textBlock = `<div class="metadata-pre">${escapeHtml(formatMetadataText(data))}</div>`;
+      if (data.show_qr_code === '1' && data.qr_image_url && data.immich_asset_url) {
+        return `${textBlock}<div class="meta-qr"><img src="${escapeHtml(data.qr_image_url)}" alt="QR code to open asset in Immich"><a href="${escapeHtml(data.immich_asset_url)}" target="_blank" rel="noopener noreferrer">Open in Immich</a></div>`;
+      }
+      return textBlock;
+    };
+
     const formatStats = (data) => {
+      const shownThisSession = String(getShownThisSession());
       return [
         `use_sqlite: ${data.use_sqlite}`,
         `only_favorites: ${data.only_favorites}`,
@@ -1222,6 +1269,8 @@ $statsPayload = [
         `total_videos: ${data.db_total_videos || '-'}`,
         `matching_duration: ${data.db_qualifying_videos || '-'}`,
         `favorites: ${data.db_favorite_videos || '-'}`,
+        `shown_this_session: ${shownThisSession}`,
+        `shown_total: ${data.db_total_watched || '-'}`,
         `last_sync_at: ${data.last_sync_at || '-'}`
       ].join('\n');
     };
@@ -1242,6 +1291,14 @@ $statsPayload = [
       player.muted = !player.muted;
       saveMutedPreference(player.muted);
       updateMuteButton();
+    });
+
+    backBtn.addEventListener('click', () => {
+      if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        window.location.reload();
+      }
     });
 
     skipBtn.addEventListener('click', () => {
@@ -1285,7 +1342,7 @@ $statsPayload = [
         }
         isFavorite = next;
         metadata.is_favorite = isFavorite ? '1' : '0';
-        metadataPanel.textContent = formatMetadata(metadata);
+        metadataPanel.innerHTML = renderMetadataPanel(metadata);
         updateFavoriteButton();
       } catch (err) {
         console.error('Favorite toggle failed', err);
@@ -1294,21 +1351,26 @@ $statsPayload = [
       }
     });
 
-    metadataPanel.textContent = formatMetadata(metadata);
+    metadataPanel.innerHTML = renderMetadataPanel(metadata);
     statsPanel.textContent = formatStats(stats);
     metadataPanel.classList.toggle('visible', readMetadataPreference());
     updateFavoriteButton();
     updateFavoriteFilterButton();
+
+    // Keep storage synchronized with URL-based session counter.
+    setShownThisSession(getShownThisSession());
 
     player.addEventListener('volumechange', () => {
       saveMutedPreference(player.muted);
       updateMuteButton();
     });
     player.addEventListener('ended', () => {
+      const currentShown = getShownThisSession();
+      const nextUrl = setShownThisSession(currentShown + 1);
       const encodedId = encodeURIComponent(metadata.asset_id || '');
       fetch(`/watch.php?id=${encodedId}`, { method: 'POST', keepalive: true }).catch(() => {});
       setTimeout(() => {
-        window.location.reload();
+        window.location.href = nextUrl.toString();
       }, 120);
     });
 
