@@ -1738,6 +1738,58 @@ if ($asJsonNext) {
       window.location.href = url.toString();
     });
 
+    const isTypingTarget = (target) => {
+      if (!(target instanceof Element)) {
+        return false;
+      }
+      if (target.isContentEditable) {
+        return true;
+      }
+      const tag = target.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+    };
+
+    window.addEventListener('keydown', (event) => {
+      if (isTypingTarget(event.target)) {
+        return;
+      }
+
+      const key = (event.key || '').toLowerCase();
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        backBtn.click();
+        return;
+      }
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        skipBtn.click();
+        return;
+      }
+      if (key === 'f') {
+        event.preventDefault();
+        favoriteToggle.click();
+        return;
+      }
+      if (key === 's') {
+        event.preventDefault();
+        statsToggle.click();
+        return;
+      }
+      if (key === 'i') {
+        event.preventDefault();
+        metaToggle.click();
+        return;
+      }
+      if (event.code === 'Space' || event.key === ' ') {
+        event.preventDefault();
+        if (player.paused) {
+          player.play().catch(() => {});
+        } else {
+          player.pause();
+        }
+      }
+    });
+
     metadataPanel.innerHTML = renderMetadataPanel(metadata);
     statsPanel.textContent = formatStats(stats);
     adminLastSync.textContent = `Last synced: ${stats.last_sync_at || '-'}`;
