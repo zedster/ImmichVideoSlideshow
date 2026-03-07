@@ -7,6 +7,8 @@ services:
       - .env
     volumes:
       - ./index.php:/var/www/html/index.php:ro
+      - ./api.php:/var/www/html/api.php:ro
+      - ./helpers.php:/var/www/html/helpers.php:ro
       - ./video.php:/var/www/html/video.php:ro
       - ./watch.php:/var/www/html/watch.php:ro
       - ./favorite.php:/var/www/html/favorite.php:ro

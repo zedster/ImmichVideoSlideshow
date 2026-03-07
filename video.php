@@ -1,27 +1,7 @@
 <?php
 declare(strict_types=1);
 
-function envFlag(string $name, bool $default = false): bool
-{
-    $raw = getenv($name);
-    if ($raw === false) {
-        return $default;
-    }
-
-    $value = strtolower(trim((string) $raw));
-    return in_array($value, ['1', 'true', 'yes', 'on'], true);
-}
-
-function kioskLog(string $message, array $context = []): void
-{
-    $encoded = $context === [] ? '' : ' ' . json_encode($context);
-    error_log('[immich-video-kiosk][video] ' . $message . $encoded);
-}
-
-function buildApiUrl(string $baseUrl, string $path): string
-{
-    return rtrim($baseUrl, '/') . '/' . ltrim($path, '/');
-}
+require_once __DIR__ . '/helpers.php';
 
 $immichUrl = getenv('IMMICH_URL') ?: '';
 $apiKey = getenv('IMMICH_API_KEY') ?: '';
@@ -33,7 +13,7 @@ ini_set('log_errors', '1');
 error_reporting(E_ALL);
 ini_set('display_errors', $debug ? '1' : '0');
 
-kioskLog('Incoming playback proxy request', [
+kioskLog('video', 'Incoming playback proxy request', [
     'request_id' => $requestId,
     'asset_id' => is_string($assetId) ? $assetId : '',
     'range' => $_SERVER['HTTP_RANGE'] ?? '',
@@ -41,7 +21,7 @@ kioskLog('Incoming playback proxy request', [
 ]);
 
 if ($immichUrl === '' || $apiKey === '') {
-    kioskLog('Missing required environment variables', [
+    kioskLog('video', 'Missing required environment variables', [
         'request_id' => $requestId,
     ]);
     http_response_code(500);
@@ -51,7 +31,7 @@ if ($immichUrl === '' || $apiKey === '') {
 }
 
 if (!is_string($assetId) || $assetId === '') {
-    kioskLog('Missing required asset id query string', [
+    kioskLog('video', 'Missing required asset id query string', [
         'request_id' => $requestId,
     ]);
     http_response_code(400);
@@ -60,7 +40,7 @@ if (!is_string($assetId) || $assetId === '') {
     exit;
 }
 
-$playbackUrl = buildApiUrl($immichUrl, '/api/assets/' . rawurlencode($assetId) . '/video/playback');
+$playbackUrl = buildApiUrl($immichUrl, IMMICH_PATH_ASSETS . '/' . rawurlencode($assetId) . '/video/playback');
 
 @set_time_limit(0);
 @ini_set('zlib.output_compression', 'Off');
@@ -134,7 +114,7 @@ curl_setopt_array($ch, [
 
 $ok = curl_exec($ch);
 if ($ok === false) {
-    kioskLog('Immich playback proxy failed', [
+    kioskLog('video', 'Immich playback proxy failed', [
         'request_id' => $requestId,
         'asset_id' => $assetId,
         'curl_error' => curl_error($ch),
@@ -146,7 +126,7 @@ if ($ok === false) {
     echo 'Failed to stream video from Immich.';
 } else {
     $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-    kioskLog('Immich playback proxy completed', [
+    kioskLog('video', 'Immich playback proxy completed', [
         'request_id' => $requestId,
         'asset_id' => $assetId,
         'status' => $status,
