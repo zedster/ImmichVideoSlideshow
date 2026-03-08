@@ -11,6 +11,7 @@ struct AppConfig: Codable, Equatable {
     var crossfadeDurationMs: Int = 450
     var preloadSecondsBeforeEnd: Double = 4
     var queueTargetSize: Int = 2
+    var playbackQuality: String = "auto"
     var useSQLiteCache: Bool = true
     var syncOnStartup: Bool = true
     var syncPageSize: Int = 200
@@ -24,6 +25,32 @@ struct AppConfig: Codable, Equatable {
     var normalizedImmichBaseURL: String {
         immichURL.trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+
+    var playbackPeakBitRate: Double {
+        switch playbackQuality {
+        case "low":
+            return 2_000_000
+        case "medium":
+            return 5_000_000
+        case "high":
+            return 10_000_000
+        default:
+            return 0
+        }
+    }
+
+    var playbackQualityLabel: String {
+        switch playbackQuality {
+        case "low":
+            return "low"
+        case "medium":
+            return "med"
+        case "high":
+            return "high"
+        default:
+            return "auto"
+        }
     }
 }
 

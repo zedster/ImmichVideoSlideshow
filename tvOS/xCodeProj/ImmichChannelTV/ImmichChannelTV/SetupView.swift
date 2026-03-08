@@ -15,6 +15,7 @@ struct SetupView: View {
     @State private var apiKey = ""
     @State private var minDuration = "10"
     @State private var randomBatchSize = "20"
+    @State private var playbackQuality = "auto"
     @State private var preloadSeconds = "4"
     @State private var crossfadeDuration = "450"
     @State private var queueTarget = "2"
@@ -36,10 +37,24 @@ struct SetupView: View {
         NavigationStack {
             Form {
                 Section("Immich") {
-                    TextField("Immich URL (e.g. https://immich.example.com)", text: $immichURL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled(true)
-                    TextField("Immich API Key", text: $apiKey)
+                    Text("Use your full Immich server URL, including `http://` or `https://`.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    labeledField(
+                        "Immich URL",
+                        placeholder: "https://immich.example.com",
+                        text: $immichURL,
+                        disableAutocorrect: true
+                    )
+                    labeledField(
+                        "Immich API Key",
+                        placeholder: "API key",
+                        text: $apiKey,
+                        disableAutocorrect: true
+                    )
+                    Text("API key is used to fetch and play your videos directly from Immich.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
                     Button(testInProgress ? "Testing..." : "Test Immich Connection") {
                         testImmichConnection()
@@ -54,23 +69,38 @@ struct SetupView: View {
                 }
 
                 Section("Playback") {
-                    TextField("Minimum Duration (seconds)", text: $minDuration)
-                    TextField("Random Batch Size", text: $randomBatchSize)
+                    Text("Controls which videos are eligible and how many are fetched at a time.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    labeledField("Minimum Duration (seconds)", placeholder: "10", text: $minDuration)
+                    labeledField("Random Batch Size", placeholder: "20", text: $randomBatchSize)
+                    Picker("Picture Quality", selection: $playbackQuality) {
+                        Text("Auto").tag("auto")
+                        Text("High").tag("high")
+                        Text("Medium").tag("medium")
+                        Text("Low").tag("low")
+                    }
                     Toggle("Only Favorites", isOn: $onlyFavorites)
                 }
 
                 Section("Smooth Channel") {
+                    Text("Crossfade and preload settings control how smooth transitions feel between videos.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     Toggle("Crossfade Enabled", isOn: $crossfadeEnabled)
-                    TextField("Crossfade Duration (ms)", text: $crossfadeDuration)
-                    TextField("Preload Seconds Before End", text: $preloadSeconds)
-                    TextField("Queue Target Size", text: $queueTarget)
+                    labeledField("Crossfade Duration (ms)", placeholder: "450", text: $crossfadeDuration)
+                    labeledField("Preload Seconds Before End", placeholder: "4", text: $preloadSeconds)
+                    labeledField("Queue Target Size", placeholder: "2", text: $queueTarget)
                 }
 
                 Section("Local Cache") {
+                    Text("Keeps metadata in local SQLite for faster random selection and better reliability.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     Toggle("Use SQLite Cache", isOn: $useSQLiteCache)
                     Toggle("Sync On Startup", isOn: $syncOnStartup)
-                    TextField("Sync Page Size", text: $syncPageSize)
-                    TextField("Sync Max Pages", text: $syncMaxPages)
+                    labeledField("Sync Page Size", placeholder: "200", text: $syncPageSize)
+                    labeledField("Sync Max Pages", placeholder: "200", text: $syncMaxPages)
 
                     if syncIsSyncing != nil || syncLastSyncAt != nil {
                         Divider()
@@ -96,6 +126,9 @@ struct SetupView: View {
                 }
 
                 Section("Advanced") {
+                    Text("Debug logging adds technical status info on screen and in console output.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     Toggle("Debug Logging", isOn: $debugEnabled)
                 }
 
@@ -119,6 +152,16 @@ struct SetupView: View {
                     }
                     .buttonStyle(.borderedProminent)
                 }
+
+                Section {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Created and maintained by bananasystems.co.uk.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Link("GitHub: zedster/ImmichVideoSlideshow", destination: URL(string: "https://github.com/zedster/ImmichVideoSlideshow")!)
+                            .font(.caption)
+                    }
+                }
             }
             .navigationTitle("Immich Channel Setup")
             .onAppear {
@@ -133,6 +176,7 @@ struct SetupView: View {
         apiKey = cfg.apiKey
         minDuration = String(Int(cfg.minDuration))
         randomBatchSize = String(cfg.randomBatchSize)
+        playbackQuality = cfg.playbackQuality
         preloadSeconds = String(cfg.preloadSecondsBeforeEnd)
         crossfadeDuration = String(cfg.crossfadeDurationMs)
         queueTarget = String(cfg.queueTargetSize)
@@ -172,6 +216,7 @@ struct SetupView: View {
         next.apiKey = trimmedKey
         next.minDuration = minDurationValue
         next.randomBatchSize = randomBatchValue
+        next.playbackQuality = playbackQuality
         next.onlyFavorites = onlyFavorites
         next.debug = debugEnabled
         next.crossfadeEnabled = crossfadeEnabled
@@ -212,8 +257,9 @@ struct SetupView: View {
             do {
                 _ = try await client.fetchRandomBatch(config: testConfig, size: 1)
                 await MainActor.run {
+                    persistImmichCredentialsFromInputs()
                     testFailed = false
-                    testMessage = "Connection successful."
+                    testMessage = "Connection successful. URL/API key saved."
                 }
             } catch {
                 await MainActor.run {
@@ -225,6 +271,34 @@ struct SetupView: View {
             await MainActor.run {
                 testInProgress = false
             }
+        }
+    }
+
+    private func persistImmichCredentialsFromInputs() {
+        let trimmedURL = immichURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedURL.isEmpty, !trimmedKey.isEmpty else { return }
+
+        var next = configStore.config
+        next.immichURL = trimmedURL
+        next.apiKey = trimmedKey
+        configStore.save(next)
+    }
+
+    @ViewBuilder
+    private func labeledField(
+        _ label: String,
+        placeholder: String,
+        text: Binding<String>,
+        disableAutocorrect: Bool = false
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            TextField(placeholder, text: text)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled(disableAutocorrect)
         }
     }
 }

@@ -1,11 +1,15 @@
-import AVKit
+import AVFoundation
+import CoreImage.CIFilterBuiltins
 import SwiftUI
+import UIKit
 
 struct ChannelView: View {
     @ObservedObject private var configStore: ConfigStore
     @StateObject private var coordinator: ChannelCoordinator
     @State private var showSetup = false
     @State private var showInfo = false
+    @State private var shouldResumeAfterSettings = false
+    @State private var infoScrollIndex = 0
 
     init(configStore: ConfigStore) {
         self._configStore = ObservedObject(wrappedValue: configStore)
@@ -17,12 +21,12 @@ struct ChannelView: View {
             ZStack {
                 Color.black.ignoresSafeArea()
 
-                VideoPlayer(player: coordinator.playerA)
+                PlayerSurfaceView(player: coordinator.playerA)
                     .ignoresSafeArea()
                     .opacity(coordinator.opacityA)
                     .allowsHitTesting(false)
 
-                VideoPlayer(player: coordinator.playerB)
+                PlayerSurfaceView(player: coordinator.playerB)
                     .ignoresSafeArea()
                     .opacity(coordinator.opacityB)
                     .allowsHitTesting(false)
@@ -40,13 +44,44 @@ struct ChannelView: View {
                     Spacer()
                 }
 
+                if configStore.config.debug && !coordinator.recentDebugMessages.isEmpty {
+                    VStack {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                ForEach(Array(coordinator.recentDebugMessages.enumerated()), id: \.offset) { _, line in
+                                    Text(line)
+                                        .font(.caption2.monospaced())
+                                        .foregroundStyle(.white.opacity(0.9))
+                                        .lineLimit(1)
+                                }
+                            }
+                            .padding(8)
+                            .background(Color.black.opacity(0.45))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .padding(.leading, 16)
+                            Spacer()
+                        }
+                        Spacer()
+                    }
+                    .padding(.top, 56)
+                }
+
+                if coordinator.isBuffering {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .tint(.white)
+                        .padding(18)
+                        .background(Color.black.opacity(0.45))
+                        .clipShape(Circle())
+                }
+
                 if !coordinator.captionText.isEmpty {
                     VStack {
                         Spacer()
                         HStack {
                             outlinedCaption(coordinator.captionText)
                                 .padding(.leading, 20)
-                                .padding(.bottom, max(40, geo.size.height * 0.10))
+                                .padding(.bottom, max(110, geo.size.height * 0.16))
                             Spacer()
                         }
                     }
@@ -54,6 +89,28 @@ struct ChannelView: View {
 
                 VStack {
                     Spacer()
+                    HStack {
+                        Spacer()
+                        Text(coordinator.secondsLeftText)
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(.white.opacity(0.9))
+                            .padding(.trailing, 8)
+                    }
+                    .padding(.bottom, 6)
+
+                    GeometryReader { proxy in
+                        ZStack(alignment: .leading) {
+                            Rectangle()
+                                .fill(Color.white.opacity(0.2))
+                            Rectangle()
+                                .fill(Color.white.opacity(0.9))
+                                .frame(width: proxy.size.width * coordinator.playbackProgress)
+                        }
+                    }
+                    .frame(height: 5)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+
                     HStack(spacing: 10) {
                         Text(coordinator.title)
                             .font(.caption)
@@ -65,12 +122,24 @@ struct ChannelView: View {
 
                         Spacer()
 
-                        Text(coordinator.statusText)
-                            .font(.caption2.monospaced())
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.black.opacity(0.6))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        if configStore.config.debug {
+                            Text(coordinator.statusText)
+                                .font(.caption2.monospaced())
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color.black.opacity(0.6))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+
+                        if coordinator.canGoBack {
+                            Button {
+                                coordinator.goBack()
+                            } label: {
+                                Image(systemName: "backward.end.fill")
+                            }
+                            .buttonStyle(.bordered)
+                            .accessibilityLabel("Back")
+                        }
 
                         Button {
                             coordinator.togglePlayPause()
@@ -98,7 +167,7 @@ struct ChannelView: View {
                         .accessibilityLabel(coordinator.favoriteButtonLabel())
 
                         Button {
-                            showInfo = true
+                            showInfo.toggle()
                         } label: {
                             Image(systemName: "info.circle")
                         }
@@ -113,7 +182,83 @@ struct ChannelView: View {
                         .buttonStyle(.borderedProminent)
                         .accessibilityLabel("Settings")
                     }
-                    .padding(16)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 0)
+                }
+
+                if showInfo {
+                    HStack(spacing: 0) {
+                        Spacer(minLength: 0)
+
+                        VStack(spacing: 0) {
+                            HStack {
+                                Spacer()
+                                Button {
+                                    showInfo = false
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.title2)
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.top, 16)
+                                .padding(.trailing, 16)
+                            }
+
+                            ScrollViewReader { proxy in
+                                ScrollView {
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            if let image = qrImage(from: coordinator.currentImmichAssetURL) {
+                                                HStack {
+                                                    Spacer()
+                                                    Image(uiImage: image)
+                                                        .interpolation(.none)
+                                                        .resizable()
+                                                        .scaledToFit()
+                                                        .frame(width: 180, height: 180)
+                                                    Spacer()
+                                                }
+                                            }
+                                            if !coordinator.currentImmichAssetURL.isEmpty {
+                                                Text(coordinator.currentImmichAssetURL)
+                                                    .font(.caption2.monospaced())
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                        }
+                                        .id("row-0")
+
+                                        Text("Metadata")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+
+                                        ForEach(Array(coordinator.currentInfoFields.enumerated()), id: \.element.id) { index, field in
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Text(field.label)
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                                Text(field.value)
+                                                    .font(.body.monospaced())
+                                            }
+                                            .padding(.vertical, 4)
+                                            .id("row-\(index + 1)")
+                                        }
+                                    }
+                                    .padding(.horizontal, 20)
+                                    .padding(.bottom, 20)
+                                }
+                                .onChange(of: infoScrollIndex) { next in
+                                    withAnimation(.easeInOut(duration: 0.15)) {
+                                        proxy.scrollTo("row-\(next)", anchor: .top)
+                                    }
+                                }
+                            }
+                        }
+                        .frame(width: geo.size.width * 0.5, height: geo.size.height)
+                        .background(Color.black.opacity(0.45))
+                    }
+                    .ignoresSafeArea()
+                    .transition(.move(edge: .trailing))
                 }
             }
         }
@@ -131,6 +276,49 @@ struct ChannelView: View {
             showSetup = true
             coordinator.acknowledgeSetupOpenRequest()
         }
+        .onChange(of: showInfo) { isVisible in
+            if isVisible {
+                infoScrollIndex = 0
+            }
+        }
+        .onChange(of: showSetup) { isPresented in
+            if isPresented {
+                if !coordinator.isPlaybackPaused {
+                    coordinator.togglePlayPause()
+                    shouldResumeAfterSettings = true
+                } else {
+                    shouldResumeAfterSettings = false
+                }
+            } else if shouldResumeAfterSettings, coordinator.isPlaybackPaused {
+                coordinator.togglePlayPause()
+                shouldResumeAfterSettings = false
+            }
+            if !isPresented {
+                coordinator.clearDebugMessages()
+            }
+        }
+        .onChange(of: configStore.config.debug) { debugEnabled in
+            if !debugEnabled {
+                coordinator.clearDebugMessages()
+            }
+        }
+        .onExitCommand {
+            if showInfo {
+                showInfo = false
+            }
+        }
+        .onMoveCommand { direction in
+            guard showInfo else { return }
+            let maxIndex = coordinator.currentInfoFields.count
+            switch direction {
+            case .down:
+                infoScrollIndex = min(maxIndex, infoScrollIndex + 1)
+            case .up:
+                infoScrollIndex = max(0, infoScrollIndex - 1)
+            default:
+                break
+            }
+        }
         .sheet(isPresented: $showSetup) {
             SetupView(onForceSync: {
                 coordinator.forceSyncNow()
@@ -142,21 +330,6 @@ struct ChannelView: View {
             syncLastError: Binding(get: { coordinator.syncLastError }, set: { _ in }),
             playbackError: Binding(get: { coordinator.setupErrorMessage }, set: { coordinator.setupErrorMessage = $0 }))
                 .environmentObject(configStore)
-        }
-        .sheet(isPresented: $showInfo) {
-            NavigationStack {
-                List(coordinator.currentInfoFields) { field in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(field.label)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(field.value)
-                            .font(.body.monospaced())
-                    }
-                    .padding(.vertical, 4)
-                }
-                .navigationTitle("Video Info")
-            }
         }
     }
 
@@ -177,4 +350,37 @@ struct ChannelView: View {
             base.foregroundColor(.white)
         }
     }
+
+    private func qrImage(from value: String) -> UIImage? {
+        guard !value.isEmpty else { return nil }
+        let context = CIContext()
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(value.utf8)
+        filter.correctionLevel = "M"
+
+        guard let output = filter.outputImage else { return nil }
+        let transformed = output.transformed(by: CGAffineTransform(scaleX: 10, y: 10))
+        guard let cgImage = context.createCGImage(transformed, from: transformed.extent) else { return nil }
+        return UIImage(cgImage: cgImage)
+    }
+}
+
+private struct PlayerSurfaceView: UIViewRepresentable {
+    let player: AVPlayer
+
+    func makeUIView(context: Context) -> PlayerSurfaceUIView {
+        let view = PlayerSurfaceUIView()
+        view.playerLayer.videoGravity = .resizeAspect
+        view.playerLayer.player = player
+        return view
+    }
+
+    func updateUIView(_ uiView: PlayerSurfaceUIView, context: Context) {
+        uiView.playerLayer.player = player
+    }
+}
+
+private final class PlayerSurfaceUIView: UIView {
+    override static var layerClass: AnyClass { AVPlayerLayer.self }
+    var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
 }

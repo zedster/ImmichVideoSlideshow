@@ -169,7 +169,9 @@ final class ImmichAPIClient {
             ]]
         )
 
-        return AVPlayerItem(asset: asset)
+        let item = AVPlayerItem(asset: asset)
+        item.preferredPeakBitRate = config.playbackPeakBitRate
+        return item
     }
 
     func updateFavorite(assetId: String, isFavorite: Bool, config: AppConfig) async throws {

@@ -18,7 +18,13 @@ final class ChannelCoordinator: ObservableObject {
     @Published var captionText: String = ""
     @Published var fallbackMessage: String = ""
     @Published var statusText: String = ""
+    @Published var recentDebugMessages: [String] = []
+    @Published var playbackProgress: Double = 0
+    @Published var secondsLeftText: String = "--:--"
+    @Published var isBuffering: Bool = false
     @Published var currentInfoFields: [VideoInfoField] = []
+    @Published var currentImmichAssetURL: String = ""
+    @Published var canGoBack: Bool = false
     @Published var currentIsFavorite: Bool = false
     @Published var isPlaybackPaused: Bool = false
     @Published var favoriteUpdateInProgress: Bool = false
@@ -36,6 +42,7 @@ final class ChannelCoordinator: ObservableObject {
     private lazy var syncService = VideoSyncService(client: client, store: store)
 
     private var queue: [VideoCandidate] = []
+    private var history: [VideoCandidate] = []
     private var currentItem: VideoCandidate?
     private var transitionInProgress = false
     private var preparingNext = false
@@ -47,6 +54,7 @@ final class ChannelCoordinator: ObservableObject {
 
     private var timeObserver: Any?
     private var timeObserverPlayer: AVPlayer?
+    private var timeControlObservation: NSKeyValueObservation?
     private var endObserver: NSObjectProtocol?
 
     private var queueTimer: Timer?
@@ -114,6 +122,7 @@ final class ChannelCoordinator: ObservableObject {
     func restart() {
         stop()
         queue = []
+        history = []
         currentItem = nil
         nextPreparedId = ""
         consecutivePlaybackFailures = 0
@@ -122,7 +131,12 @@ final class ChannelCoordinator: ObservableObject {
         fallbackMessage = ""
         title = "Loading..."
         captionText = ""
+        playbackProgress = 0
+        secondsLeftText = "--:--"
+        isBuffering = false
         currentInfoFields = []
+        currentImmichAssetURL = ""
+        canGoBack = false
         currentIsFavorite = false
         isPlaybackPaused = false
         favoriteUpdateInProgress = false
@@ -130,6 +144,10 @@ final class ChannelCoordinator: ObservableObject {
         opacityB = 0
         activeIndex = 0
         start()
+    }
+
+    func clearDebugMessages() {
+        recentDebugMessages = []
     }
 
     func acknowledgeSetupOpenRequest() {
@@ -175,9 +193,17 @@ final class ChannelCoordinator: ObservableObject {
         if isPlaybackPaused {
             player.play()
             isPlaybackPaused = false
+            updateBufferingState(for: player)
         } else {
             player.pause()
             isPlaybackPaused = true
+            isBuffering = false
+        }
+    }
+
+    func goBack() {
+        Task {
+            await transitionToPrevious(reason: "manual_back")
         }
     }
 
@@ -206,11 +232,13 @@ final class ChannelCoordinator: ObservableObject {
             try await playOnActivePlayer(first)
             clearPlaybackFailureState()
             await fillQueueIfNeeded()
+            addDebugMessage("Bootstrap playback started")
         } catch {
             registerPlaybackFailure("Could not load initial video. Retrying...", error: error)
             if configStore.config.debug {
                 print("[ChannelCoordinator] bootstrap failed: \(error)")
             }
+            addDebugMessage("Bootstrap failed: \(error.localizedDescription)")
         }
     }
 
@@ -243,6 +271,7 @@ final class ChannelCoordinator: ObservableObject {
             if configStore.config.debug {
                 print("[ChannelCoordinator] sync done pages=\(result.pagesFetched) upserted=\(result.rowsUpserted)")
             }
+            addDebugMessage("Sync done p\(result.pagesFetched) r\(result.rowsUpserted)")
             if !silent {
                 fallbackMessage = "Sync complete"
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
@@ -259,6 +288,7 @@ final class ChannelCoordinator: ObservableObject {
             if configStore.config.debug {
                 print("[ChannelCoordinator] sync failed: \(error)")
             }
+            addDebugMessage("Sync failed: \(error.localizedDescription)")
         }
 
         isSyncing = false
@@ -286,6 +316,8 @@ final class ChannelCoordinator: ObservableObject {
             NotificationCenter.default.removeObserver(endObserver)
             self.endObserver = nil
         }
+        timeControlObservation?.invalidate()
+        timeControlObservation = nil
         removeTimeObserverIfNeeded()
     }
 
@@ -299,6 +331,22 @@ final class ChannelCoordinator: ObservableObject {
             self.onTick(current: CMTimeGetSeconds(time))
         }
         timeObserverPlayer = player
+        installPlaybackStateObserver()
+    }
+
+    private func installPlaybackStateObserver() {
+        timeControlObservation?.invalidate()
+        let player = activePlayer()
+        timeControlObservation = player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] observed, _ in
+            guard let self else { return }
+            Task { @MainActor in
+                self.updateBufferingState(for: observed)
+            }
+        }
+    }
+
+    private func updateBufferingState(for player: AVPlayer) {
+        isBuffering = !isPlaybackPaused && player.timeControlStatus == .waitingToPlayAtSpecifiedRate
     }
 
     private func removeTimeObserverIfNeeded() {
@@ -314,6 +362,9 @@ final class ChannelCoordinator: ObservableObject {
         guard duration.isFinite, duration > 0 else { return }
 
         let remaining = duration - current
+        let clampedProgress = max(0, min(1, current / duration))
+        playbackProgress = clampedProgress
+        secondsLeftText = "-\(formatDuration(max(0, remaining)))"
         if remaining <= configStore.config.preloadSecondsBeforeEnd {
             Task { @MainActor in
                 await maybePrepareNext()
@@ -359,11 +410,13 @@ final class ChannelCoordinator: ObservableObject {
                 if fallbackMessage == "Could not fetch next video. Retrying..." {
                     fallbackMessage = ""
                 }
+                addDebugMessage("Queued \(item.title)")
             } catch {
                 if configStore.config.debug {
                     print("[ChannelCoordinator] queue fetch failed: \(error)")
                 }
                 registerPlaybackFailure("Could not fetch next video. Retrying...", error: error)
+                addDebugMessage("Queue fetch failed: \(error.localizedDescription)")
                 break
             }
         }
@@ -440,8 +493,12 @@ final class ChannelCoordinator: ObservableObject {
         try await playWithAutoplayFallback(player: player)
 
         currentItem = candidate
+        canGoBack = !history.isEmpty
         currentIsFavorite = candidate.isFavorite
         isPlaybackPaused = false
+        playbackProgress = 0
+        secondsLeftText = "-\(formatDuration(candidate.duration))"
+        currentImmichAssetURL = buildImmichAssetURL(for: candidate)
         currentInfoFields = buildInfoFields(for: candidate)
         title = candidate.title
         captionText = formatCaption(for: candidate)
@@ -475,6 +532,7 @@ final class ChannelCoordinator: ObservableObject {
         }
 
         let next = queue.removeFirst()
+        let previous = currentItem
         updateStatus()
 
         do {
@@ -512,9 +570,19 @@ final class ChannelCoordinator: ObservableObject {
             outgoing.replaceCurrentItem(with: nil)
 
             activeIndex = 1 - activeIndex
+            if let previous {
+                history.append(previous)
+                if history.count > 100 {
+                    history.removeFirst(history.count - 100)
+                }
+            }
             currentItem = next
+            canGoBack = !history.isEmpty
             currentIsFavorite = next.isFavorite
             isPlaybackPaused = false
+            playbackProgress = 0
+            secondsLeftText = "-\(formatDuration(next.duration))"
+            currentImmichAssetURL = buildImmichAssetURL(for: next)
             currentInfoFields = buildInfoFields(for: next)
             title = next.title
             captionText = formatCaption(for: next)
@@ -528,12 +596,71 @@ final class ChannelCoordinator: ObservableObject {
             if configStore.config.debug {
                 print("[ChannelCoordinator] transitioned: \(reason) -> \(next.id)")
             }
+            addDebugMessage("Next: \(next.title)")
         } catch {
             registerPlaybackFailure("Transition failed. Skipping...", error: error)
             nextPreparedId = ""
             if configStore.config.debug {
                 print("[ChannelCoordinator] transition failed: \(reason) error=\(error)")
             }
+            addDebugMessage("Transition failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func transitionToPrevious(reason: String) async {
+        guard !transitionInProgress else { return }
+        guard let previous = history.popLast() else { return }
+
+        transitionInProgress = true
+        defer { transitionInProgress = false }
+
+        let outgoingCurrent = currentItem
+
+        do {
+            try await prepareHiddenPlayer(with: previous)
+
+            let outgoing = activePlayer()
+            let incoming = hiddenPlayer()
+            incoming.isMuted = outgoing.isMuted
+            try await playWithAutoplayFallback(player: incoming)
+
+            outgoing.pause()
+            outgoing.replaceCurrentItem(with: nil)
+
+            activeIndex = 1 - activeIndex
+            currentItem = previous
+            canGoBack = !history.isEmpty
+            currentIsFavorite = previous.isFavorite
+            isPlaybackPaused = false
+            playbackProgress = 0
+            secondsLeftText = "-\(formatDuration(previous.duration))"
+            currentImmichAssetURL = buildImmichAssetURL(for: previous)
+            currentInfoFields = buildInfoFields(for: previous)
+            title = previous.title
+            captionText = formatCaption(for: previous)
+            nextPreparedId = ""
+            clearPlaybackFailureState()
+
+            if let outgoingCurrent, !queue.contains(where: { $0.id == outgoingCurrent.id }) {
+                queue.insert(outgoingCurrent, at: 0)
+            }
+
+            installTimeObserver()
+            await fillQueueIfNeeded()
+            await maybePrepareNext()
+
+            if configStore.config.debug {
+                print("[ChannelCoordinator] transitioned: \(reason) -> \(previous.id)")
+            }
+            addDebugMessage("Back: \(previous.title)")
+        } catch {
+            history.append(previous)
+            canGoBack = !history.isEmpty
+            fallbackMessage = "Back failed: \(error.localizedDescription)"
+            if configStore.config.debug {
+                print("[ChannelCoordinator] previous transition failed: \(reason) error=\(error)")
+            }
+            addDebugMessage("Back failed: \(error.localizedDescription)")
         }
     }
 
@@ -548,7 +675,8 @@ final class ChannelCoordinator: ObservableObject {
     private func updateStatus() {
         let mode = configStore.config.crossfadeEnabled ? "fade \(configStore.config.crossfadeDurationMs)ms" : "cut"
         let syncText = isSyncing ? " · syncing p\(syncPagesFetched) r\(syncRowsUpserted)" : ""
-        statusText = "Queue \(queue.count)/\(configStore.config.queueTargetSize) · \(mode)\(syncText)"
+        let debugQuality = configStore.config.debug ? " · q \(configStore.config.playbackQualityLabel)" : ""
+        statusText = "Queue \(queue.count)/\(configStore.config.queueTargetSize) · \(mode)\(syncText)\(debugQuality)"
     }
 
     private func applyMuteState(_ muted: Bool) {
@@ -600,6 +728,9 @@ final class ChannelCoordinator: ObservableObject {
 
         if let index = queue.firstIndex(where: { $0.id == assetId }) {
             queue[index] = queue[index].withFavorite(isFavorite)
+        }
+        for i in history.indices where history[i].id == assetId {
+            history[i] = history[i].withFavorite(isFavorite)
         }
     }
 
@@ -705,56 +836,35 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func buildInfoFields(for candidate: VideoCandidate) -> [VideoInfoField] {
-        var fields: [VideoInfoField] = []
-
-        fields.append(VideoInfoField(id: "title", label: "Title", value: candidate.title))
-        fields.append(VideoInfoField(id: "id", label: "Asset ID", value: candidate.id))
-        fields.append(VideoInfoField(id: "duration", label: "Duration", value: formatDuration(candidate.duration)))
-        fields.append(VideoInfoField(id: "favorite", label: "Favorite", value: candidate.isFavorite ? "Yes" : "No"))
-
-        let dateTime = formatCaptureDateTime(candidate.captureDate)
-        if !dateTime.isEmpty {
-            fields.append(VideoInfoField(id: "datetime", label: "Date/Time", value: dateTime))
-        }
-
         let location = formatLocation(city: candidate.city, country: candidate.country)
-        if !location.isEmpty {
-            fields.append(VideoInfoField(id: "location", label: "Location", value: location))
-        }
-
         let camera = [candidate.cameraMake, candidate.cameraModel]
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: " ")
-        if !camera.isEmpty {
-            fields.append(VideoInfoField(id: "camera", label: "Camera", value: camera))
-        }
+        let dateTime = formatCaptureDateTime(candidate.captureDate)
 
-        if !candidate.lensModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            fields.append(VideoInfoField(id: "lens", label: "Lens", value: candidate.lensModel))
-        }
-        if !candidate.fNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            fields.append(VideoInfoField(id: "fnumber", label: "Aperture", value: candidate.fNumber))
-        }
-        if !candidate.focalLength.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            fields.append(VideoInfoField(id: "focal", label: "Focal Length", value: candidate.focalLength))
-        }
-        if !candidate.iso.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            fields.append(VideoInfoField(id: "iso", label: "ISO", value: candidate.iso))
-        }
-        if !candidate.exposureTime.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            fields.append(VideoInfoField(id: "shutter", label: "Exposure", value: candidate.exposureTime))
-        }
-
-        let gps = [candidate.latitude, candidate.longitude]
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .joined(separator: ", ")
-        if !gps.isEmpty {
-            fields.append(VideoInfoField(id: "gps", label: "GPS", value: gps))
-        }
-
-        return fields
+        return [
+            VideoInfoField(id: "title", label: "Title", value: nonEmptyOrDash(candidate.title)),
+            VideoInfoField(id: "id", label: "Asset ID", value: nonEmptyOrDash(candidate.id)),
+            VideoInfoField(id: "duration", label: "Duration", value: formatDuration(candidate.duration)),
+            VideoInfoField(id: "favorite", label: "Favorite", value: candidate.isFavorite ? "Yes" : "No"),
+            VideoInfoField(id: "capture_raw", label: "Capture Date (Raw)", value: nonEmptyOrDash(candidate.captureDate)),
+            VideoInfoField(id: "capture_fmt", label: "Capture Date (Parsed)", value: nonEmptyOrDash(dateTime)),
+            VideoInfoField(id: "city", label: "City", value: nonEmptyOrDash(candidate.city)),
+            VideoInfoField(id: "country", label: "Country", value: nonEmptyOrDash(candidate.country)),
+            VideoInfoField(id: "location", label: "Location", value: nonEmptyOrDash(location)),
+            VideoInfoField(id: "camera_make", label: "Camera Make", value: nonEmptyOrDash(candidate.cameraMake)),
+            VideoInfoField(id: "camera_model", label: "Camera Model", value: nonEmptyOrDash(candidate.cameraModel)),
+            VideoInfoField(id: "camera", label: "Camera (Combined)", value: nonEmptyOrDash(camera)),
+            VideoInfoField(id: "lens", label: "Lens", value: nonEmptyOrDash(candidate.lensModel)),
+            VideoInfoField(id: "fnumber", label: "Aperture", value: nonEmptyOrDash(candidate.fNumber)),
+            VideoInfoField(id: "focal", label: "Focal Length", value: nonEmptyOrDash(candidate.focalLength)),
+            VideoInfoField(id: "iso", label: "ISO", value: nonEmptyOrDash(candidate.iso)),
+            VideoInfoField(id: "shutter", label: "Exposure", value: nonEmptyOrDash(candidate.exposureTime)),
+            VideoInfoField(id: "latitude", label: "Latitude", value: nonEmptyOrDash(candidate.latitude)),
+            VideoInfoField(id: "longitude", label: "Longitude", value: nonEmptyOrDash(candidate.longitude)),
+            VideoInfoField(id: "immich_url", label: "Immich URL", value: nonEmptyOrDash(currentImmichAssetURL))
+        ]
     }
 
     private func formatDuration(_ seconds: Double) -> String {
@@ -798,6 +908,28 @@ final class ChannelCoordinator: ObservableObject {
             }
         }
         return value
+    }
+
+    private func buildImmichAssetURL(for candidate: VideoCandidate) -> String {
+        let encoded = candidate.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? candidate.id
+        return "\(configStore.config.normalizedImmichBaseURL)/photos/\(encoded)"
+    }
+
+    private func addDebugMessage(_ message: String) {
+        guard configStore.config.debug else {
+            recentDebugMessages = []
+            return
+        }
+        let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
+        recentDebugMessages.append("[\(timestamp)] \(message)")
+        if recentDebugMessages.count > 3 {
+            recentDebugMessages.removeFirst(recentDebugMessages.count - 3)
+        }
+    }
+
+    private func nonEmptyOrDash(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "-" : trimmed
     }
 }
 
