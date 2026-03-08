@@ -1,9 +1,48 @@
+<?php
+declare(strict_types=1);
+
+function envFlag(string $name, bool $default = false): bool
+{
+    $raw = getenv($name);
+    if ($raw === false) {
+        return $default;
+    }
+    $value = strtolower(trim((string) $raw));
+    return in_array($value, ['1', 'true', 'yes', 'on'], true);
+}
+
+function envInt(string $name, int $default): int
+{
+    $raw = getenv($name);
+    if ($raw === false || trim((string) $raw) === '') {
+        return $default;
+    }
+    return (int) $raw;
+}
+
+function envFloat(string $name, float $default): float
+{
+    $raw = getenv($name);
+    if ($raw === false || trim((string) $raw) === '') {
+        return $default;
+    }
+    return (float) $raw;
+}
+
+$settings = [
+    'minDuration' => max(0.0, envFloat('MIN_DURATION', 10.0)),
+    'crossfadeEnabled' => envFlag('CROSSFADE_ENABLED', true),
+    'crossfadeDurationMs' => max(0, envInt('CROSSFADE_DURATION', 450)),
+    'preloadSecondsBeforeEnd' => max(0.25, envFloat('PRELOAD_SECONDS_BEFORE_END', 4.0)),
+    'queueTargetSize' => max(1, min(5, envInt('QUEUE_TARGET_SIZE', 2))),
+];
+?>
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Immich Video Kiosk</title>
+  <title>Immich Video Channel</title>
   <style>
     html, body {
       margin: 0;
@@ -11,792 +50,560 @@
       height: 100%;
       background: #000;
       overflow: hidden;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
     }
 
-    video {
+    #stage {
+      position: fixed;
+      inset: 0;
+      background: #000;
+    }
+
+    .player {
+      position: absolute;
+      inset: 0;
       width: 100vw;
       height: 100vh;
       width: 100dvw;
       height: 100dvh;
       object-fit: contain;
       background: #000;
-      display: block;
+      opacity: 0;
+      transition: opacity 0ms linear;
     }
 
-    .mute-toggle {
-      border: 1px solid #666;
-      background: rgba(0, 0, 0, 0.65);
-      color: #fff;
-      font: 13px/1.2 sans-serif;
-      padding: 8px 10px;
-      cursor: pointer;
+    .player.active {
+      opacity: 1;
     }
 
-    .action-bar {
-      position: fixed;
-      right: 12px;
-      top: 12px;
-      z-index: 9999;
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-
-    .action-btn {
-      border: 1px solid #666;
-      background: rgba(0, 0, 0, 0.65);
-      color: #fff;
-      font: 13px/1.2 sans-serif;
-      padding: 8px 10px;
-      cursor: pointer;
-    }
-
-    .action-btn.wide {
-      min-width: 72px;
-    }
-
-    .action-btn.favorite-active {
-      border-color: #ff5d7b;
-      color: #ff5d7b;
-      font-weight: 700;
-    }
-
-    .metadata-panel {
-      position: fixed;
-      right: 12px;
-      top: 52px;
-      z-index: 9998;
-      max-width: 45vw;
-      max-height: 65vh;
-      overflow: auto;
-      background: rgba(0, 0, 0, 0.75);
-      border: 1px solid #666;
-      color: #fff;
-      padding: 10px 12px;
-      font: 12px/1.4 monospace;
-      white-space: pre-wrap;
-      display: none;
-    }
-
-    .metadata-panel.visible {
-      display: block;
-    }
-
-    .stats-panel {
-      position: fixed;
-      right: 12px;
-      top: 52px;
-      z-index: 9998;
-      max-width: 45vw;
-      max-height: 65vh;
-      overflow: auto;
-      background: rgba(0, 0, 0, 0.75);
-      border: 1px solid #666;
-      color: #fff;
-      padding: 10px 12px;
-      font: 12px/1.4 monospace;
-      white-space: pre-wrap;
-      display: none;
-    }
-
-    .stats-panel.visible {
-      display: block;
-    }
-
-    .video-caption {
-      position: fixed;
-      left: 14px;
-      bottom: 10vh;
-      z-index: 9997;
-      color: #fff;
-      font: 900 34px/1.12 sans-serif;
-      letter-spacing: 0.3px;
-      -webkit-text-stroke: 1.5px #000;
-      text-shadow:
-        -1px -1px 0 #000,
-         1px -1px 0 #000,
-        -1px  1px 0 #000,
-         1px  1px 0 #000,
-         0 2px 4px rgba(0, 0, 0, 0.8);
-      pointer-events: none;
-      user-select: none;
-      white-space: pre-line;
-    }
-
-    .video-caption.hidden {
-      display: none;
-    }
-
-    .metadata-panel .metadata-pre {
-      white-space: pre-wrap;
-      margin-bottom: 10px;
-    }
-
-    .metadata-panel .meta-qr {
-      margin-top: 8px;
-      text-align: center;
-    }
-
-    .metadata-panel .meta-qr img {
-      width: 150px;
-      height: 150px;
-      display: block;
-      margin: 0 auto 6px;
-      background: #fff;
-    }
-
-    .metadata-panel .meta-qr a {
-      color: #fff;
-      font: 12px/1.2 sans-serif;
-      text-decoration: underline;
-      word-break: break-word;
-    }
-
-    .next-countdown {
-      position: fixed;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 10000;
-      color: #fff;
-      background: rgba(0, 0, 0, 0.7);
-      border: 1px solid #666;
-      border-radius: 10px;
-      padding: 14px 18px;
-      font: 700 28px/1.1 sans-serif;
-      text-align: center;
-      display: none;
-      pointer-events: none;
-      -webkit-text-stroke: 1px #000;
-      text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
-    }
-
-    .next-countdown.visible {
-      display: block;
-    }
-
-    .admin-trigger {
-      position: fixed;
-      right: 8px;
-      bottom: 6px;
-      z-index: 10001;
-      background: transparent;
-      border: none;
-      color: rgba(255, 255, 255, 0.25);
-      font: 700 18px/1 monospace;
-      cursor: pointer;
-      padding: 4px 6px;
-    }
-
-    .admin-panel {
-      position: fixed;
-      right: 12px;
-      bottom: 28px;
-      z-index: 10002;
-      width: 280px;
-      background: rgba(0, 0, 0, 0.88);
-      border: 1px solid #666;
-      color: #fff;
-      padding: 12px;
-      display: none;
-      border-radius: 8px;
-    }
-
-    .admin-panel.visible {
-      display: block;
-    }
-
-    .admin-title {
-      font: 700 14px/1.2 sans-serif;
-      margin-bottom: 10px;
-    }
-
-    .admin-row {
-      display: flex;
-      gap: 8px;
-      justify-content: flex-end;
-    }
-
-    .admin-btn {
-      border: 1px solid #666;
-      background: rgba(255, 255, 255, 0.08);
-      color: #fff;
-      font: 12px/1.2 sans-serif;
-      padding: 7px 9px;
-      cursor: pointer;
-      border-radius: 4px;
-    }
-
-    .admin-btn.primary {
-      border-color: #2f7f2f;
-      background: rgba(47, 127, 47, 0.3);
-    }
-
-    .load-error {
+    .hud {
       position: fixed;
       left: 12px;
-      top: 12px;
-      z-index: 10003;
-      background: rgba(40, 0, 0, 0.85);
-      border: 1px solid #8f3a3a;
-      color: #ffd0d0;
-      padding: 10px 12px;
-      max-width: 80vw;
-      font: 12px/1.4 monospace;
-      display: none;
-      white-space: pre-wrap;
+      right: 12px;
+      bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      z-index: 20;
+      pointer-events: none;
     }
 
-    .load-error.visible {
-      display: block;
+    .chip {
+      pointer-events: auto;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 6px;
+      padding: 6px 9px;
+      font-size: 12px;
+      line-height: 1.2;
+      backdrop-filter: blur(2px);
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      pointer-events: auto;
+    }
+
+    .btn {
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      color: #fff;
+      background: rgba(0, 0, 0, 0.6);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    #fallback {
+      position: fixed;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 30;
+      color: #ffd8d8;
+      background: rgba(60, 0, 0, 0.72);
+      border: 1px solid rgba(255, 120, 120, 0.6);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font: 12px/1.3 monospace;
+      display: none;
+      white-space: pre-wrap;
+      text-align: center;
+      max-width: 90vw;
     }
   </style>
 </head>
 <body>
-  <video id="player" autoplay muted playsinline controls></video>
-  <div class="action-bar">
-    <button id="backBtn" class="action-btn wide" type="button" title="Back" aria-label="Back">↩</button>
-    <button id="skipBtn" class="action-btn wide" type="button" title="Skip" aria-label="Skip">⏭</button>
-    <button id="favoriteFilterToggle" class="action-btn" type="button" title="Favorites only" aria-label="Favorites only">⭐</button>
-    <button id="statsToggle" class="action-btn" type="button" title="Stats" aria-label="Stats">📊</button>
-    <button id="metaToggle" class="action-btn" type="button" title="Metadata" aria-label="Metadata">ⓘ</button>
-    <button id="favoriteToggle" class="action-btn" type="button" title="Toggle favorite">♡</button>
-    <button id="muteToggle" class="mute-toggle" type="button" title="Mute toggle" aria-label="Mute toggle">🔇</button>
+  <div id="stage">
+    <video id="v0" class="player active" autoplay muted playsinline preload="auto"></video>
+    <video id="v1" class="player" autoplay muted playsinline preload="auto"></video>
   </div>
-  <div id="videoCaption" class="video-caption hidden"></div>
-  <button id="adminTrigger" class="admin-trigger" type="button" title="Admin">~</button>
-  <div id="adminPanel" class="admin-panel" role="dialog" aria-modal="false" aria-label="Admin panel">
-    <div class="admin-title">Admin Panel</div>
-    <div id="adminLastSync" style="font:12px/1.3 monospace; margin-bottom:10px; color:#d0d0d0;">Last synced: -</div>
-    <div class="admin-row">
-      <button id="adminCloseBtn" class="admin-btn" type="button">Close</button>
-      <button id="syncNowBtn" class="admin-btn primary" type="button">Sync With Immich</button>
+
+  <div id="fallback"></div>
+
+  <div class="hud">
+    <div id="title" class="chip">Loading…</div>
+    <div class="controls">
+      <button id="skipBtn" class="btn" type="button">Skip</button>
+      <button id="muteBtn" class="btn" type="button">Unmute</button>
+      <button id="fullscreenBtn" class="btn" type="button">Fullscreen</button>
+      <div id="status" class="chip"></div>
     </div>
   </div>
-  <div id="nextCountdown" class="next-countdown"></div>
-  <div id="metadataPanel" class="metadata-panel"></div>
-  <div id="statsPanel" class="stats-panel"></div>
-  <div id="loadError" class="load-error"></div>
 
   <script>
-    const player = document.getElementById('player');
-    const backBtn = document.getElementById('backBtn');
+    const settings = <?= json_encode($settings, JSON_UNESCAPED_SLASHES) ?>;
+
+    const players = [
+      document.getElementById('v0'),
+      document.getElementById('v1'),
+    ];
+    const titleEl = document.getElementById('title');
+    const statusEl = document.getElementById('status');
+    const fallbackEl = document.getElementById('fallback');
     const skipBtn = document.getElementById('skipBtn');
-    const favoriteFilterToggle = document.getElementById('favoriteFilterToggle');
-    const statsToggle = document.getElementById('statsToggle');
-    const metaToggle = document.getElementById('metaToggle');
-    const favoriteToggle = document.getElementById('favoriteToggle');
-    const muteToggle = document.getElementById('muteToggle');
-    const metadataPanel = document.getElementById('metadataPanel');
-    const statsPanel = document.getElementById('statsPanel');
-    const adminTrigger = document.getElementById('adminTrigger');
-    const adminPanel = document.getElementById('adminPanel');
-    const adminCloseBtn = document.getElementById('adminCloseBtn');
-    const adminLastSync = document.getElementById('adminLastSync');
-    const syncNowBtn = document.getElementById('syncNowBtn');
-    const nextCountdown = document.getElementById('nextCountdown');
-    const videoCaption = document.getElementById('videoCaption');
-    const loadError = document.getElementById('loadError');
+    const muteBtn = document.getElementById('muteBtn');
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
 
-    const muteStorageKey = 'immichVideoKioskMuted';
-    const metadataStorageKey = 'immichVideoKioskShowMetadata';
-    const sessionShownStorageKey = 'immichVideoKioskShownThisSession';
-
-    let metadata = {};
-    let stats = {};
-    let isFavorite = false;
-    let onlyFavoritesMode = false;
-    let suppressMutePersist = false;
-    let userInteracted = false;
-    let nextTimerInterval = null;
-    let nextTimerTimeout = null;
+    const muteStorageKey = 'immichChannelMuted';
+    let activeIndex = 0;
+    let queue = [];
+    let inflightFetches = 0;
+    let transitionInProgress = false;
+    let preparingNext = false;
+    let nextPreparedId = '';
+    let currentItem = null;
 
     const readMutedPreference = () => {
       try {
-        const raw = window.localStorage.getItem(muteStorageKey);
-        if (raw === null) {
-          return true;
-        }
+        const raw = localStorage.getItem(muteStorageKey);
+        if (raw === null) return true;
         return raw === '1';
       } catch (e) {
         return true;
       }
     };
 
-    const preferredMuted = readMutedPreference();
-
     const saveMutedPreference = (muted) => {
       try {
-        window.localStorage.setItem(muteStorageKey, muted ? '1' : '0');
+        localStorage.setItem(muteStorageKey, muted ? '1' : '0');
       } catch (e) {}
     };
 
-    const readMetadataPreference = () => {
-      try {
-        return window.localStorage.getItem(metadataStorageKey) === '1';
-      } catch (e) {
-        return false;
-      }
-    };
-
-    const saveMetadataPreference = (visible) => {
-      try {
-        window.localStorage.setItem(metadataStorageKey, visible ? '1' : '0');
-      } catch (e) {}
-    };
-
-    const getShownThisSession = () => {
-      const url = new URL(window.location.href);
-      const fromUrl = parseInt(url.searchParams.get('shown') || '', 10);
-      if (!Number.isNaN(fromUrl) && fromUrl >= 0) {
-        return fromUrl;
-      }
-      try {
-        const fromStorage = parseInt(window.sessionStorage.getItem(sessionShownStorageKey) || '0', 10);
-        return Number.isNaN(fromStorage) ? 0 : Math.max(0, fromStorage);
-      } catch (e) {
-        return 0;
-      }
-    };
-
-    const setShownThisSession = (value) => {
-      const normalized = Math.max(0, value);
-      try {
-        window.sessionStorage.setItem(sessionShownStorageKey, String(normalized));
-      } catch (e) {}
-      const url = new URL(window.location.href);
-      url.searchParams.set('shown', String(normalized));
-      return url;
-    };
+    const preferredMuted = readMutedPreference();
+    players.forEach((p) => {
+      p.muted = preferredMuted;
+      p.volume = 1;
+    });
 
     const updateMuteButton = () => {
-      muteToggle.textContent = player.muted ? '🔇' : '🔊';
-      muteToggle.title = player.muted ? 'Unmute' : 'Mute';
-      muteToggle.setAttribute('aria-label', player.muted ? 'Unmute' : 'Mute');
+      const muted = players[activeIndex].muted;
+      muteBtn.textContent = muted ? 'Unmute' : 'Mute';
     };
 
-    const isLandscapePhone = () => {
-      const isCoarse = window.matchMedia('(pointer: coarse)').matches;
-      const isLandscape = window.matchMedia('(orientation: landscape)').matches;
-      const isPhoneLike = Math.max(window.screen.width, window.screen.height) <= 1366;
-      return isCoarse && isLandscape && isPhoneLike;
+    const isFullscreen = () => {
+      return Boolean(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement
+      );
     };
 
-    const tryEnterFullscreenForMobile = () => {
-      if (!isLandscapePhone()) {
-        return;
-      }
-      if (document.fullscreenElement) {
-        return;
-      }
-      if (typeof player.requestFullscreen === 'function') {
-        player.requestFullscreen().catch(() => {});
-        return;
-      }
-      if (typeof player.webkitEnterFullscreen === 'function') {
-        try {
-          player.webkitEnterFullscreen();
-        } catch (e) {}
-      }
+    const updateFullscreenButton = () => {
+      fullscreenBtn.textContent = isFullscreen() ? 'Exit Fullscreen' : 'Fullscreen';
     };
 
-    const escapeHtml = (value) => {
-      return String(value ?? '').replace(/[&<>"']/g, (ch) => (
-        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]
-      ));
-    };
+    const toggleFullscreen = async () => {
+      const docEl = document.documentElement;
+      const current = activePlayer();
 
-    const formatMetadataText = (data) => {
-      const cameraName = [data.camera_make || '', data.camera_model || ''].join(' ').trim();
-      const resolution = (data.video_width && data.video_height) ? `${data.video_width}x${data.video_height}` : '-';
-      return [
-        `asset_id: ${data.asset_id || '-'}`,
-        `file_name: ${data.file_name || '-'}`,
-        `is_favorite: ${data.is_favorite === '1' ? 'yes' : 'no'}`,
-        `capture_date: ${data.capture_date || '-'}`,
-        `camera: ${cameraName || '-'}`,
-        `lens: ${data.camera_lens || '-'}`,
-        `codec: ${data.video_codec || '-'}`,
-        `fps: ${data.video_fps || '-'}`,
-        `resolution: ${resolution}`,
-        `duration: ${data.duration || '-'}s`,
-        `duration_raw: ${data.duration_raw || '-'}`,
-        `faces_count: ${data.faces_count || '0'}`,
-        `watched_count: ${data.watched_count || '0'}`,
-        `city: ${data.city || '-'}`,
-        `country: ${data.country || '-'}`,
-        `latitude: ${data.latitude || '-'}`,
-        `longitude: ${data.longitude || '-'}`,
-        `original_path: ${data.original_path || '-'}`
-      ].join('\n');
-    };
-
-    const renderMetadataPanel = (data) => {
-      const textBlock = `<div class="metadata-pre">${escapeHtml(formatMetadataText(data))}</div>`;
-      if (data.show_qr_code === '1' && data.qr_image_url && data.immich_asset_url) {
-        return `${textBlock}<div class="meta-qr"><img src="${escapeHtml(data.qr_image_url)}" alt="QR code to open asset in Immich"><a href="${escapeHtml(data.immich_asset_url)}" target="_blank" rel="noopener noreferrer">Open in Immich</a></div>`;
-      }
-      return textBlock;
-    };
-
-    const formatStats = (data) => {
-      const shownThisSession = String(getShownThisSession());
-      let topCameras = [];
-      let topCodecs = [];
       try {
-        topCameras = JSON.parse(data.db_top_cameras || '[]');
-      } catch (e) {
-        topCameras = [];
-      }
-      try {
-        topCodecs = JSON.parse(data.db_top_codecs || '[]');
-      } catch (e) {
-        topCodecs = [];
-      }
-      const topCameraLines = topCameras.map((row, i) => `${i + 1}. ${(row.camera_name || 'Unknown')} (${row.cnt || 0})`);
-      const topCodecLines = topCodecs.map((row, i) => `${i + 1}. ${(row.codec_name || 'Unknown')} (${row.cnt || 0})`);
-      const lines = [
-        `use_sqlite: ${data.use_sqlite || '-'}`,
-        `only_favorites: ${data.only_favorites || '-'}`,
-        `min_duration: ${data.min_duration || '-'}s`,
-        `total_videos: ${data.db_total_videos || '-'}`,
-        `matching_duration: ${data.db_qualifying_videos || '-'}`,
-        `favorites: ${data.db_favorite_videos || '-'}`,
-        `shown_this_session: ${shownThisSession}`,
-        `shown_total: ${data.db_total_watched || '-'}`,
-        `last_sync_at: ${data.last_sync_at || '-'}`,
-        'top_5_cameras:'
-      ];
-      if (topCameraLines.length > 0) {
-        lines.push(...topCameraLines);
-      } else {
-        lines.push('-');
-      }
-      lines.push('top_5_codecs:');
-      if (topCodecLines.length > 0) {
-        lines.push(...topCodecLines);
-      } else {
-        lines.push('-');
-      }
-      return lines.join('\n');
-    };
-
-    const updateFavoriteButton = () => {
-      favoriteToggle.textContent = isFavorite ? '♥' : '♡';
-      favoriteToggle.classList.toggle('favorite-active', isFavorite);
-      favoriteToggle.title = isFavorite ? 'Unfavorite' : 'Favorite';
-    };
-
-    const updateFavoriteFilterButton = () => {
-      favoriteFilterToggle.classList.toggle('favorite-active', onlyFavoritesMode);
-      favoriteFilterToggle.title = onlyFavoritesMode ? 'Showing favorites only' : 'Show favorites only';
-      favoriteFilterToggle.setAttribute('aria-label', favoriteFilterToggle.title);
-    };
-
-    const setAdminVisible = (visible) => {
-      adminPanel.classList.toggle('visible', visible);
-    };
-
-    const clearNextTimer = () => {
-      if (nextTimerInterval !== null) {
-        window.clearInterval(nextTimerInterval);
-        nextTimerInterval = null;
-      }
-      if (nextTimerTimeout !== null) {
-        window.clearTimeout(nextTimerTimeout);
-        nextTimerTimeout = null;
-      }
-      nextCountdown.classList.remove('visible');
-      nextCountdown.textContent = '';
-    };
-
-    const buildApiUrl = () => {
-      const currentUrl = new URL(window.location.href);
-      const apiUrl = new URL('/api.php', window.location.origin);
-      apiUrl.searchParams.set('next', '1');
-      if (currentUrl.searchParams.get('favOnly') === '1') {
-        apiUrl.searchParams.set('favOnly', '1');
-      }
-      if (currentUrl.searchParams.get('sync') === '1') {
-        apiUrl.searchParams.set('sync', '1');
-      }
-      apiUrl.searchParams.set('t', String(Date.now()));
-      return apiUrl;
-    };
-
-    const clearOneShotParamsFromUrl = () => {
-      const url = new URL(window.location.href);
-      let changed = false;
-      if (url.searchParams.has('sync')) {
-        url.searchParams.delete('sync');
-        changed = true;
-      }
-      if (url.searchParams.has('skip')) {
-        url.searchParams.delete('skip');
-        changed = true;
-      }
-      if (changed) {
-        window.history.replaceState(null, '', url.toString());
-      }
-    };
-
-    const showLoadError = (message) => {
-      loadError.textContent = message;
-      loadError.classList.add('visible');
-    };
-
-    const hideLoadError = () => {
-      loadError.textContent = '';
-      loadError.classList.remove('visible');
-    };
-
-    const applyPayload = (data) => {
-      metadata = data.metadata || {};
-      stats = data.stats || {};
-      isFavorite = metadata.is_favorite === '1';
-      onlyFavoritesMode = stats.only_favorites === 'true';
-
-      metadataPanel.innerHTML = renderMetadataPanel(metadata);
-      statsPanel.textContent = formatStats(stats);
-      adminLastSync.textContent = `Last synced: ${stats.last_sync_at || '-'}`;
-
-      const captionText = String(data.caption_text || '');
-      videoCaption.textContent = captionText;
-      videoCaption.classList.toggle('hidden', captionText === '');
-
-      updateFavoriteButton();
-      updateFavoriteFilterButton();
-
-      if (typeof data.video_src === 'string' && data.video_src !== '') {
-        player.src = data.video_src;
-      }
-    };
-
-    const loadCurrentVideo = async () => {
-      const response = await fetch(buildApiUrl().toString(), { cache: 'no-store' });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok || body.ok !== true) {
-        throw new Error(body.error || `HTTP ${response.status}`);
-      }
-
-      applyPayload(body);
-      clearOneShotParamsFromUrl();
-      hideLoadError();
-
-      player.load();
-      player.play().catch(() => {
-        if (!preferredMuted) {
-          suppressMutePersist = true;
-          player.muted = true;
-          suppressMutePersist = false;
-          updateMuteButton();
-          player.play().catch(() => {});
+        if (isFullscreen()) {
+          if (typeof document.exitFullscreen === 'function') {
+            await document.exitFullscreen();
+            return;
+          }
+          if (typeof document.webkitExitFullscreen === 'function') {
+            document.webkitExitFullscreen();
+            return;
+          }
+          if (typeof current.webkitExitFullscreen === 'function') {
+            current.webkitExitFullscreen();
+            return;
+          }
+          return;
         }
+
+        if (typeof docEl.requestFullscreen === 'function') {
+          await docEl.requestFullscreen();
+          return;
+        }
+        if (typeof docEl.webkitRequestFullscreen === 'function') {
+          docEl.webkitRequestFullscreen();
+          return;
+        }
+        // iOS Safari fallback: fullscreen video element.
+        if (typeof current.webkitEnterFullscreen === 'function') {
+          current.webkitEnterFullscreen();
+        }
+      } catch (err) {
+        console.warn('Fullscreen toggle failed', err);
+      } finally {
+        updateFullscreenButton();
+      }
+    };
+
+    const setFallback = (text) => {
+      fallbackEl.textContent = text;
+      fallbackEl.style.display = text ? 'block' : 'none';
+    };
+
+    const apiNextUrl = () => {
+      const url = new URL('/api.php', window.location.origin);
+      url.searchParams.set('next', '1');
+      const current = new URL(window.location.href);
+      if (current.searchParams.get('favOnly') === '1') {
+        url.searchParams.set('favOnly', '1');
+      }
+      url.searchParams.set('t', String(Date.now()));
+      return url.toString();
+    };
+
+    const normalizeItem = (payload) => {
+      return {
+        id: String(payload.asset_id || payload.id || ''),
+        title: String(payload.metadata?.file_name || 'Untitled'),
+        duration: Number(payload.metadata?.duration || 0),
+        src: String(payload.video_src || ''),
+      };
+    };
+
+    const fetchNextItem = async () => {
+      const resp = await fetch(apiNextUrl(), { cache: 'no-store' });
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok || body.ok !== true) {
+        const message = body.error || `HTTP ${resp.status}`;
+        throw new Error(message);
+      }
+      const item = normalizeItem(body);
+      if (!item.id || !item.src) {
+        throw new Error('Invalid next video payload');
+      }
+      return item;
+    };
+
+    const fillQueue = async () => {
+      while ((queue.length + inflightFetches) < settings.queueTargetSize) {
+        inflightFetches++;
+        fetchNextItem()
+          .then((item) => {
+            if (currentItem && item.id === currentItem.id) {
+              return;
+            }
+            if (queue.some((q) => q.id === item.id)) {
+              return;
+            }
+            queue.push(item);
+            updateStatus();
+            maybePrepareNext();
+            setFallback('');
+          })
+          .catch((err) => {
+            console.error('Queue fetch failed', err);
+            setFallback('Could not fetch next video. Retrying…');
+          })
+          .finally(() => {
+            inflightFetches--;
+            updateStatus();
+          });
+      }
+    };
+
+    const activePlayer = () => players[activeIndex];
+    const hiddenPlayer = () => players[1 - activeIndex];
+
+    const clearPlayer = (video) => {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+      video.dataset.assetId = '';
+      video.classList.remove('active');
+      video.style.transitionDuration = '0ms';
+      video.style.opacity = '0';
+    };
+
+    const waitForCanPlay = (video, timeoutMs) => {
+      return new Promise((resolve, reject) => {
+        let done = false;
+        const onReady = () => {
+          if (done) return;
+          done = true;
+          cleanup();
+          resolve();
+        };
+        const onError = () => {
+          if (done) return;
+          done = true;
+          cleanup();
+          reject(new Error('Video failed while buffering'));
+        };
+        const onTimeout = () => {
+          if (done) return;
+          done = true;
+          cleanup();
+          reject(new Error('Timed out waiting for buffered video'));
+        };
+        const cleanup = () => {
+          video.removeEventListener('canplay', onReady);
+          video.removeEventListener('loadeddata', onReady);
+          video.removeEventListener('error', onError);
+          window.clearTimeout(timer);
+        };
+
+        video.addEventListener('canplay', onReady, { once: true });
+        video.addEventListener('loadeddata', onReady, { once: true });
+        video.addEventListener('error', onError, { once: true });
+
+        const timer = window.setTimeout(onTimeout, timeoutMs);
       });
     };
 
-    const startNextTimer = () => {
-      clearNextTimer();
-      const durationMs = 3000;
-      const deadline = Date.now() + durationMs;
-      const update = () => {
-        const remainingMs = Math.max(0, deadline - Date.now());
-        const remainingSeconds = Math.ceil(remainingMs / 1000);
-        nextCountdown.textContent = `Next video in ${remainingSeconds}s`;
-        nextCountdown.classList.add('visible');
-      };
-      update();
-      nextTimerInterval = window.setInterval(update, 100);
-      nextTimerTimeout = window.setTimeout(() => {
-        clearNextTimer();
-        const currentShown = getShownThisSession();
-        const nextUrl = setShownThisSession(currentShown + 1);
-        const encodedId = encodeURIComponent(metadata.asset_id || '');
-        fetch(`/watch.php?id=${encodedId}`, { method: 'POST', keepalive: true }).catch(() => {});
-        window.location.href = nextUrl.toString();
-      }, durationMs);
+    const prepareHiddenWith = async (item) => {
+      const hidden = hiddenPlayer();
+      if (hidden.dataset.assetId === item.id && nextPreparedId === item.id) {
+        return;
+      }
+      hidden.muted = activePlayer().muted;
+      hidden.src = item.src;
+      hidden.dataset.assetId = item.id;
+      hidden.preload = 'auto';
+      hidden.load();
+      await waitForCanPlay(hidden, 12000);
+      nextPreparedId = item.id;
     };
 
-    muteToggle.addEventListener('click', () => {
-      player.muted = !player.muted;
-      saveMutedPreference(player.muted);
+    const maybePrepareNext = async () => {
+      if (preparingNext || transitionInProgress || queue.length === 0) {
+        return;
+      }
+      preparingNext = true;
+      try {
+        await prepareHiddenWith(queue[0]);
+      } catch (err) {
+        console.error('Prepare next failed', err);
+      } finally {
+        preparingNext = false;
+      }
+    };
+
+    const playOnActivePlayer = async (item) => {
+      const active = activePlayer();
+      active.src = item.src;
+      active.dataset.assetId = item.id;
+      active.classList.add('active');
+      active.style.opacity = '1';
+      active.style.transitionDuration = '0ms';
+      active.muted = players[0].muted;
+      active.load();
+      await active.play().catch((err) => {
+        console.warn('Autoplay failed, retrying muted', err);
+        active.muted = true;
+        players[0].muted = true;
+        players[1].muted = true;
+        saveMutedPreference(true);
+        updateMuteButton();
+        return active.play();
+      });
+      currentItem = item;
+      titleEl.textContent = item.title;
+      updateStatus();
+    };
+
+    const swapPlayers = () => {
+      const outgoingIdx = activeIndex;
+      activeIndex = 1 - activeIndex;
+      clearPlayer(players[outgoingIdx]);
+    };
+
+    const transitionToNext = async (reason) => {
+      if (transitionInProgress) {
+        return;
+      }
+      transitionInProgress = true;
+      try {
+        if (queue.length === 0) {
+          await fillQueue();
+        }
+
+        if (queue.length === 0) {
+          setFallback('No eligible videos right now. Retrying…');
+          window.setTimeout(() => {
+            transitionInProgress = false;
+            fillQueue();
+          }, 2000);
+          return;
+        }
+
+        const nextItem = queue.shift();
+        updateStatus();
+
+        await prepareHiddenWith(nextItem);
+
+        const outgoing = activePlayer();
+        const incoming = hiddenPlayer();
+
+        incoming.muted = outgoing.muted;
+        incoming.classList.add('active');
+        incoming.style.transitionDuration = '0ms';
+        incoming.style.opacity = settings.crossfadeEnabled ? '0' : '1';
+
+        await incoming.play();
+
+        if (settings.crossfadeEnabled && settings.crossfadeDurationMs > 0) {
+          const duration = settings.crossfadeDurationMs;
+          incoming.style.transitionDuration = `${duration}ms`;
+          outgoing.style.transitionDuration = `${duration}ms`;
+          requestAnimationFrame(() => {
+            incoming.style.opacity = '1';
+            outgoing.style.opacity = '0';
+          });
+          await new Promise((resolve) => setTimeout(resolve, duration));
+        } else {
+          outgoing.style.opacity = '0';
+          incoming.style.opacity = '1';
+        }
+
+        swapPlayers();
+        currentItem = nextItem;
+        titleEl.textContent = nextItem.title;
+        nextPreparedId = '';
+        setFallback('');
+
+        fillQueue();
+        maybePrepareNext();
+      } catch (err) {
+        console.error('Transition failed', reason, err);
+        setFallback('Transition failed. Skipping to another video…');
+        const hidden = hiddenPlayer();
+        clearPlayer(hidden);
+        nextPreparedId = '';
+        fillQueue();
+      } finally {
+        transitionInProgress = false;
+      }
+    };
+
+    const updateStatus = () => {
+      const mode = settings.crossfadeEnabled ? `fade ${settings.crossfadeDurationMs}ms` : 'cut';
+      statusEl.textContent = `Queue ${queue.length}/${settings.queueTargetSize} · ${mode}`;
+    };
+
+    const onActiveTimeUpdate = () => {
+      const video = activePlayer();
+      if (!isFinite(video.duration) || video.duration <= 0) {
+        return;
+      }
+      const remaining = video.duration - video.currentTime;
+      if (remaining <= settings.preloadSecondsBeforeEnd) {
+        maybePrepareNext();
+      }
+      if (settings.crossfadeEnabled && remaining <= Math.max(0.15, settings.crossfadeDurationMs / 1000) && queue.length > 0) {
+        transitionToNext('near_end_crossfade');
+      }
+    };
+
+    const bindPlayerEvents = () => {
+      players.forEach((video, idx) => {
+        video.addEventListener('timeupdate', () => {
+          if (idx === activeIndex) {
+            onActiveTimeUpdate();
+          }
+        });
+        video.addEventListener('ended', () => {
+          if (idx === activeIndex) {
+            transitionToNext('ended');
+          }
+        });
+        video.addEventListener('error', () => {
+          if (idx === activeIndex) {
+            console.error('Active player error', video.error);
+            transitionToNext('active_error');
+          }
+        });
+      });
+    };
+
+    skipBtn.addEventListener('click', () => {
+      transitionToNext('manual_skip');
+    });
+
+    muteBtn.addEventListener('click', () => {
+      const nextMuted = !activePlayer().muted;
+      players[0].muted = nextMuted;
+      players[1].muted = nextMuted;
+      saveMutedPreference(nextMuted);
       updateMuteButton();
     });
 
-    backBtn.addEventListener('click', () => {
-      if (window.history.length > 1) {
-        window.history.back();
-      } else {
-        window.location.reload();
-      }
+    fullscreenBtn.addEventListener('click', () => {
+      toggleFullscreen();
     });
-
-    skipBtn.addEventListener('click', () => {
-      const url = new URL(window.location.href);
-      url.searchParams.set('skip', Date.now().toString());
-      window.location.href = url.toString();
-    });
-
-    favoriteFilterToggle.addEventListener('click', () => {
-      onlyFavoritesMode = !onlyFavoritesMode;
-      const url = new URL(window.location.href);
-      url.searchParams.set('favOnly', onlyFavoritesMode ? '1' : '0');
-      window.location.href = url.toString();
-    });
-
-    metaToggle.addEventListener('click', () => {
-      const next = !metadataPanel.classList.contains('visible');
-      metadataPanel.classList.toggle('visible', next);
-      statsPanel.classList.remove('visible');
-      saveMetadataPreference(next);
-    });
-
-    statsToggle.addEventListener('click', () => {
-      statsPanel.classList.toggle('visible');
-      metadataPanel.classList.remove('visible');
-      saveMetadataPreference(false);
-    });
-
-    favoriteToggle.addEventListener('click', async () => {
-      const next = !isFavorite;
-      favoriteToggle.disabled = true;
-      try {
-        const encodedId = encodeURIComponent(metadata.asset_id || '');
-        const resp = await fetch(`/favorite.php?id=${encodedId}&favorite=${next ? '1' : '0'}`, {
-          method: 'POST',
-          keepalive: true
-        });
-        const body = await resp.json().catch(() => ({}));
-        if (!resp.ok || body.ok !== true) {
-          throw new Error(body.error || `HTTP ${resp.status}`);
-        }
-        isFavorite = next;
-        metadata.is_favorite = isFavorite ? '1' : '0';
-        metadataPanel.innerHTML = renderMetadataPanel(metadata);
-        updateFavoriteButton();
-      } catch (err) {
-        console.error('Favorite toggle failed', err);
-      } finally {
-        favoriteToggle.disabled = false;
-      }
-    });
-
-    adminTrigger.addEventListener('click', () => {
-      setAdminVisible(!adminPanel.classList.contains('visible'));
-    });
-
-    adminCloseBtn.addEventListener('click', () => {
-      setAdminVisible(false);
-    });
-
-    syncNowBtn.addEventListener('click', () => {
-      const url = new URL(window.location.href);
-      url.searchParams.set('sync', '1');
-      window.location.href = url.toString();
-    });
-
-    const isTypingTarget = (target) => {
-      if (!(target instanceof Element)) {
-        return false;
-      }
-      if (target.isContentEditable) {
-        return true;
-      }
-      const tag = target.tagName;
-      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
-    };
 
     window.addEventListener('keydown', (event) => {
-      if (isTypingTarget(event.target)) {
-        return;
-      }
-
-      const key = (event.key || '').toLowerCase();
-      if (event.key === 'ArrowLeft') {
+      if (event.code === 'Space') {
         event.preventDefault();
-        backBtn.click();
-        return;
+        const v = activePlayer();
+        if (v.paused) v.play().catch(() => {});
+        else v.pause();
       }
       if (event.key === 'ArrowRight') {
         event.preventDefault();
-        skipBtn.click();
-        return;
-      }
-      if (key === 'f') {
-        event.preventDefault();
-        favoriteToggle.click();
-        return;
-      }
-      if (key === 's') {
-        event.preventDefault();
-        statsToggle.click();
-        return;
-      }
-      if (key === 'i') {
-        event.preventDefault();
-        metaToggle.click();
-        return;
-      }
-      if (event.code === 'Space' || event.key === ' ') {
-        event.preventDefault();
-        if (player.paused) {
-          player.play().catch(() => {});
-        } else {
-          player.pause();
-        }
+        transitionToNext('arrow_skip');
       }
     });
 
-    metadataPanel.classList.toggle('visible', readMetadataPreference());
-
-    // Keep storage synchronized with URL-based session counter.
-    setShownThisSession(getShownThisSession());
-
-    player.addEventListener('volumechange', () => {
-      if (!suppressMutePersist) {
-        saveMutedPreference(player.muted);
-      }
+    const bootstrap = async () => {
+      bindPlayerEvents();
       updateMuteButton();
-    });
+      updateFullscreenButton();
+      updateStatus();
 
-    player.addEventListener('play', clearNextTimer);
-    player.addEventListener('seeking', clearNextTimer);
-    player.addEventListener('ended', () => {
-      startNextTimer();
-    });
+      document.addEventListener('fullscreenchange', updateFullscreenButton);
+      document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
 
-    player.muted = preferredMuted;
-    updateMuteButton();
-
-    const markUserInteracted = () => {
-      userInteracted = true;
-      if (!preferredMuted && player.muted) {
-        suppressMutePersist = true;
-        player.muted = false;
-        suppressMutePersist = false;
-        updateMuteButton();
+      try {
+        const first = await fetchNextItem();
+        await playOnActivePlayer(first);
+        fillQueue();
+      } catch (err) {
+        console.error('Initial load failed', err);
+        setFallback('Could not load initial video. Retrying…');
       }
-      tryEnterFullscreenForMobile();
+
+      // Keep queue filled over long runs.
+      window.setInterval(() => {
+        fillQueue();
+      }, 2000);
+
+      // If startup failed, retry until recovered.
+      window.setInterval(() => {
+        if (!currentItem && !transitionInProgress) {
+          fetchNextItem()
+            .then((item) => playOnActivePlayer(item))
+            .then(() => {
+              setFallback('');
+              fillQueue();
+            })
+            .catch((err) => {
+              console.error('Startup retry failed', err);
+            });
+        }
+      }, 3000);
     };
 
-    window.addEventListener('pointerdown', markUserInteracted, { passive: true });
-    window.addEventListener('touchstart', markUserInteracted, { passive: true });
-    window.addEventListener('click', markUserInteracted, { passive: true });
-    window.addEventListener('resize', () => {
-      if (userInteracted) {
-        tryEnterFullscreenForMobile();
-      }
-    });
-    window.addEventListener('orientationchange', () => {
-      if (userInteracted) {
-        tryEnterFullscreenForMobile();
-      }
-    });
-
-    loadCurrentVideo().catch((err) => {
-      console.error('Failed to load video payload', err);
-      showLoadError(`Could not load a video.\n${String(err.message || err)}`);
-    });
+    bootstrap();
   </script>
 </body>
 </html>

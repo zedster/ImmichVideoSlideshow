@@ -24,6 +24,10 @@ Required variables:
 - `IMMICH_URL` - Base URL of your Immich server, e.g. `http://immich:2283`
 - `IMMICH_API_KEY` - Your Immich API key
 - `MIN_DURATION` - Minimum video length in seconds (default `10`)
+- `PRELOAD_SECONDS_BEFORE_END` - Seconds before end of current clip to begin preparing transition (default `4`)
+- `CROSSFADE_ENABLED` - Enable smooth crossfade between clips (`true` or `false`, default `true`)
+- `CROSSFADE_DURATION` - Crossfade duration in milliseconds (default `450`)
+- `QUEUE_TARGET_SIZE` - Number of upcoming clips to keep queued in the browser (default `2`)
 - `RANDOM_BATCH_SIZE` - Fallback live mode batch size if SQLite cache is disabled/unavailable (default `20`)
 - `USE_SQLITE_CACHE` - Enable local SQLite metadata cache and random DB selection (default `true`)
 - `SQLITE_PATH` - SQLite database path inside container (default `/var/www/html/data/videos.sqlite`)
@@ -86,14 +90,15 @@ For a live sync progress page, open `/api.php?sync=1` directly when `SHOW_SYNC_S
 - `index.php` is the frontend shell and fetches slideshow payloads from `/api.php?next=1`.
 - Shared SQL/Immich utility helpers are centralized in `helpers.php` and reused by `api.php`, `video.php`, `watch.php`, and `favorite.php`.
 - The browser plays `/video.php?id=<assetId>` fullscreen.
-- UI controls include `Skip`, `Stats`, `Metadata`, `Favorite` (heart), and `Mute`.
-- `⭐` control toggles favorites-only playback mode (`favOnly=1` in URL).
-- Favorite heart updates local DB and attempts to update Immich favorite state via API.
-- A QR code and `Open in Immich` link are shown for the currently playing asset.
+- The browser keeps two overlaid `<video>` players and preloads the next clip in the hidden player.
+- UI controls include `Skip` and `Mute`.
 - `video.php` proxies Immich playback from:
   - `GET /api/assets/{id}/video/playback`
 - `video.php` sends `x-api-key` server-side, so the API key is never exposed to the browser.
-- When playback ends, the page reloads and selects another random qualifying video.
+- Playback continues without page reloads:
+  - next clips are fetched in the background from `api.php?next=1`
+  - queue is kept topped up in JS
+  - transition is instant cut or crossfade depending on settings
 
 ## Architecture
 
