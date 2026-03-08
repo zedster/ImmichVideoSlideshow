@@ -702,18 +702,21 @@ final class ChannelCoordinator: ObservableObject {
 
         favoriteUpdateInProgress = true
         let previous = candidate.isFavorite
+        addDebugMessage("\(isFavorite ? "Favorite" : "Unfavorite") requested: \(candidate.title)")
         applyFavoriteStateLocally(assetId: candidate.id, isFavorite: isFavorite)
 
         do {
             try await client.updateFavorite(assetId: candidate.id, isFavorite: isFavorite, config: configStore.config)
             try await store.initializeSchema()
             try await store.setFavorite(assetId: candidate.id, isFavorite: isFavorite)
+            addDebugMessage("\(isFavorite ? "Favorited" : "Unfavorited"): \(candidate.title)")
         } catch {
             applyFavoriteStateLocally(assetId: candidate.id, isFavorite: previous)
             fallbackMessage = "Favorite update failed: \(error.localizedDescription)"
             if configStore.config.debug {
                 print("[ChannelCoordinator] favorite update failed: \(error)")
             }
+            addDebugMessage("Favorite failed (reverted): \(candidate.title)")
         }
 
         favoriteUpdateInProgress = false
