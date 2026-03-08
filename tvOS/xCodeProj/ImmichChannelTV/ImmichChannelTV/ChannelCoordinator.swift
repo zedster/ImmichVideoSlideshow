@@ -77,10 +77,12 @@ final class ChannelCoordinator: ObservableObject {
     func start() {
         guard configStore.config.isConfigured else {
             fallbackMessage = "Please complete setup first"
+            addDebugMessage("Start blocked: app not configured")
             return
         }
         guard !started else { return }
         started = true
+        addDebugMessage("Channel start")
 
         setupEndObserver()
         applyMuteState(readMutedPreference())
@@ -109,6 +111,7 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     func stop() {
+        addDebugMessage("Channel stop")
         started = false
         queueTimer?.invalidate()
         recoveryTimer?.invalidate()
@@ -120,6 +123,7 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     func restart() {
+        addDebugMessage("Channel restart requested")
         stop()
         queue = []
         history = []
@@ -155,6 +159,7 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     func skip() {
+        addDebugMessage("Skip requested")
         Task {
             await transitionToNext(reason: "manual_skip")
         }
@@ -171,6 +176,7 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     func forceSyncNow() {
+        addDebugMessage("Manual sync requested")
         Task {
             await runForceSync()
         }
@@ -194,21 +200,27 @@ final class ChannelCoordinator: ObservableObject {
             player.play()
             isPlaybackPaused = false
             updateBufferingState(for: player)
+            addDebugMessage("Playback resumed")
         } else {
             player.pause()
             isPlaybackPaused = true
             isBuffering = false
+            addDebugMessage("Playback paused")
         }
     }
 
     func goBack() {
+        addDebugMessage("Back requested")
         Task {
             await transitionToPrevious(reason: "manual_back")
         }
     }
 
     func toggleFavorite() {
-        guard let currentItem else { return }
+        guard let currentItem else {
+            addDebugMessage("Favorite ignored: no current item")
+            return
+        }
         let nextValue = !currentItem.isFavorite
         Task {
             await setFavorite(for: currentItem, to: nextValue)
@@ -243,8 +255,14 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func runForceSync(silent: Bool = false) async {
-        guard configStore.config.useSQLiteCache else { return }
-        guard !isSyncing else { return }
+        guard configStore.config.useSQLiteCache else {
+            addDebugMessage("Sync skipped: SQLite cache disabled")
+            return
+        }
+        guard !isSyncing else {
+            addDebugMessage("Sync skipped: already in progress")
+            return
+        }
 
         isSyncing = true
         syncPagesFetched = 0
@@ -254,6 +272,7 @@ final class ChannelCoordinator: ObservableObject {
         if !silent {
             fallbackMessage = "Syncing metadata..."
         }
+        addDebugMessage("Sync started")
 
         do {
             let result = try await syncService.forceSync(
@@ -346,7 +365,12 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func updateBufferingState(for player: AVPlayer) {
-        isBuffering = !isPlaybackPaused && player.timeControlStatus == .waitingToPlayAtSpecifiedRate
+        let next = !isPlaybackPaused && player.timeControlStatus == .waitingToPlayAtSpecifiedRate
+        let changed = next != isBuffering
+        isBuffering = next
+        if changed {
+            addDebugMessage(bufferingStateText(next))
+        }
     }
 
     private func removeTimeObserverIfNeeded() {
@@ -396,6 +420,7 @@ final class ChannelCoordinator: ObservableObject {
 
     private func fillQueueIfNeeded() async {
         let target = max(1, min(configStore.config.queueTargetSize, 5))
+        addDebugMessage("Queue check \(queue.count)/\(target)")
         while (queue.count + inflightQueueFetches) < target {
             inflightQueueFetches += 1
             defer { inflightQueueFetches -= 1 }
@@ -430,11 +455,14 @@ final class ChannelCoordinator: ObservableObject {
 
         preparingNext = true
         defer { preparingNext = false }
+        addDebugMessage("Preparing next: \(next.title)")
 
         do {
             try await prepareHiddenPlayer(with: next)
             nextPreparedId = next.id
+            addDebugMessage("Prepared next: \(next.title)")
         } catch {
+            addDebugMessage("Prepare failed: \(next.title)")
             if configStore.config.debug {
                 print("[ChannelCoordinator] prepare failed: \(error)")
             }
@@ -505,12 +533,14 @@ final class ChannelCoordinator: ObservableObject {
         clearPlaybackFailureState()
         installTimeObserver()
         updateStatus()
+        addDebugMessage("Playing: \(candidate.title)")
     }
 
     private func playWithAutoplayFallback(player: AVPlayer) async throws {
         do {
             try await player.playAsync()
         } catch {
+            addDebugMessage("Autoplay fallback: mute and retry")
             player.isMuted = true
             applyMuteState(true)
             try await player.playAsync()
@@ -518,9 +548,13 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func transitionToNext(reason: String) async {
-        guard !transitionInProgress else { return }
+        guard !transitionInProgress else {
+            addDebugMessage("Transition skipped: already in progress")
+            return
+        }
         transitionInProgress = true
         defer { transitionInProgress = false }
+        addDebugMessage("Transition start: \(reason)")
 
         if queue.isEmpty {
             await fillQueueIfNeeded()
@@ -608,8 +642,15 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func transitionToPrevious(reason: String) async {
-        guard !transitionInProgress else { return }
-        guard let previous = history.popLast() else { return }
+        guard !transitionInProgress else {
+            addDebugMessage("Back skipped: transition already in progress")
+            return
+        }
+        guard let previous = history.popLast() else {
+            addDebugMessage("Back skipped: no history")
+            return
+        }
+        addDebugMessage("Transition back start: \(reason)")
 
         transitionInProgress = true
         defer { transitionInProgress = false }
@@ -745,6 +786,7 @@ final class ChannelCoordinator: ObservableObject {
     private func registerPlaybackFailure(_ message: String, error: Error? = nil) {
         consecutivePlaybackFailures += 1
         fallbackMessage = message
+        addDebugMessage("Playback failure \(consecutivePlaybackFailures): \(message)")
 
         if consecutivePlaybackFailures < maxConsecutivePlaybackFailures || shouldOpenSetup {
             return
@@ -755,6 +797,7 @@ final class ChannelCoordinator: ObservableObject {
         setupErrorMessage = composedMessage
         syncLastError = composedMessage
         shouldOpenSetup = true
+        addDebugMessage("Failure threshold reached: opening settings")
         stop()
     }
 
@@ -928,6 +971,10 @@ final class ChannelCoordinator: ObservableObject {
         if recentDebugMessages.count > 3 {
             recentDebugMessages.removeFirst(recentDebugMessages.count - 3)
         }
+    }
+
+    private func bufferingStateText(_ buffering: Bool) -> String {
+        buffering ? "Buffering..." : "Buffering ended"
     }
 
     private func nonEmptyOrDash(_ value: String) -> String {
