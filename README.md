@@ -95,12 +95,32 @@ For a live sync progress page, open `/api.php?sync=1` directly when `SHOW_SYNC_S
 - `video.php` sends `x-api-key` server-side, so the API key is never exposed to the browser.
 - When playback ends, the page reloads and selects another random qualifying video.
 
+## Architecture
+
+- `index.php`: frontend UI/player shell, keyboard shortcuts, and client-side controls.
+- `api.php`: slideshow orchestration endpoint (sync, selection, metadata/stats payloads).
+- `helpers.php`: shared constants, API helpers, SQLite helpers, migrations, and response helpers.
+- `video.php`: secure playback proxy to Immich.
+- `favorite.php`: toggles favorite state in Immich and local SQLite cache.
+- `watch.php`: increments local `watched_count`.
+
 ## API response format
 
 - JSON endpoints (`api.php`, `favorite.php`, `watch.php`) return:
   - `ok` (`true`/`false`)
   - `error_code` on failures (stable machine-readable code)
   - `error` on failures (human-readable message)
+
+## Endpoint reference
+
+- `GET /api.php?next=1[&favOnly=1][&sync=1]`
+  - Returns next playable video payload.
+- `POST /favorite.php?id=<assetId>&favorite=<0|1>`
+  - Updates Immich + local SQLite favorite state.
+- `POST /watch.php?id=<assetId>`
+  - Increments local watch counter.
+- `GET /video.php?id=<assetId>`
+  - Streams video playback proxied through server.
 
 ## SQLite schema migration changelog
 
@@ -111,3 +131,19 @@ For a live sync progress page, open `/api.php?sync=1` directly when `SHOW_SYNC_S
   - `3` `add_watched_count_column`
   - `4` `add_is_favorite_column`
   - `5` `add_camera_codec_resolution_columns`
+
+## Troubleshooting
+
+- `error_code=E_MISSING_IMMICH_ENV`
+  - Check `IMMICH_URL` and `IMMICH_API_KEY` in `.env`.
+- `error_code=E_PDO_SQLITE_NOT_LOADED`
+  - Verify PHP image has `pdo_sqlite` enabled.
+- `error_code=E_SQLITE_INITIALIZATION_FAILED`
+  - Confirm `SQLITE_PATH` parent directory is writable in container.
+- Playback does not start
+  - Check `docker compose logs -f` and verify `video.php?id=<assetId>` is reachable.
+
+## Releases
+
+- Follow SemVer tags (`vMAJOR.MINOR.PATCH`) for GitHub releases.
+- Add release notes from `CHANGELOG.md`.
