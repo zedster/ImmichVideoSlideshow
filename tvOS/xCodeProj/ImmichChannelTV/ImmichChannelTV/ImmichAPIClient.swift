@@ -96,6 +96,7 @@ extension VideoCandidate {
 struct ImmichAssetRecord: Equatable {
     let id: String
     let title: String
+    let fileType: String
     let duration: Double
     let isFavorite: Bool
     let captureDate: String
@@ -529,9 +530,18 @@ private struct ImmichAssetItem: Decodable {
     }
 
     var record: ImmichAssetRecord {
-        ImmichAssetRecord(
+        let fileType: String = {
+            let name = (originalFileName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let dot = name.lastIndex(of: "."), dot < name.index(before: name.endIndex) else {
+                return ""
+            }
+            return String(name[name.index(after: dot)...]).lowercased()
+        }()
+
+        return ImmichAssetRecord(
             id: id,
             title: originalFileName ?? "Untitled",
+            fileType: fileType,
             duration: durationSeconds,
             isFavorite: isFavorite ?? false,
             captureDate: captureDateValue,

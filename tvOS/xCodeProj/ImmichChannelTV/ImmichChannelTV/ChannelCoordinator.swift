@@ -35,6 +35,16 @@ final class ChannelCoordinator: ObservableObject {
     @Published var syncRowsUpserted: Int = 0
     @Published var syncLastSyncAt: String = "-"
     @Published var syncLastError: String = ""
+    @Published var statsTotalVideos: Int = 0
+    @Published var statsTotalWatchedPlays: Int = 0
+    @Published var statsVideosWatchedAtLeastOnce: Int = 0
+    @Published var statsFavoritesCount: Int = 0
+    @Published var statsHiddenCount: Int = 0
+    @Published var statsMostPopularCamera: String = "-"
+    @Published var statsMostPopularFileType: String = "-"
+    @Published var statsMostPopularPlace: String = "-"
+    @Published var statsMostPopularYear: String = "-"
+    @Published var statsLastError: String = ""
     @Published var shouldOpenSetup: Bool = false
     @Published var setupErrorMessage: String = ""
 
@@ -143,6 +153,16 @@ final class ChannelCoordinator: ObservableObject {
         hiddenAlbumId = ""
         hiddenAssetIds = []
         consecutivePlaybackFailures = 0
+        statsTotalVideos = 0
+        statsTotalWatchedPlays = 0
+        statsVideosWatchedAtLeastOnce = 0
+        statsFavoritesCount = 0
+        statsHiddenCount = 0
+        statsMostPopularCamera = "-"
+        statsMostPopularFileType = "-"
+        statsMostPopularPlace = "-"
+        statsMostPopularYear = "-"
+        statsLastError = ""
         shouldOpenSetup = false
         setupErrorMessage = ""
         fallbackMessage = ""
@@ -200,6 +220,12 @@ final class ChannelCoordinator: ObservableObject {
     func resetPlaybackProgress() {
         Task {
             await resetSequentialProgress()
+        }
+    }
+
+    func refreshLibraryStats() {
+        Task {
+            await loadLibraryStats()
         }
     }
 
@@ -309,6 +335,7 @@ final class ChannelCoordinator: ObservableObject {
             try await playOnActivePlayer(first)
             clearPlaybackFailureState()
             await fillQueueIfNeeded()
+            await loadLibraryStats()
             addDebugMessage("Bootstrap playback started")
         } catch {
             registerPlaybackFailure("Could not load initial video. Retrying...", error: error)
@@ -373,6 +400,7 @@ final class ChannelCoordinator: ObservableObject {
                 }
             }
             await fillQueueIfNeeded()
+            await loadLibraryStats()
         } catch {
             syncLastError = error.localizedDescription
             fallbackMessage = "Sync failed: \(error.localizedDescription)"
@@ -942,7 +970,7 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func recordWatchStart(for candidate: VideoCandidate) async {
-        guard configStore.config.useSQLiteCache else { return }
+        guard shouldUseSQLiteSelection() else { return }
         do {
             let count = try await store.incrementWatchCount(assetId: candidate.id)
             applyWatchCountLocally(assetId: candidate.id, timesWatched: count)
@@ -991,6 +1019,7 @@ final class ChannelCoordinator: ObservableObject {
             queue.removeAll()
             addDebugMessage("Sequential progress reset")
             await fillQueueIfNeeded()
+            await loadLibraryStats()
         } catch {
             addDebugMessage("Seq progress reset failed: \(error.localizedDescription)")
         }
@@ -998,6 +1027,31 @@ final class ChannelCoordinator: ObservableObject {
 
     private func isSequentialOrder(_ order: String) -> Bool {
         order == "sequential_oldest" || order == "sequential_newest" || order == "sequential"
+    }
+
+    private func loadLibraryStats() async {
+        guard shouldUseSQLiteSelection() else {
+            statsLastError = "SQLite cache is disabled."
+            return
+        }
+
+        do {
+            try await store.initializeSchema()
+            let stats = try await store.getLibraryStats()
+            statsTotalVideos = stats.totalVideos
+            statsTotalWatchedPlays = stats.totalWatchedPlays
+            statsVideosWatchedAtLeastOnce = stats.videosWatchedAtLeastOnce
+            statsFavoritesCount = stats.favoritesCount
+            statsHiddenCount = stats.hiddenCount
+            statsMostPopularCamera = stats.mostPopularCamera
+            statsMostPopularFileType = stats.mostPopularFileType
+            statsMostPopularPlace = stats.mostPopularPlace
+            statsMostPopularYear = stats.mostPopularYear
+            statsLastError = ""
+        } catch {
+            statsLastError = error.localizedDescription
+            addDebugMessage("Library stats failed: \(error.localizedDescription)")
+        }
     }
 
     private func clearPlaybackFailureState() {

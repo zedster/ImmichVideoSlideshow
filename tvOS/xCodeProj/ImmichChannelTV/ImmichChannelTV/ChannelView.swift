@@ -381,11 +381,24 @@ struct ChannelView: View {
             onResetPlaybackProgress: {
                 coordinator.resetPlaybackProgress()
             },
+            onRefreshStats: {
+                coordinator.refreshLibraryStats()
+            },
             syncIsSyncing: Binding(get: { coordinator.isSyncing }, set: { _ in }),
             syncPagesFetched: Binding(get: { coordinator.syncPagesFetched }, set: { _ in }),
             syncRowsUpserted: Binding(get: { coordinator.syncRowsUpserted }, set: { _ in }),
             syncLastSyncAt: Binding(get: { coordinator.syncLastSyncAt }, set: { _ in }),
             syncLastError: Binding(get: { coordinator.syncLastError }, set: { _ in }),
+            statsTotalVideos: Binding(get: { coordinator.statsTotalVideos }, set: { _ in }),
+            statsTotalWatchedPlays: Binding(get: { coordinator.statsTotalWatchedPlays }, set: { _ in }),
+            statsVideosWatchedAtLeastOnce: Binding(get: { coordinator.statsVideosWatchedAtLeastOnce }, set: { _ in }),
+            statsFavoritesCount: Binding(get: { coordinator.statsFavoritesCount }, set: { _ in }),
+            statsHiddenCount: Binding(get: { coordinator.statsHiddenCount }, set: { _ in }),
+            statsMostPopularCamera: Binding(get: { coordinator.statsMostPopularCamera }, set: { _ in }),
+            statsMostPopularFileType: Binding(get: { coordinator.statsMostPopularFileType }, set: { _ in }),
+            statsMostPopularPlace: Binding(get: { coordinator.statsMostPopularPlace }, set: { _ in }),
+            statsMostPopularYear: Binding(get: { coordinator.statsMostPopularYear }, set: { _ in }),
+            statsLastError: Binding(get: { coordinator.statsLastError }, set: { _ in }),
             playbackError: Binding(get: { coordinator.setupErrorMessage }, set: { coordinator.setupErrorMessage = $0 }))
                 .environmentObject(configStore)
         }

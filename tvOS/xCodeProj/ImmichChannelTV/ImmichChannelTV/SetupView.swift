@@ -5,11 +5,22 @@ struct SetupView: View {
     @Environment(\.dismiss) private var dismiss
     var onForceSync: (() -> Void)? = nil
     var onResetPlaybackProgress: (() -> Void)? = nil
+    var onRefreshStats: (() -> Void)? = nil
     var syncIsSyncing: Binding<Bool>? = nil
     var syncPagesFetched: Binding<Int>? = nil
     var syncRowsUpserted: Binding<Int>? = nil
     var syncLastSyncAt: Binding<String>? = nil
     var syncLastError: Binding<String>? = nil
+    var statsTotalVideos: Binding<Int>? = nil
+    var statsTotalWatchedPlays: Binding<Int>? = nil
+    var statsVideosWatchedAtLeastOnce: Binding<Int>? = nil
+    var statsFavoritesCount: Binding<Int>? = nil
+    var statsHiddenCount: Binding<Int>? = nil
+    var statsMostPopularCamera: Binding<String>? = nil
+    var statsMostPopularFileType: Binding<String>? = nil
+    var statsMostPopularPlace: Binding<String>? = nil
+    var statsMostPopularYear: Binding<String>? = nil
+    var statsLastError: Binding<String>? = nil
     var playbackError: Binding<String>? = nil
 
     @State private var immichURL = ""
@@ -87,7 +98,7 @@ struct SetupView: View {
                         Text("Medium").tag("medium")
                         Text("Low").tag("low")
                     }
-                    Toggle("Only Favorites", isOn: $onlyFavorites)
+                    booleanPicker("Only Favorites", isOn: $onlyFavorites)
 
                     if onResetPlaybackProgress != nil {
                         Button("Reset Playback Progress") {
@@ -101,7 +112,7 @@ struct SetupView: View {
                     Text("Crossfade and preload settings control how smooth transitions feel between videos.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Toggle("Crossfade Enabled", isOn: $crossfadeEnabled)
+                    booleanPicker("Crossfade Enabled", isOn: $crossfadeEnabled)
                     labeledField("Crossfade Duration (ms)", placeholder: "450", text: $crossfadeDuration)
                     labeledField("Preload Seconds Before End", placeholder: "4", text: $preloadSeconds)
                     labeledField("Queue Target Size", placeholder: "2", text: $queueTarget)
@@ -111,8 +122,8 @@ struct SetupView: View {
                     Text("Keeps metadata in local SQLite for faster random selection and better reliability.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Toggle("Use SQLite Cache", isOn: $useSQLiteCache)
-                    Toggle("Sync On Startup", isOn: $syncOnStartup)
+                    booleanPicker("Use SQLite Cache", isOn: $useSQLiteCache)
+                    booleanPicker("Sync On Startup", isOn: $syncOnStartup)
                     labeledField("Sync Page Size", placeholder: "200", text: $syncPageSize)
                     labeledField("Sync Max Pages", placeholder: "200", text: $syncMaxPages)
 
@@ -139,11 +150,36 @@ struct SetupView: View {
                     }
                 }
 
+                Section("Library Stats") {
+                    Text("Stats are calculated from the local SQLite cache.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Total Videos: \(statsTotalVideos?.wrappedValue ?? 0)")
+                    Text("Total Watched Plays: \(statsTotalWatchedPlays?.wrappedValue ?? 0)")
+                    Text("Videos Watched At Least Once: \(statsVideosWatchedAtLeastOnce?.wrappedValue ?? 0)")
+                    Text("Favorites: \(statsFavoritesCount?.wrappedValue ?? 0)")
+                    Text("Hidden: \(statsHiddenCount?.wrappedValue ?? 0)")
+                    Text("Most Popular Camera: \(statsMostPopularCamera?.wrappedValue ?? "-")")
+                    Text("Most Popular File Type: \(statsMostPopularFileType?.wrappedValue ?? "-")")
+                    Text("Most Popular Place: \(statsMostPopularPlace?.wrappedValue ?? "-")")
+                    Text("Most Popular Year: \(statsMostPopularYear?.wrappedValue ?? "-")")
+                    if let err = statsLastError?.wrappedValue, !err.isEmpty {
+                        Text("Stats Error: \(err)")
+                            .foregroundStyle(.red)
+                    }
+                    if onRefreshStats != nil {
+                        Button("Refresh Stats") {
+                            onRefreshStats?()
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+
                 Section("Advanced") {
                     Text("Debug logging adds technical status info on screen and in console output.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Toggle("Debug Logging", isOn: $debugEnabled)
+                    booleanPicker("Debug Logging", isOn: $debugEnabled)
                 }
 
                 if !validationError.isEmpty {
@@ -180,6 +216,7 @@ struct SetupView: View {
             .navigationTitle("Immich Channel Setup")
             .onAppear {
                 loadFromConfig()
+                onRefreshStats?()
             }
         }
     }
@@ -327,6 +364,14 @@ struct SetupView: View {
             TextField(placeholder, text: text)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled(disableAutocorrect)
+        }
+    }
+
+    @ViewBuilder
+    private func booleanPicker(_ label: String, isOn: Binding<Bool>) -> some View {
+        Picker(label, selection: isOn) {
+            Text("Off").tag(false)
+            Text("On").tag(true)
         }
     }
 }

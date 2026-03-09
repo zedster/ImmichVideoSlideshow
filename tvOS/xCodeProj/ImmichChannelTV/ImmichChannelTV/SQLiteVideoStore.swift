@@ -7,6 +7,18 @@ actor SQLiteVideoStore {
         let rowsUpserted: Int
     }
 
+    struct LibraryStats {
+        let totalVideos: Int
+        let totalWatchedPlays: Int
+        let videosWatchedAtLeastOnce: Int
+        let favoritesCount: Int
+        let hiddenCount: Int
+        let mostPopularCamera: String
+        let mostPopularFileType: String
+        let mostPopularPlace: String
+        let mostPopularYear: String
+    }
+
     private let sequentialLastAssetIdKey = "playback.sequential.last_asset_id"
 
     private let dbPath: String
@@ -30,6 +42,7 @@ actor SQLiteVideoStore {
             CREATE TABLE IF NOT EXISTS videos (
                 asset_id TEXT PRIMARY KEY,
                 title TEXT,
+                file_type TEXT,
                 duration REAL NOT NULL,
                 is_favorite INTEGER NOT NULL DEFAULT 0,
                 is_hidden INTEGER NOT NULL DEFAULT 0,
@@ -56,6 +69,7 @@ actor SQLiteVideoStore {
             try exec(db, sql: "CREATE INDEX IF NOT EXISTS idx_videos_times_watched ON videos(times_watched)")
             try ensureColumn(db, table: "videos", column: "is_hidden", type: "INTEGER NOT NULL DEFAULT 0")
             try ensureColumn(db, table: "videos", column: "times_watched", type: "INTEGER NOT NULL DEFAULT 0")
+            try ensureColumn(db, table: "videos", column: "file_type", type: "TEXT")
             try ensureColumn(db, table: "videos", column: "capture_date", type: "TEXT")
             try ensureColumn(db, table: "videos", column: "city", type: "TEXT")
             try ensureColumn(db, table: "videos", column: "country", type: "TEXT")
@@ -88,13 +102,14 @@ actor SQLiteVideoStore {
 
             let sql = """
             INSERT INTO videos (
-                asset_id, title, duration, is_favorite, is_hidden, times_watched, capture_date, city, country,
+                asset_id, title, file_type, duration, is_favorite, is_hidden, times_watched, capture_date, city, country,
                 camera_make, camera_model, lens_model, f_number, focal_length, iso,
                 exposure_time, latitude, longitude, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(asset_id) DO UPDATE SET
                 title=excluded.title,
+                file_type=excluded.file_type,
                 duration=excluded.duration,
                 is_favorite=excluded.is_favorite,
                 capture_date=excluded.capture_date,
@@ -126,23 +141,24 @@ actor SQLiteVideoStore {
 
                 sqlite3_bind_text(stmt, 1, (record.id as NSString).utf8String, -1, nil)
                 sqlite3_bind_text(stmt, 2, (record.title as NSString).utf8String, -1, nil)
-                sqlite3_bind_double(stmt, 3, record.duration)
-                sqlite3_bind_int(stmt, 4, record.isFavorite ? 1 : 0)
-                sqlite3_bind_int(stmt, 5, 0)
+                sqlite3_bind_text(stmt, 3, (record.fileType as NSString).utf8String, -1, nil)
+                sqlite3_bind_double(stmt, 4, record.duration)
+                sqlite3_bind_int(stmt, 5, record.isFavorite ? 1 : 0)
                 sqlite3_bind_int(stmt, 6, 0)
-                sqlite3_bind_text(stmt, 7, (record.captureDate as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 8, (record.city as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 9, (record.country as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 10, (record.cameraMake as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 11, (record.cameraModel as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 12, (record.lensModel as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 13, (record.fNumber as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 14, (record.focalLength as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 15, (record.iso as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 16, (record.exposureTime as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 17, (record.latitude as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 18, (record.longitude as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 19, (now as NSString).utf8String, -1, nil)
+                sqlite3_bind_int(stmt, 7, 0)
+                sqlite3_bind_text(stmt, 8, (record.captureDate as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 9, (record.city as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 10, (record.country as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 11, (record.cameraMake as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 12, (record.cameraModel as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 13, (record.lensModel as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 14, (record.fNumber as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 15, (record.focalLength as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 16, (record.iso as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 17, (record.exposureTime as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 18, (record.latitude as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 19, (record.longitude as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 20, (now as NSString).utf8String, -1, nil)
 
                 guard sqlite3_step(stmt) == SQLITE_DONE else {
                     throw storeError(db, fallback: "upsert step failed")
@@ -221,6 +237,121 @@ actor SQLiteVideoStore {
                 throw storeError(db, fallback: "countQualifying step failed")
             }
             return Int(sqlite3_column_int64(stmt, 0))
+        }
+    }
+
+    func getLibraryStats() throws -> LibraryStats {
+        try withDatabase { db in
+            let totalsSQL = """
+            SELECT
+                COUNT(*) AS total_videos,
+                COALESCE(SUM(COALESCE(times_watched, 0)), 0) AS total_watched_plays,
+                COALESCE(SUM(CASE WHEN COALESCE(times_watched, 0) > 0 THEN 1 ELSE 0 END), 0) AS watched_once_count,
+                COALESCE(SUM(CASE WHEN is_favorite = 1 THEN 1 ELSE 0 END), 0) AS favorites_count,
+                COALESCE(SUM(CASE WHEN COALESCE(is_hidden, 0) = 1 THEN 1 ELSE 0 END), 0) AS hidden_count
+            FROM videos
+            """
+            var totalsStmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, totalsSQL, -1, &totalsStmt, nil) == SQLITE_OK else {
+                throw storeError(db, fallback: "prepare library totals failed")
+            }
+            defer { sqlite3_finalize(totalsStmt) }
+
+            guard sqlite3_step(totalsStmt) == SQLITE_ROW else {
+                throw storeError(db, fallback: "library totals step failed")
+            }
+            let totalVideos = Int(sqlite3_column_int64(totalsStmt, 0))
+            let totalWatchedPlays = Int(sqlite3_column_int64(totalsStmt, 1))
+            let videosWatchedAtLeastOnce = Int(sqlite3_column_int64(totalsStmt, 2))
+            let favoritesCount = Int(sqlite3_column_int64(totalsStmt, 3))
+            let hiddenCount = Int(sqlite3_column_int64(totalsStmt, 4))
+
+            let mostPopularCamera = try topValue(
+                db: db,
+                sql: """
+                SELECT camera_name, COUNT(*) AS c
+                FROM (
+                    SELECT
+                        CASE
+                            WHEN TRIM(COALESCE(camera_make, '')) != '' AND TRIM(COALESCE(camera_model, '')) != ''
+                                THEN TRIM(camera_make) || ' ' || TRIM(camera_model)
+                            WHEN TRIM(COALESCE(camera_model, '')) != ''
+                                THEN TRIM(camera_model)
+                            WHEN TRIM(COALESCE(camera_make, '')) != ''
+                                THEN TRIM(camera_make)
+                            ELSE ''
+                        END AS camera_name
+                    FROM videos
+                )
+                WHERE camera_name != ''
+                GROUP BY camera_name
+                ORDER BY c DESC, camera_name ASC
+                LIMIT 1
+                """
+            )
+
+            let mostPopularFileType = try topValue(
+                db: db,
+                sql: """
+                SELECT file_type, COUNT(*) AS c
+                FROM videos
+                WHERE TRIM(COALESCE(file_type, '')) != ''
+                GROUP BY file_type
+                ORDER BY c DESC, file_type ASC
+                LIMIT 1
+                """
+            )
+
+            let mostPopularPlace = try topValue(
+                db: db,
+                sql: """
+                SELECT place_name, COUNT(*) AS c
+                FROM (
+                    SELECT
+                        CASE
+                            WHEN TRIM(COALESCE(city, '')) != '' AND TRIM(COALESCE(country, '')) != ''
+                                THEN TRIM(city) || ', ' || TRIM(country)
+                            WHEN TRIM(COALESCE(city, '')) != ''
+                                THEN TRIM(city)
+                            WHEN TRIM(COALESCE(country, '')) != ''
+                                THEN TRIM(country)
+                            ELSE ''
+                        END AS place_name
+                    FROM videos
+                )
+                WHERE place_name != ''
+                GROUP BY place_name
+                ORDER BY c DESC, place_name ASC
+                LIMIT 1
+                """
+            )
+
+            let mostPopularYear = try topValue(
+                db: db,
+                sql: """
+                SELECT year_value, COUNT(*) AS c
+                FROM (
+                    SELECT SUBSTR(COALESCE(capture_date, ''), 1, 4) AS year_value
+                    FROM videos
+                )
+                WHERE year_value GLOB '[0-9][0-9][0-9][0-9]'
+                GROUP BY year_value
+                ORDER BY c DESC, year_value ASC
+                LIMIT 1
+                """
+            )
+
+            return LibraryStats(
+                totalVideos: totalVideos,
+                totalWatchedPlays: totalWatchedPlays,
+                videosWatchedAtLeastOnce: videosWatchedAtLeastOnce,
+                favoritesCount: favoritesCount,
+                hiddenCount: hiddenCount,
+                mostPopularCamera: mostPopularCamera,
+                mostPopularFileType: mostPopularFileType,
+                mostPopularPlace: mostPopularPlace,
+                mostPopularYear: mostPopularYear
+            )
         }
     }
 
@@ -538,5 +669,20 @@ actor SQLiteVideoStore {
     private func storeError(_ db: OpaquePointer, fallback: String) -> NSError {
         let msg = sqlite3_errmsg(db).flatMap { String(cString: $0) } ?? fallback
         return NSError(domain: "SQLiteVideoStore", code: 2, userInfo: [NSLocalizedDescriptionKey: msg])
+    }
+
+    private func topValue(db: OpaquePointer, sql: String) throws -> String {
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            throw storeError(db, fallback: "prepare top value failed")
+        }
+        defer { sqlite3_finalize(stmt) }
+
+        guard sqlite3_step(stmt) == SQLITE_ROW else {
+            return "-"
+        }
+        let value = sqlite3_column_text(stmt, 0).map { String(cString: $0) } ?? ""
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "-" : trimmed
     }
 }
