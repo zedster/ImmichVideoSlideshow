@@ -12,6 +12,7 @@ struct ChannelView: View {
     @State private var infoScrollIndex = 0
     @State private var controlsVisible = true
     @State private var hideControlsTask: Task<Void, Never>?
+    @FocusState private var inputAnchorFocused: Bool
 
     init(configStore: ConfigStore) {
         self._configStore = ObservedObject(wrappedValue: configStore)
@@ -33,11 +34,13 @@ struct ChannelView: View {
                     .opacity(coordinator.opacityB)
                     .allowsHitTesting(false)
 
-                RemotePressCaptureView { pressType in
-                    handleRemotePress(pressType)
+                if !controlsVisible && !showInfo && !showSetup {
+                    Color.clear
+                        .frame(width: 1, height: 1)
+                        .focusable(true)
+                        .focused($inputAnchorFocused)
+                        .opacity(0.001)
                 }
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
 
                 VStack {
                     if !coordinator.fallbackMessage.isEmpty {
@@ -304,6 +307,7 @@ struct ChannelView: View {
                 infoScrollIndex = 0
             }
             recordInteraction()
+            refreshInputAnchorFocus()
         }
         .onChange(of: showSetup) { isPresented in
             if isPresented {
@@ -321,6 +325,10 @@ struct ChannelView: View {
                 coordinator.clearDebugMessages()
             }
             recordInteraction()
+            refreshInputAnchorFocus()
+        }
+        .onChange(of: controlsVisible) { _ in
+            refreshInputAnchorFocus()
         }
         .onChange(of: configStore.config.debug) { debugEnabled in
             if !debugEnabled {
@@ -335,6 +343,9 @@ struct ChannelView: View {
         }
         .onPlayPauseCommand {
             recordInteraction()
+            if !showSetup {
+                coordinator.togglePlayPause()
+            }
         }
         .onTapGesture {
             recordInteraction()
@@ -385,27 +396,31 @@ struct ChannelView: View {
     }
 
     private func recordInteraction() {
-        withAnimation(.easeInOut(duration: 0.2)) {
-            controlsVisible = true
-        }
+        showControls()
         hideControlsTask?.cancel()
         guard !showInfo, !showSetup else { return }
 
         hideControlsTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 10_000_000_000)
             guard !Task.isCancelled, !showInfo, !showSetup else { return }
-            withAnimation(.easeInOut(duration: 0.2)) {
-                controlsVisible = false
-            }
+            hideControls()
         }
     }
 
-    private func handleRemotePress(_ pressType: UIPress.PressType) {
-        recordInteraction()
-        guard pressType == .playPause else { return }
-        if !showInfo && !showSetup {
-            coordinator.togglePlayPause()
+    private func showControls() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            controlsVisible = true
         }
+    }
+
+    private func hideControls() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            controlsVisible = false
+        }
+    }
+
+    private func refreshInputAnchorFocus() {
+        inputAnchorFocused = !controlsVisible && !showInfo && !showSetup
     }
 
     private func qrImage(from value: String) -> UIImage? {
@@ -440,38 +455,4 @@ private struct PlayerSurfaceView: UIViewRepresentable {
 private final class PlayerSurfaceUIView: UIView {
     override static var layerClass: AnyClass { AVPlayerLayer.self }
     var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
-}
-
-private struct RemotePressCaptureView: UIViewRepresentable {
-    let onPress: (UIPress.PressType) -> Void
-
-    func makeUIView(context: Context) -> RemotePressCaptureUIView {
-        let view = RemotePressCaptureUIView()
-        view.onPress = onPress
-        return view
-    }
-
-    func updateUIView(_ uiView: RemotePressCaptureUIView, context: Context) {
-        uiView.onPress = onPress
-    }
-}
-
-private final class RemotePressCaptureUIView: UIView {
-    var onPress: ((UIPress.PressType) -> Void)?
-
-    override var canBecomeFirstResponder: Bool { true }
-
-    override func didMoveToWindow() {
-        super.didMoveToWindow()
-        DispatchQueue.main.async { [weak self] in
-            _ = self?.becomeFirstResponder()
-        }
-    }
-
-    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        for press in presses {
-            onPress?(press.type)
-        }
-        super.pressesBegan(presses, with: event)
-    }
 }
