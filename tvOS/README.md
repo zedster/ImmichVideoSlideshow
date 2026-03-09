@@ -65,8 +65,8 @@ This folder contains the native SwiftUI/tvOS app for fullscreen Immich video pla
 
 ## Build in Xcode
 
-1. Open `tvOS/xCodeProj/ImmichChannelTV/ImmichChannelTV.xcodeproj`.
-2. Select scheme `ImmichChannelTV`.
+1. Open `tvOS/xCodeProj/ImmichVideoChannel/ImmichVideoChannel.xcodeproj`.
+2. Select scheme `ImmichVideoChannel`.
 3. Build/run for Apple TV device or tvOS simulator (tvOS 16+).
 
 ## Git version bump hook

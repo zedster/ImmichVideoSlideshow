@@ -1,0 +1,64 @@
+---
+path:            '/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/appletvos/prebuilt-modules/18.2/Combine.swiftmodule/arm64-apple-tvos.swiftmodule'
+dependencies:
+  - mtime:           1733472150000000000
+    path:            '/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/appletvos/prebuilt-modules/18.2/Combine.swiftmodule/arm64-apple-tvos.swiftmodule'
+    size:            478756
+  - mtime:           1731227521000000000
+    path:            'usr/lib/swift/Swift.swiftmodule/arm64-apple-tvos.swiftinterface'
+    size:            2050202
+    sdk_relative:    true
+  - mtime:           1731228353000000000
+    path:            'usr/include/_time.apinotes'
+    size:            1132
+    sdk_relative:    true
+  - mtime:           1731228558000000000
+    path:            'usr/lib/swift/_errno.swiftmodule/arm64-apple-tvos.swiftinterface'
+    size:            3703
+    sdk_relative:    true
+  - mtime:           1731228576000000000
+    path:            'usr/lib/swift/_signal.swiftmodule/arm64-apple-tvos.swiftinterface'
+    size:            988
+    sdk_relative:    true
+  - mtime:           1731228587000000000
+    path:            'usr/lib/swift/sys_time.swiftmodule/arm64-apple-tvos.swiftinterface'
+    size:            989
+    sdk_relative:    true
+  - mtime:           1731228576000000000
+    path:            'usr/lib/swift/_time.swiftmodule/arm64-apple-tvos.swiftinterface'
+    size:            952
+    sdk_relative:    true
+  - mtime:           1731228576000000000
+    path:            'usr/lib/swift/_stdio.swiftmodule/arm64-apple-tvos.swiftinterface'
+    size:            1414
+    sdk_relative:    true
+  - mtime:           1731228593000000000
+    path:            'usr/lib/swift/unistd.swiftmodule/arm64-apple-tvos.swiftinterface'
+    size:            684
+    sdk_relative:    true
+  - mtime:           1731228558000000000
+    path:            'usr/lib/swift/_math.swiftmodule/arm64-apple-tvos.swiftinterface'
+    size:            16095
+    sdk_relative:    true
+  - mtime:           1731227622000000000
+    path:            'usr/lib/swift/_Builtin_float.swiftmodule/arm64-apple-tvos.swiftinterface'
+    size:            4189
+    sdk_relative:    true
+  - mtime:           1731228605000000000
+    path:            'usr/lib/swift/Darwin.swiftmodule/arm64-apple-tvos.swiftinterface'
+    size:            19766
+    sdk_relative:    true
+  - mtime:           1731229093000000000
+    path:            'usr/lib/swift/_Concurrency.swiftmodule/arm64-apple-tvos.swiftinterface'
+    size:            248678
+    sdk_relative:    true
+  - mtime:           1731229216000000000
+    path:            'usr/lib/swift/_StringProcessing.swiftmodule/arm64-apple-tvos.swiftinterface'
+    size:            22655
+    sdk_relative:    true
+  - mtime:           1731229870000000000
+    path:            'System/Library/Frameworks/Combine.framework/Modules/Combine.swiftmodule/arm64-apple-tvos.swiftinterface'
+    size:            172305
+    sdk_relative:    true
+version:         1
+...

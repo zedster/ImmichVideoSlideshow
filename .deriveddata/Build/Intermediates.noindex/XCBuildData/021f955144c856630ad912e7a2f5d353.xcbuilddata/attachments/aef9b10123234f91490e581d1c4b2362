@@ -1,0 +1,128 @@
+{
+  "" : {
+    "diagnostics" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichVideoChannel-master.dia",
+    "emit-module-dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichVideoChannel-master-emit-module.d",
+    "emit-module-diagnostics" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichVideoChannel-master-emit-module.dia",
+    "swift-dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichVideoChannel-master.swiftdeps"
+  },
+  "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "const-values" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftconstvalues",
+    "dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/GeneratedAssetSymbols.d",
+    "diagnostics" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/GeneratedAssetSymbols.dia",
+    "index-unit-output-path" : "/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "llvm-bc" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/GeneratedAssetSymbols.bc",
+    "object" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "swift-dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftdeps",
+    "swiftmodule" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/GeneratedAssetSymbols~partial.swiftmodule"
+  },
+  "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/tvOS/xCodeProj/ImmichVideoChannel/ImmichVideoChannel/AppConfig.swift" : {
+    "const-values" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/AppConfig.swiftconstvalues",
+    "dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/AppConfig.d",
+    "diagnostics" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/AppConfig.dia",
+    "index-unit-output-path" : "/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/AppConfig.o",
+    "llvm-bc" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/AppConfig.bc",
+    "object" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/AppConfig.o",
+    "swift-dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/AppConfig.swiftdeps",
+    "swiftmodule" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/AppConfig~partial.swiftmodule"
+  },
+  "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/tvOS/xCodeProj/ImmichVideoChannel/ImmichVideoChannel/ChannelCoordinator.swift" : {
+    "const-values" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ChannelCoordinator.swiftconstvalues",
+    "dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ChannelCoordinator.d",
+    "diagnostics" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ChannelCoordinator.dia",
+    "index-unit-output-path" : "/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ChannelCoordinator.o",
+    "llvm-bc" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ChannelCoordinator.bc",
+    "object" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ChannelCoordinator.o",
+    "swift-dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ChannelCoordinator.swiftdeps",
+    "swiftmodule" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ChannelCoordinator~partial.swiftmodule"
+  },
+  "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/tvOS/xCodeProj/ImmichVideoChannel/ImmichVideoChannel/ChannelView.swift" : {
+    "const-values" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ChannelView.swiftconstvalues",
+    "dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ChannelView.d",
+    "diagnostics" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ChannelView.dia",
+    "index-unit-output-path" : "/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ChannelView.o",
+    "llvm-bc" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ChannelView.bc",
+    "object" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ChannelView.o",
+    "swift-dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ChannelView.swiftdeps",
+    "swiftmodule" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ChannelView~partial.swiftmodule"
+  },
+  "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/tvOS/xCodeProj/ImmichVideoChannel/ImmichVideoChannel/ContentView.swift" : {
+    "const-values" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ContentView.swiftconstvalues",
+    "dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ContentView.d",
+    "diagnostics" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ContentView.dia",
+    "index-unit-output-path" : "/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ContentView.o",
+    "llvm-bc" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ContentView.bc",
+    "object" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ContentView.o",
+    "swift-dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ContentView.swiftdeps",
+    "swiftmodule" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ContentView~partial.swiftmodule"
+  },
+  "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/tvOS/xCodeProj/ImmichVideoChannel/ImmichVideoChannel/ImmichAPIClient.swift" : {
+    "const-values" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichAPIClient.swiftconstvalues",
+    "dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichAPIClient.d",
+    "diagnostics" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichAPIClient.dia",
+    "index-unit-output-path" : "/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichAPIClient.o",
+    "llvm-bc" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichAPIClient.bc",
+    "object" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichAPIClient.o",
+    "swift-dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichAPIClient.swiftdeps",
+    "swiftmodule" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichAPIClient~partial.swiftmodule"
+  },
+  "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/tvOS/xCodeProj/ImmichVideoChannel/ImmichVideoChannel/ImmichVideoChannelApp_orig.swift" : {
+    "const-values" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichVideoChannelApp_orig.swiftconstvalues",
+    "dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichVideoChannelApp_orig.d",
+    "diagnostics" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichVideoChannelApp_orig.dia",
+    "index-unit-output-path" : "/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichVideoChannelApp_orig.o",
+    "llvm-bc" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichVideoChannelApp_orig.bc",
+    "object" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichVideoChannelApp_orig.o",
+    "swift-dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichVideoChannelApp_orig.swiftdeps",
+    "swiftmodule" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichVideoChannelApp_orig~partial.swiftmodule"
+  },
+  "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/tvOS/xCodeProj/ImmichVideoChannel/ImmichVideoChannel/ImmichVideoChannelApp.swift" : {
+    "const-values" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichVideoChannelApp.swiftconstvalues",
+    "dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichVideoChannelApp.d",
+    "diagnostics" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichVideoChannelApp.dia",
+    "index-unit-output-path" : "/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichVideoChannelApp.o",
+    "llvm-bc" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichVideoChannelApp.bc",
+    "object" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichVideoChannelApp.o",
+    "swift-dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichVideoChannelApp.swiftdeps",
+    "swiftmodule" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/ImmichVideoChannelApp~partial.swiftmodule"
+  },
+  "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/tvOS/xCodeProj/ImmichVideoChannel/ImmichVideoChannel/RootView.swift" : {
+    "const-values" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/RootView.swiftconstvalues",
+    "dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/RootView.d",
+    "diagnostics" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/RootView.dia",
+    "index-unit-output-path" : "/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/RootView.o",
+    "llvm-bc" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/RootView.bc",
+    "object" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/RootView.o",
+    "swift-dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/RootView.swiftdeps",
+    "swiftmodule" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/RootView~partial.swiftmodule"
+  },
+  "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/tvOS/xCodeProj/ImmichVideoChannel/ImmichVideoChannel/SetupView.swift" : {
+    "const-values" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/SetupView.swiftconstvalues",
+    "dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/SetupView.d",
+    "diagnostics" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/SetupView.dia",
+    "index-unit-output-path" : "/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/SetupView.o",
+    "llvm-bc" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/SetupView.bc",
+    "object" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/SetupView.o",
+    "swift-dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/SetupView.swiftdeps",
+    "swiftmodule" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/SetupView~partial.swiftmodule"
+  },
+  "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/tvOS/xCodeProj/ImmichVideoChannel/ImmichVideoChannel/SQLiteVideoStore.swift" : {
+    "const-values" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/SQLiteVideoStore.swiftconstvalues",
+    "dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/SQLiteVideoStore.d",
+    "diagnostics" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/SQLiteVideoStore.dia",
+    "index-unit-output-path" : "/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/SQLiteVideoStore.o",
+    "llvm-bc" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/SQLiteVideoStore.bc",
+    "object" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/SQLiteVideoStore.o",
+    "swift-dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/SQLiteVideoStore.swiftdeps",
+    "swiftmodule" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/SQLiteVideoStore~partial.swiftmodule"
+  },
+  "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/tvOS/xCodeProj/ImmichVideoChannel/ImmichVideoChannel/VideoSyncService.swift" : {
+    "const-values" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/VideoSyncService.swiftconstvalues",
+    "dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/VideoSyncService.d",
+    "diagnostics" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/VideoSyncService.dia",
+    "index-unit-output-path" : "/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/VideoSyncService.o",
+    "llvm-bc" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/VideoSyncService.bc",
+    "object" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/VideoSyncService.o",
+    "swift-dependencies" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/VideoSyncService.swiftdeps",
+    "swiftmodule" : "/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/.deriveddata/Build/Intermediates.noindex/ImmichVideoChannel.build/Debug-appletvos/ImmichVideoChannel.build/Objects-normal/arm64/VideoSyncService~partial.swiftmodule"
+  }
+}
