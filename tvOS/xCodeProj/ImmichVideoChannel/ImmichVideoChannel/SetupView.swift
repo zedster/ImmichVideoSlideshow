@@ -9,6 +9,7 @@ struct SetupView: View {
         case randomBatchSize
         case playbackOrder
         case playbackQuality
+        case showDateLocationOverlay
         case onlyFavorites
         case resetPlayback
         case crossfadeEnabled
@@ -62,6 +63,7 @@ struct SetupView: View {
     @State private var randomBatchSize = "20"
     @State private var playbackOrder = "random"
     @State private var playbackQuality = "auto"
+    @State private var showDateLocationOverlay = true
     @State private var preloadSeconds = "4"
     @State private var crossfadeDuration = "450"
     @State private var queueTarget = "2"
@@ -127,6 +129,7 @@ struct SetupView: View {
                     choiceRow("Picture Quality", value: playbackQualityDisplayValue, focus: .playbackQuality) {
                         cyclePlaybackQuality()
                     }
+                    booleanPicker("Show Month/Year + Location", isOn: $showDateLocationOverlay, focus: .showDateLocationOverlay)
                     booleanPicker("Only Favorites", isOn: $onlyFavorites, focus: .onlyFavorites)
 
                     if onResetPlaybackProgress != nil {
@@ -270,6 +273,7 @@ struct SetupView: View {
             playbackOrder = "random"
         }
         playbackQuality = cfg.playbackQuality
+        showDateLocationOverlay = cfg.showDateLocationOverlay
         preloadSeconds = String(cfg.preloadSecondsBeforeEnd)
         crossfadeDuration = String(cfg.crossfadeDurationMs)
         queueTarget = String(cfg.queueTargetSize)
@@ -316,6 +320,7 @@ struct SetupView: View {
             next.playbackOrder = "random"
         }
         next.playbackQuality = playbackQuality
+        next.showDateLocationOverlay = showDateLocationOverlay
         next.onlyFavorites = onlyFavorites
         next.debug = debugEnabled
         next.crossfadeEnabled = crossfadeEnabled

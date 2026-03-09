@@ -717,7 +717,7 @@ final class ChannelCoordinator: ObservableObject {
         currentImmichAssetURL = buildImmichAssetURL(for: candidate)
         currentInfoFields = buildInfoFields(for: candidate)
         let overlay = overlayTexts(for: candidate)
-        dateLocationText = formatCaption(for: candidate)
+        dateLocationText = overlayDateLocationText(for: candidate)
         title = overlay.title
         captionText = overlay.caption
         clearPlaybackFailureState()
@@ -819,7 +819,7 @@ final class ChannelCoordinator: ObservableObject {
             currentImmichAssetURL = buildImmichAssetURL(for: next)
             currentInfoFields = buildInfoFields(for: next)
             let overlay = overlayTexts(for: next)
-            dateLocationText = formatCaption(for: next)
+            dateLocationText = overlayDateLocationText(for: next)
             title = overlay.title
             captionText = overlay.caption
             nextPreparedId = ""
@@ -905,7 +905,7 @@ final class ChannelCoordinator: ObservableObject {
             currentImmichAssetURL = buildImmichAssetURL(for: previous)
             currentInfoFields = buildInfoFields(for: previous)
             let overlay = overlayTexts(for: previous)
-            dateLocationText = formatCaption(for: previous)
+            dateLocationText = overlayDateLocationText(for: previous)
             title = overlay.title
             captionText = overlay.caption
             nextPreparedId = ""
@@ -1198,6 +1198,11 @@ final class ChannelCoordinator: ObservableObject {
             return monthYear
         }
         return "\(monthYear)\n\(location)"
+    }
+
+    private func overlayDateLocationText(for candidate: VideoCandidate) -> String {
+        guard configStore.config.showDateLocationOverlay else { return "" }
+        return formatCaption(for: candidate)
     }
 
     private func overlayTexts(for candidate: VideoCandidate) -> (title: String, caption: String) {
