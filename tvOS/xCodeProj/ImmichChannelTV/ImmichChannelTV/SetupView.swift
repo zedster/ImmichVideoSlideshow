@@ -160,36 +160,29 @@ struct SetupView: View {
                 }
 
                 Section("Library Stats") {
-                    Text("Stats are calculated from the local SQLite cache.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text("Total Videos: \(statsTotalVideos?.wrappedValue ?? 0)")
-                    Text("Total Watched Plays: \(statsTotalWatchedPlays?.wrappedValue ?? 0)")
-                    Text("Watched Plays (7 Days): \(statsWatchedPlays7Days?.wrappedValue ?? 0)")
-                    Text("Watched Plays (30 Days): \(statsWatchedPlays30Days?.wrappedValue ?? 0)")
-                    Text("Videos Watched At Least Once: \(statsVideosWatchedAtLeastOnce?.wrappedValue ?? 0)")
-                    Text("Current Session Watched: \(sessionVideosWatchedCount?.wrappedValue ?? 0)")
-                    Text("Favorites: \(statsFavoritesCount?.wrappedValue ?? 0)")
-                    Text("Hidden: \(statsHiddenCount?.wrappedValue ?? 0)")
-                    Text("Most Popular Camera: \(statsMostPopularCamera?.wrappedValue ?? "-")")
-                    Text("Most Popular Codec: \(statsMostPopularCodec?.wrappedValue ?? "-")")
-                    Text("Most Popular File Type: \(statsMostPopularFileType?.wrappedValue ?? "-")")
-                    Text("Most Popular Place: \(statsMostPopularPlace?.wrappedValue ?? "-")")
-                    Text("Most Popular Year: \(statsMostPopularYear?.wrappedValue ?? "-")")
-                    Text("Top Cameras: \(statsTopCamerasSummary?.wrappedValue ?? "-")")
-                    Text("Top Codecs: \(statsTopCodecsSummary?.wrappedValue ?? "-")")
-                    Text("Top File Types: \(statsTopFileTypesSummary?.wrappedValue ?? "-")")
-                    Text("Top Places: \(statsTopPlacesSummary?.wrappedValue ?? "-")")
-                    Text("Top Years: \(statsTopYearsSummary?.wrappedValue ?? "-")")
-                    if let err = statsLastError?.wrappedValue, !err.isEmpty {
-                        Text("Stats Error: \(err)")
-                            .foregroundStyle(.red)
-                    }
-                    if onRefreshStats != nil {
-                        Button("Refresh Stats") {
-                            onRefreshStats?()
-                        }
-                        .buttonStyle(.bordered)
+                    NavigationLink("Open Library Stats") {
+                        LibraryStatsView(
+                            onRefreshStats: onRefreshStats,
+                            statsTotalVideos: statsTotalVideos,
+                            statsTotalWatchedPlays: statsTotalWatchedPlays,
+                            statsWatchedPlays7Days: statsWatchedPlays7Days,
+                            statsWatchedPlays30Days: statsWatchedPlays30Days,
+                            statsVideosWatchedAtLeastOnce: statsVideosWatchedAtLeastOnce,
+                            statsFavoritesCount: statsFavoritesCount,
+                            statsHiddenCount: statsHiddenCount,
+                            sessionVideosWatchedCount: sessionVideosWatchedCount,
+                            statsMostPopularCamera: statsMostPopularCamera,
+                            statsMostPopularCodec: statsMostPopularCodec,
+                            statsMostPopularFileType: statsMostPopularFileType,
+                            statsMostPopularPlace: statsMostPopularPlace,
+                            statsMostPopularYear: statsMostPopularYear,
+                            statsTopCamerasSummary: statsTopCamerasSummary,
+                            statsTopCodecsSummary: statsTopCodecsSummary,
+                            statsTopFileTypesSummary: statsTopFileTypesSummary,
+                            statsTopPlacesSummary: statsTopPlacesSummary,
+                            statsTopYearsSummary: statsTopYearsSummary,
+                            statsLastError: statsLastError
+                        )
                     }
                 }
 
@@ -221,13 +214,16 @@ struct SetupView: View {
                     .buttonStyle(.borderedProminent)
                 }
 
-                Section {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Created and maintained by bananasystems.co.uk.")
+                Section("About") {
+                    aboutRow("Maintained By", value: "bananasystems.co.uk")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("GitHub")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Link("GitHub: zedster/ImmichVideoSlideshow", destination: URL(string: "https://github.com/zedster/ImmichVideoSlideshow")!)
-                            .font(.caption)
+                        Link(
+                            "zedster/ImmichVideoSlideshow",
+                            destination: URL(string: "https://github.com/zedster/ImmichVideoSlideshow")!
+                        )
                     }
                 }
             }
@@ -390,6 +386,96 @@ struct SetupView: View {
         Picker(label, selection: isOn) {
             Text("Off").tag(false)
             Text("On").tag(true)
+        }
+    }
+
+    @ViewBuilder
+    private func aboutRow(_ label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+        }
+    }
+}
+
+private struct LibraryStatsView: View {
+    var onRefreshStats: (() -> Void)? = nil
+    var statsTotalVideos: Binding<Int>? = nil
+    var statsTotalWatchedPlays: Binding<Int>? = nil
+    var statsWatchedPlays7Days: Binding<Int>? = nil
+    var statsWatchedPlays30Days: Binding<Int>? = nil
+    var statsVideosWatchedAtLeastOnce: Binding<Int>? = nil
+    var statsFavoritesCount: Binding<Int>? = nil
+    var statsHiddenCount: Binding<Int>? = nil
+    var sessionVideosWatchedCount: Binding<Int>? = nil
+    var statsMostPopularCamera: Binding<String>? = nil
+    var statsMostPopularCodec: Binding<String>? = nil
+    var statsMostPopularFileType: Binding<String>? = nil
+    var statsMostPopularPlace: Binding<String>? = nil
+    var statsMostPopularYear: Binding<String>? = nil
+    var statsTopCamerasSummary: Binding<String>? = nil
+    var statsTopCodecsSummary: Binding<String>? = nil
+    var statsTopFileTypesSummary: Binding<String>? = nil
+    var statsTopPlacesSummary: Binding<String>? = nil
+    var statsTopYearsSummary: Binding<String>? = nil
+    var statsLastError: Binding<String>? = nil
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Stats are calculated from the local SQLite cache.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                statRow("Total Videos", value: "\(statsTotalVideos?.wrappedValue ?? 0)")
+                statRow("Total Watched Plays", value: "\(statsTotalWatchedPlays?.wrappedValue ?? 0)")
+                statRow("Watched Plays (7 Days)", value: "\(statsWatchedPlays7Days?.wrappedValue ?? 0)")
+                statRow("Watched Plays (30 Days)", value: "\(statsWatchedPlays30Days?.wrappedValue ?? 0)")
+                statRow("Videos Watched At Least Once", value: "\(statsVideosWatchedAtLeastOnce?.wrappedValue ?? 0)")
+                statRow("Current Session Watched", value: "\(sessionVideosWatchedCount?.wrappedValue ?? 0)")
+                statRow("Favorites", value: "\(statsFavoritesCount?.wrappedValue ?? 0)")
+                statRow("Hidden", value: "\(statsHiddenCount?.wrappedValue ?? 0)")
+                statRow("Most Popular Camera", value: statsMostPopularCamera?.wrappedValue ?? "-")
+                statRow("Most Popular Codec", value: statsMostPopularCodec?.wrappedValue ?? "-")
+                statRow("Most Popular File Type", value: statsMostPopularFileType?.wrappedValue ?? "-")
+                statRow("Most Popular Place", value: statsMostPopularPlace?.wrappedValue ?? "-")
+                statRow("Most Popular Year", value: statsMostPopularYear?.wrappedValue ?? "-")
+                statRow("Top Cameras", value: statsTopCamerasSummary?.wrappedValue ?? "-")
+                statRow("Top Codecs", value: statsTopCodecsSummary?.wrappedValue ?? "-")
+                statRow("Top File Types", value: statsTopFileTypesSummary?.wrappedValue ?? "-")
+                statRow("Top Places", value: statsTopPlacesSummary?.wrappedValue ?? "-")
+                statRow("Top Years", value: statsTopYearsSummary?.wrappedValue ?? "-")
+
+                if let err = statsLastError?.wrappedValue, !err.isEmpty {
+                    Text("Stats Error: \(err)")
+                        .foregroundStyle(.red)
+                }
+
+                if onRefreshStats != nil {
+                    Button("Refresh Stats") {
+                        onRefreshStats?()
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
+        }
+        .navigationTitle("Library Stats")
+        .onAppear {
+            onRefreshStats?()
+        }
+    }
+
+    @ViewBuilder
+    private func statRow(_ label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
         }
     }
 }

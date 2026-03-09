@@ -16,6 +16,7 @@ final class ChannelCoordinator: ObservableObject {
     @Published var opacityB: Double = 0
     @Published var title: String = "Loading..."
     @Published var captionText: String = ""
+    @Published var dateLocationText: String = ""
     @Published var fallbackMessage: String = ""
     @Published var statusText: String = ""
     @Published var recentDebugMessages: [String] = []
@@ -190,6 +191,7 @@ final class ChannelCoordinator: ObservableObject {
         fallbackMessage = ""
         title = "Loading..."
         captionText = ""
+        dateLocationText = ""
         playbackProgress = 0
         secondsLeftText = "--:--"
         isBuffering = false
@@ -681,6 +683,7 @@ final class ChannelCoordinator: ObservableObject {
         currentImmichAssetURL = buildImmichAssetURL(for: candidate)
         currentInfoFields = buildInfoFields(for: candidate)
         let overlay = overlayTexts(for: candidate)
+        dateLocationText = formatCaption(for: candidate)
         title = overlay.title
         captionText = overlay.caption
         clearPlaybackFailureState()
@@ -780,6 +783,7 @@ final class ChannelCoordinator: ObservableObject {
             currentImmichAssetURL = buildImmichAssetURL(for: next)
             currentInfoFields = buildInfoFields(for: next)
             let overlay = overlayTexts(for: next)
+            dateLocationText = formatCaption(for: next)
             title = overlay.title
             captionText = overlay.caption
             nextPreparedId = ""
@@ -842,6 +846,7 @@ final class ChannelCoordinator: ObservableObject {
             currentImmichAssetURL = buildImmichAssetURL(for: previous)
             currentInfoFields = buildInfoFields(for: previous)
             let overlay = overlayTexts(for: previous)
+            dateLocationText = formatCaption(for: previous)
             title = overlay.title
             captionText = overlay.caption
             nextPreparedId = ""
@@ -1225,6 +1230,7 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func buildInfoFields(for candidate: VideoCandidate) -> [VideoInfoField] {
+        let monthYear = formatMonthYear(candidate.captureDate)
         let location = formatLocation(city: candidate.city, country: candidate.country)
         let camera = [candidate.cameraMake, candidate.cameraModel]
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -1232,14 +1238,24 @@ final class ChannelCoordinator: ObservableObject {
             .joined(separator: " ")
         let dateTime = formatCaptureDateTime(candidate.captureDate)
 
-        return [
+        var fields: [VideoInfoField] = [
             VideoInfoField(id: "title", label: "Title", value: nonEmptyOrDash(candidate.title)),
             VideoInfoField(id: "id", label: "Asset ID", value: nonEmptyOrDash(candidate.id)),
             VideoInfoField(id: "duration", label: "Duration", value: formatDuration(candidate.duration)),
             VideoInfoField(id: "times_watched", label: "Times Watched", value: String(candidate.timesWatched)),
             VideoInfoField(id: "session_watched", label: "Session Watched", value: String(sessionVideosWatchedCount)),
             VideoInfoField(id: "favorite", label: "Favorite", value: candidate.isFavorite ? "Yes" : "No"),
-            VideoInfoField(id: "hidden", label: "Hidden", value: candidate.isHidden ? "Yes" : "No"),
+            VideoInfoField(id: "hidden", label: "Hidden", value: candidate.isHidden ? "Yes" : "No")
+        ]
+
+        if !monthYear.isEmpty {
+            fields.append(VideoInfoField(id: "month_year", label: "Year / Month", value: monthYear))
+        }
+        if !location.isEmpty {
+            fields.append(VideoInfoField(id: "current_location", label: "Current Location", value: location))
+        }
+
+        fields.append(contentsOf: [
             VideoInfoField(id: "capture_raw", label: "Capture Date (Raw)", value: nonEmptyOrDash(candidate.captureDate)),
             VideoInfoField(id: "capture_fmt", label: "Capture Date (Parsed)", value: nonEmptyOrDash(dateTime)),
             VideoInfoField(id: "city", label: "City", value: nonEmptyOrDash(candidate.city)),
@@ -1256,7 +1272,9 @@ final class ChannelCoordinator: ObservableObject {
             VideoInfoField(id: "latitude", label: "Latitude", value: nonEmptyOrDash(candidate.latitude)),
             VideoInfoField(id: "longitude", label: "Longitude", value: nonEmptyOrDash(candidate.longitude)),
             VideoInfoField(id: "immich_url", label: "Immich URL", value: nonEmptyOrDash(currentImmichAssetURL))
-        ]
+        ])
+
+        return fields
     }
 
     private func formatDuration(_ seconds: Double) -> String {

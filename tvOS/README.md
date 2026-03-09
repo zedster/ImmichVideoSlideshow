@@ -69,6 +69,18 @@ This folder contains the native SwiftUI/tvOS app for fullscreen Immich video pla
 2. Select scheme `ImmichChannelTV`.
 3. Build/run for Apple TV device or tvOS simulator (tvOS 16+).
 
+## Git version bump hook
+
+- Commits can auto-bump tvOS app versions via `.githooks/pre-commit`.
+- The hook runs `tvOS/scripts/bump_tvos_version.sh` and updates:
+  - `CURRENT_PROJECT_VERSION` (+1 each commit)
+  - `MARKETING_VERSION` (patch component +1 each commit)
+- Ensure hooks are enabled in your clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
 ## Runtime behavior notes
 
 - Video discovery/sync uses `POST /api/search/metadata`.

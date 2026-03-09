@@ -87,6 +87,25 @@ struct ChannelView: View {
                         .clipShape(Circle())
                 }
 
+                if !coordinator.dateLocationText.isEmpty {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Text(coordinator.dateLocationText)
+                                .font(.caption)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color.black.opacity(0.6))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .padding(.leading, 16)
+                                .padding(.bottom, max(120, geo.size.height * 0.18))
+                            Spacer()
+                        }
+                    }
+                }
+
                 if configStore.config.debug && !coordinator.title.isEmpty {
                     VStack {
                         Spacer()
