@@ -243,11 +243,15 @@ actor SQLiteVideoStore {
         }
     }
 
-    func selectSequential(afterAssetId: String?, minDuration: Double, onlyFavorites: Bool) throws -> VideoCandidate? {
+    func selectSequential(afterAssetId: String?, newestFirst: Bool, minDuration: Double, onlyFavorites: Bool) throws -> VideoCandidate? {
         try withDatabase { db in
             let baseWhere = onlyFavorites
                 ? "duration >= ? AND is_favorite = 1 AND COALESCE(is_hidden, 0) = 0"
                 : "duration >= ? AND COALESCE(is_hidden, 0) = 0"
+            let sortExpr = "CASE WHEN COALESCE(capture_date, '') = '' THEN 1 ELSE 0 END"
+            let compareDate = newestFirst ? "<" : ">"
+            let compareBucket = newestFirst ? "<" : ">"
+            let orderDirection = newestFirst ? "DESC" : "ASC"
 
             if let afterAssetId, let anchor = try selectSortAnchor(db: db, assetId: afterAssetId) {
                 let sql = """
@@ -255,10 +259,16 @@ actor SQLiteVideoStore {
                 FROM videos
                 WHERE \(baseWhere)
                   AND (
-                    COALESCE(capture_date, '') > ?
-                    OR (COALESCE(capture_date, '') = ? AND asset_id > ?)
+                    \(sortExpr) \(compareBucket) ?
+                    OR (
+                        \(sortExpr) = ?
+                        AND (
+                            COALESCE(capture_date, '') \(compareDate) ?
+                            OR (COALESCE(capture_date, '') = ? AND asset_id \(compareDate) ?)
+                        )
+                    )
                   )
-                ORDER BY COALESCE(capture_date, '') ASC, asset_id ASC
+                ORDER BY \(sortExpr) \(orderDirection), COALESCE(capture_date, '') \(orderDirection), asset_id \(orderDirection)
                 LIMIT 1
                 """
                 var stmt: OpaquePointer?
@@ -268,9 +278,11 @@ actor SQLiteVideoStore {
                 defer { sqlite3_finalize(stmt) }
 
                 sqlite3_bind_double(stmt, 1, minDuration)
-                sqlite3_bind_text(stmt, 2, (anchor.captureDate as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 3, (anchor.captureDate as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 4, (anchor.assetId as NSString).utf8String, -1, nil)
+                sqlite3_bind_int(stmt, 2, Int32(anchor.emptyDateBucket))
+                sqlite3_bind_int(stmt, 3, Int32(anchor.emptyDateBucket))
+                sqlite3_bind_text(stmt, 4, (anchor.captureDate as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 5, (anchor.captureDate as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 6, (anchor.assetId as NSString).utf8String, -1, nil)
                 if sqlite3_step(stmt) == SQLITE_ROW {
                     return decodeCandidate(stmt: stmt)
                 }
@@ -280,7 +292,7 @@ actor SQLiteVideoStore {
             SELECT asset_id, title, duration, is_favorite, is_hidden, times_watched, capture_date, city, country, camera_make, camera_model, lens_model, f_number, focal_length, iso, exposure_time, latitude, longitude
             FROM videos
             WHERE \(baseWhere)
-            ORDER BY COALESCE(capture_date, '') ASC, asset_id ASC
+            ORDER BY \(sortExpr) \(orderDirection), COALESCE(capture_date, '') \(orderDirection), asset_id \(orderDirection)
             LIMIT 1
             """
             var fallbackStmt: OpaquePointer?
@@ -413,7 +425,7 @@ actor SQLiteVideoStore {
         return try body(db)
     }
 
-    private func selectSortAnchor(db: OpaquePointer, assetId: String) throws -> (captureDate: String, assetId: String)? {
+    private func selectSortAnchor(db: OpaquePointer, assetId: String) throws -> (emptyDateBucket: Int, captureDate: String, assetId: String)? {
         let sql = "SELECT COALESCE(capture_date, ''), asset_id FROM videos WHERE asset_id = ? LIMIT 1"
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
@@ -428,7 +440,8 @@ actor SQLiteVideoStore {
 
         let captureDate = sqlite3_column_text(stmt, 0).map { String(cString: $0) } ?? ""
         let resolvedAssetId = sqlite3_column_text(stmt, 1).map { String(cString: $0) } ?? assetId
-        return (captureDate, resolvedAssetId)
+        let emptyDateBucket = captureDate.isEmpty ? 1 : 0
+        return (emptyDateBucket, captureDate, resolvedAssetId)
     }
 
     private func decodeCandidate(stmt: OpaquePointer?) -> VideoCandidate? {

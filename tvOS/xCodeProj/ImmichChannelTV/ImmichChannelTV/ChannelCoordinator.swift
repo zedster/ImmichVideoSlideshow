@@ -478,10 +478,12 @@ final class ChannelCoordinator: ObservableObject {
 
     private func fetchNextCandidate() async throws -> VideoCandidate {
         let order = configStore.config.playbackOrder
-        if order == "sequential" {
+        if isSequentialOrder(order) {
+            let newestFirst = (order == "sequential_newest")
             await ensureSequentialStateLoaded()
             if let fromDB = try await store.selectSequential(
                 afterAssetId: sequentialLastAssetId,
+                newestFirst: newestFirst,
                 minDuration: configStore.config.minDuration,
                 onlyFavorites: configStore.config.onlyFavorites
             ) {
@@ -490,6 +492,7 @@ final class ChannelCoordinator: ObservableObject {
             await runForceSync(silent: true)
             if let fromDB = try await store.selectSequential(
                 afterAssetId: sequentialLastAssetId,
+                newestFirst: newestFirst,
                 minDuration: configStore.config.minDuration,
                 onlyFavorites: configStore.config.onlyFavorites
             ) {
@@ -828,12 +831,20 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func shouldUseSQLiteSelection() -> Bool {
-        configStore.config.useSQLiteCache || configStore.config.playbackOrder == "sequential"
+        configStore.config.useSQLiteCache || isSequentialOrder(configStore.config.playbackOrder)
     }
 
     private func updateStatus() {
         let mode = configStore.config.crossfadeEnabled ? "fade \(configStore.config.crossfadeDurationMs)ms" : "cut"
-        let orderLabel = configStore.config.playbackOrder == "sequential" ? "seq" : "rand"
+        let orderLabel: String
+        switch configStore.config.playbackOrder {
+        case "sequential_oldest", "sequential":
+            orderLabel = "seq old->new"
+        case "sequential_newest":
+            orderLabel = "seq new->old"
+        default:
+            orderLabel = "rand"
+        }
         let syncText = isSyncing ? " · syncing p\(syncPagesFetched) r\(syncRowsUpserted)" : ""
         let debugQuality = configStore.config.debug ? " · q \(configStore.config.playbackQualityLabel)" : ""
         statusText = "Queue \(queue.count)/\(configStore.config.queueTargetSize) · \(orderLabel) · \(mode)\(syncText)\(debugQuality)"
@@ -961,7 +972,7 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func persistSequentialProgress(for candidate: VideoCandidate) async {
-        guard configStore.config.playbackOrder == "sequential" else { return }
+        guard isSequentialOrder(configStore.config.playbackOrder) else { return }
         sequentialLastAssetId = candidate.id
         sequentialStateLoaded = true
         do {
@@ -983,6 +994,10 @@ final class ChannelCoordinator: ObservableObject {
         } catch {
             addDebugMessage("Seq progress reset failed: \(error.localizedDescription)")
         }
+    }
+
+    private func isSequentialOrder(_ order: String) -> Bool {
+        order == "sequential_oldest" || order == "sequential_newest" || order == "sequential"
     }
 
     private func clearPlaybackFailureState() {

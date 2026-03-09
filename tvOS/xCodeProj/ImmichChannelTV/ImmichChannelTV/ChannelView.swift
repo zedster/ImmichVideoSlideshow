@@ -12,6 +12,7 @@ struct ChannelView: View {
     @State private var infoScrollIndex = 0
     @State private var controlsVisible = true
     @State private var hideControlsTask: Task<Void, Never>?
+    @State private var showHideForeverConfirmation = false
     @FocusState private var inputAnchorFocused: Bool
 
     init(configStore: ConfigStore) {
@@ -185,6 +186,16 @@ struct ChannelView: View {
                             .buttonStyle(.bordered)
                             .disabled(coordinator.favoriteUpdateInProgress)
                             .accessibilityLabel(coordinator.favoriteButtonLabel())
+
+                            Button(role: .destructive) {
+                                recordInteraction()
+                                showHideForeverConfirmation = true
+                            } label: {
+                                Image(systemName: coordinator.hideButtonSystemImage())
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(!coordinator.canHideToAlbum || coordinator.hideUpdateInProgress)
+                            .accessibilityLabel("Hide Forever")
 
                             Button {
                                 recordInteraction()
@@ -377,6 +388,15 @@ struct ChannelView: View {
             syncLastError: Binding(get: { coordinator.syncLastError }, set: { _ in }),
             playbackError: Binding(get: { coordinator.setupErrorMessage }, set: { coordinator.setupErrorMessage = $0 }))
                 .environmentObject(configStore)
+        }
+        .alert("Hide Forever?", isPresented: $showHideForeverConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Hide Forever", role: .destructive) {
+                recordInteraction()
+                coordinator.hideCurrentVideo()
+            }
+        } message: {
+            Text("Are you sure? This hides the video in Immich too. The only way to unhide it is via the web interface.")
         }
     }
 

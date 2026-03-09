@@ -78,7 +78,8 @@ struct SetupView: View {
                     labeledField("Random Batch Size", placeholder: "20", text: $randomBatchSize)
                     Picker("Order", selection: $playbackOrder) {
                         Text("Random").tag("random")
-                        Text("Sequential").tag("sequential")
+                        Text("Sequential Oldest -> Newest").tag("sequential_oldest")
+                        Text("Sequential Newest -> Oldest").tag("sequential_newest")
                     }
                     Picker("Picture Quality", selection: $playbackQuality) {
                         Text("Auto").tag("auto")
@@ -189,7 +190,14 @@ struct SetupView: View {
         apiKey = cfg.apiKey
         minDuration = String(Int(cfg.minDuration))
         randomBatchSize = String(cfg.randomBatchSize)
-        playbackOrder = cfg.playbackOrder
+        switch cfg.playbackOrder {
+        case "sequential_oldest", "sequential":
+            playbackOrder = "sequential_oldest"
+        case "sequential_newest":
+            playbackOrder = "sequential_newest"
+        default:
+            playbackOrder = "random"
+        }
         playbackQuality = cfg.playbackQuality
         preloadSeconds = String(cfg.preloadSecondsBeforeEnd)
         crossfadeDuration = String(cfg.crossfadeDurationMs)
@@ -230,7 +238,12 @@ struct SetupView: View {
         next.apiKey = trimmedKey
         next.minDuration = minDurationValue
         next.randomBatchSize = randomBatchValue
-        next.playbackOrder = playbackOrder
+        switch playbackOrder {
+        case "sequential_oldest", "sequential_newest", "random":
+            next.playbackOrder = playbackOrder
+        default:
+            next.playbackOrder = "random"
+        }
         next.playbackQuality = playbackQuality
         next.onlyFavorites = onlyFavorites
         next.debug = debugEnabled

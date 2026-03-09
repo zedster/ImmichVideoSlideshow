@@ -51,7 +51,15 @@ struct AppConfig: Codable, Equatable {
         crossfadeDurationMs = try c.decodeIfPresent(Int.self, forKey: .crossfadeDurationMs) ?? 450
         preloadSecondsBeforeEnd = try c.decodeIfPresent(Double.self, forKey: .preloadSecondsBeforeEnd) ?? 4
         queueTargetSize = try c.decodeIfPresent(Int.self, forKey: .queueTargetSize) ?? 2
-        playbackOrder = try c.decodeIfPresent(String.self, forKey: .playbackOrder) ?? "random"
+        let decodedOrder = try c.decodeIfPresent(String.self, forKey: .playbackOrder) ?? "random"
+        switch decodedOrder {
+        case "random", "sequential_oldest", "sequential_newest":
+            playbackOrder = decodedOrder
+        case "sequential":
+            playbackOrder = "sequential_oldest"
+        default:
+            playbackOrder = "random"
+        }
         playbackQuality = try c.decodeIfPresent(String.self, forKey: .playbackQuality) ?? "auto"
         useSQLiteCache = try c.decodeIfPresent(Bool.self, forKey: .useSQLiteCache) ?? true
         syncOnStartup = try c.decodeIfPresent(Bool.self, forKey: .syncOnStartup) ?? true
