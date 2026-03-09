@@ -307,8 +307,8 @@ final class ChannelCoordinator: ObservableObject {
             addDebugMessage("Hide ignored: no current item")
             return
         }
-        guard canHideToAlbum, !hiddenAlbumId.isEmpty else {
-            addDebugMessage("Hide unavailable: hidden album access not ready")
+        guard canHideToAlbum else {
+            addDebugMessage("Hide unavailable: archive access not ready")
             return
         }
         guard !hideUpdateInProgress else {
@@ -323,14 +323,14 @@ final class ChannelCoordinator: ObservableObject {
             addDebugMessage("Hide requested: \(target.title)")
 
             do {
-                try await client.addAssetToAlbum(assetId: target.id, albumId: hiddenAlbumId, config: configStore.config)
+                try await client.archiveAsset(assetId: target.id, isArchived: true, config: configStore.config)
                 if configStore.config.useSQLiteCache {
                     try await store.initializeSchema()
                     try await store.setHidden(assetId: target.id, isHidden: true)
                 }
                 applyHiddenStateLocally(assetId: target.id, isHidden: true)
                 fallbackMessage = "Hidden: \(target.title)"
-                addDebugMessage("Hidden in album: \(target.title)")
+                addDebugMessage("Archived (locked): \(target.title)")
                 await transitionToNext(reason: "manual_hide")
             } catch {
                 fallbackMessage = "Hide failed: \(error.localizedDescription)"
@@ -371,10 +371,9 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func checkHiddenAlbumAccessAtStartup() async {
-        let access = await client.resolveHiddenAlbumAccess(config: configStore.config, albumName: "Hidden")
-        canHideToAlbum = access.canHide
-        hiddenAlbumId = access.albumId
-        addDebugMessage("Hide capability: \(access.detail)")
+        canHideToAlbum = true
+        hiddenAlbumId = ""
+        addDebugMessage("Hide capability: archive/locked mode enabled")
     }
 
     private func runForceSync(silent: Bool = false) async {

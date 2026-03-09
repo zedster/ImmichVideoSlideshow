@@ -91,10 +91,13 @@ struct ChannelView: View {
                     VStack {
                         Spacer()
                         HStack {
-                            Text(coordinator.dateLocationText)
-                                .font(.caption)
+                            outlinedText(
+                                coordinator.dateLocationText,
+                                fontSize: 24,
+                                weight: .semibold,
+                                fill: .gray
+                            )
                                 .lineLimit(2)
-                                .multilineTextAlignment(.leading)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
                                 .background(Color.black.opacity(0.6))
@@ -443,8 +446,18 @@ struct ChannelView: View {
 
     @ViewBuilder
     private func outlinedCaption(_ text: String) -> some View {
+        outlinedText(text, fontSize: 34, weight: .heavy, fill: .white)
+    }
+
+    @ViewBuilder
+    private func outlinedText(
+        _ text: String,
+        fontSize: CGFloat,
+        weight: Font.Weight,
+        fill: Color
+    ) -> some View {
         let base = Text(text)
-            .font(.system(size: 34, weight: .heavy))
+            .font(.system(size: fontSize, weight: weight))
             .multilineTextAlignment(.leading)
             .lineSpacing(2)
 
@@ -455,7 +468,7 @@ struct ChannelView: View {
             base.foregroundColor(.black).offset(x: 1.2, y: 1.2)
             base.foregroundColor(.black).offset(x: 0, y: 1.6)
             base.foregroundColor(.black).offset(x: 0, y: -1.6)
-            base.foregroundColor(.white)
+            base.foregroundColor(fill)
         }
     }
 

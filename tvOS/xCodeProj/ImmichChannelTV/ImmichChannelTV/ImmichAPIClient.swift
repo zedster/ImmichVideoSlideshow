@@ -234,6 +234,71 @@ final class ImmichAPIClient {
         throw ImmichAPIError.httpStatus(lastStatus)
     }
 
+    func archiveAsset(assetId: String, isArchived: Bool = true, config: AppConfig) async throws {
+        let encodedAssetId = assetId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? assetId
+        let methods = ["PUT", "PATCH", "POST"]
+        var lastStatus: Int?
+
+        let singleAssetPayloads: [[String: Any]] = [
+            ["isArchived": isArchived],
+            ["isArchived": isArchived, "id": assetId]
+        ]
+        if let singleAssetURL = URL(string: "\(config.normalizedImmichBaseURL)/api/assets/\(encodedAssetId)") {
+            for payload in singleAssetPayloads {
+                let body = try JSONSerialization.data(withJSONObject: payload, options: [])
+                for method in methods {
+                    var request = URLRequest(url: singleAssetURL)
+                    request.httpMethod = method
+                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    request.setValue("application/json", forHTTPHeaderField: "Accept")
+                    request.setValue(config.apiKey, forHTTPHeaderField: "x-api-key")
+                    request.timeoutInterval = 30
+                    request.httpBody = body
+
+                    let (_, response) = try await session.data(for: request)
+                    guard let http = response as? HTTPURLResponse else {
+                        throw ImmichAPIError.invalidResponse
+                    }
+                    if 200..<300 ~= http.statusCode {
+                        return
+                    }
+                    lastStatus = http.statusCode
+                }
+            }
+        }
+
+        let batchPayloads: [[String: Any]] = [
+            ["ids": [assetId], "isArchived": isArchived],
+            ["assetIds": [assetId], "isArchived": isArchived]
+        ]
+        guard let batchURL = URL(string: "\(config.normalizedImmichBaseURL)/api/assets") else {
+            throw ImmichAPIError.invalidBaseURL
+        }
+        for payload in batchPayloads {
+            let body = try JSONSerialization.data(withJSONObject: payload, options: [])
+            for method in methods {
+                var request = URLRequest(url: batchURL)
+                request.httpMethod = method
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.setValue("application/json", forHTTPHeaderField: "Accept")
+                request.setValue(config.apiKey, forHTTPHeaderField: "x-api-key")
+                request.timeoutInterval = 30
+                request.httpBody = body
+
+                let (_, response) = try await session.data(for: request)
+                guard let http = response as? HTTPURLResponse else {
+                    throw ImmichAPIError.invalidResponse
+                }
+                if 200..<300 ~= http.statusCode {
+                    return
+                }
+                lastStatus = http.statusCode
+            }
+        }
+
+        throw ImmichAPIError.httpStatus(lastStatus ?? -1)
+    }
+
     func fetchRandomBatch(config: AppConfig, size: Int) async throws -> [ImmichAssetRecord] {
         let items = try await searchMetadata(
             config: config,

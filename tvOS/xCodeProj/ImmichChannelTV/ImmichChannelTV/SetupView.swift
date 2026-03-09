@@ -383,10 +383,24 @@ struct SetupView: View {
 
     @ViewBuilder
     private func booleanPicker(_ label: String, isOn: Binding<Bool>) -> some View {
-        Picker(label, selection: isOn) {
-            Text("Off").tag(false)
-            Text("On").tag(true)
+        Button {
+            isOn.wrappedValue.toggle()
+        } label: {
+            HStack {
+                Text(label)
+                    .foregroundStyle(.primary)
+                Spacer()
+                Text(isOn.wrappedValue ? "On" : "Off")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(isOn.wrappedValue ? Color.green : Color.gray)
+                    .clipShape(Capsule())
+            }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -423,8 +437,8 @@ private struct LibraryStatsView: View {
     var statsLastError: Binding<String>? = nil
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+        Form {
+            Section("Summary") {
                 Text("Stats are calculated from the local SQLite cache.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -447,21 +461,23 @@ private struct LibraryStatsView: View {
                 statRow("Top File Types", value: statsTopFileTypesSummary?.wrappedValue ?? "-")
                 statRow("Top Places", value: statsTopPlacesSummary?.wrappedValue ?? "-")
                 statRow("Top Years", value: statsTopYearsSummary?.wrappedValue ?? "-")
+            }
 
-                if let err = statsLastError?.wrappedValue, !err.isEmpty {
+            if let err = statsLastError?.wrappedValue, !err.isEmpty {
+                Section("Error") {
                     Text("Stats Error: \(err)")
                         .foregroundStyle(.red)
                 }
+            }
 
-                if onRefreshStats != nil {
+            if onRefreshStats != nil {
+                Section {
                     Button("Refresh Stats") {
                         onRefreshStats?()
                     }
                     .buttonStyle(.bordered)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding()
         }
         .navigationTitle("Library Stats")
         .onAppear {
@@ -471,11 +487,13 @@ private struct LibraryStatsView: View {
 
     @ViewBuilder
     private func statRow(_ label: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .top) {
             Text(label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            Spacer(minLength: 12)
             Text(value)
+                .multilineTextAlignment(.trailing)
         }
     }
 }
