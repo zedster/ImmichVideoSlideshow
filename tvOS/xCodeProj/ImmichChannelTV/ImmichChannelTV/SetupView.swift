@@ -13,13 +13,22 @@ struct SetupView: View {
     var syncLastError: Binding<String>? = nil
     var statsTotalVideos: Binding<Int>? = nil
     var statsTotalWatchedPlays: Binding<Int>? = nil
+    var statsWatchedPlays7Days: Binding<Int>? = nil
+    var statsWatchedPlays30Days: Binding<Int>? = nil
     var statsVideosWatchedAtLeastOnce: Binding<Int>? = nil
     var statsFavoritesCount: Binding<Int>? = nil
     var statsHiddenCount: Binding<Int>? = nil
+    var sessionVideosWatchedCount: Binding<Int>? = nil
     var statsMostPopularCamera: Binding<String>? = nil
+    var statsMostPopularCodec: Binding<String>? = nil
     var statsMostPopularFileType: Binding<String>? = nil
     var statsMostPopularPlace: Binding<String>? = nil
     var statsMostPopularYear: Binding<String>? = nil
+    var statsTopCamerasSummary: Binding<String>? = nil
+    var statsTopCodecsSummary: Binding<String>? = nil
+    var statsTopFileTypesSummary: Binding<String>? = nil
+    var statsTopPlacesSummary: Binding<String>? = nil
+    var statsTopYearsSummary: Binding<String>? = nil
     var statsLastError: Binding<String>? = nil
     var playbackError: Binding<String>? = nil
 
@@ -156,13 +165,22 @@ struct SetupView: View {
                         .foregroundStyle(.secondary)
                     Text("Total Videos: \(statsTotalVideos?.wrappedValue ?? 0)")
                     Text("Total Watched Plays: \(statsTotalWatchedPlays?.wrappedValue ?? 0)")
+                    Text("Watched Plays (7 Days): \(statsWatchedPlays7Days?.wrappedValue ?? 0)")
+                    Text("Watched Plays (30 Days): \(statsWatchedPlays30Days?.wrappedValue ?? 0)")
                     Text("Videos Watched At Least Once: \(statsVideosWatchedAtLeastOnce?.wrappedValue ?? 0)")
+                    Text("Current Session Watched: \(sessionVideosWatchedCount?.wrappedValue ?? 0)")
                     Text("Favorites: \(statsFavoritesCount?.wrappedValue ?? 0)")
                     Text("Hidden: \(statsHiddenCount?.wrappedValue ?? 0)")
                     Text("Most Popular Camera: \(statsMostPopularCamera?.wrappedValue ?? "-")")
+                    Text("Most Popular Codec: \(statsMostPopularCodec?.wrappedValue ?? "-")")
                     Text("Most Popular File Type: \(statsMostPopularFileType?.wrappedValue ?? "-")")
                     Text("Most Popular Place: \(statsMostPopularPlace?.wrappedValue ?? "-")")
                     Text("Most Popular Year: \(statsMostPopularYear?.wrappedValue ?? "-")")
+                    Text("Top Cameras: \(statsTopCamerasSummary?.wrappedValue ?? "-")")
+                    Text("Top Codecs: \(statsTopCodecsSummary?.wrappedValue ?? "-")")
+                    Text("Top File Types: \(statsTopFileTypesSummary?.wrappedValue ?? "-")")
+                    Text("Top Places: \(statsTopPlacesSummary?.wrappedValue ?? "-")")
+                    Text("Top Years: \(statsTopYearsSummary?.wrappedValue ?? "-")")
                     if let err = statsLastError?.wrappedValue, !err.isEmpty {
                         Text("Stats Error: \(err)")
                             .foregroundStyle(.red)

@@ -97,6 +97,7 @@ struct ImmichAssetRecord: Equatable {
     let id: String
     let title: String
     let fileType: String
+    let videoCodec: String
     let duration: Double
     let isFavorite: Bool
     let captureDate: String
@@ -450,6 +451,8 @@ private struct ImmichAssetItem: Decodable {
     let durationRaw: DurationValue
     let isFavorite: Bool?
     let originalFileName: String?
+    let originalMimeType: String?
+    let encodedVideoCodec: String?
     let exifInfo: ImmichExifInfo?
     let fileCreatedAt: String?
     let localDateTime: String?
@@ -460,6 +463,8 @@ private struct ImmichAssetItem: Decodable {
         case durationRaw = "duration"
         case isFavorite
         case originalFileName
+        case originalMimeType
+        case encodedVideoCodec
         case exifInfo
         case fileCreatedAt
         case localDateTime
@@ -529,6 +534,20 @@ private struct ImmichAssetItem: Decodable {
         (exifInfo?.longitude?.value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    var videoCodecValue: String {
+        let candidates = [
+            (encodedVideoCodec ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
+            (exifInfo?.videoCodec?.value ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
+            (exifInfo?.codecName?.value ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
+            (exifInfo?.codec?.value ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
+            (originalMimeType ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        ]
+        for candidate in candidates where !candidate.isEmpty {
+            return candidate.lowercased()
+        }
+        return ""
+    }
+
     var record: ImmichAssetRecord {
         let fileType: String = {
             let name = (originalFileName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -542,6 +561,7 @@ private struct ImmichAssetItem: Decodable {
             id: id,
             title: originalFileName ?? "Untitled",
             fileType: fileType,
+            videoCodec: videoCodecValue,
             duration: durationSeconds,
             isFavorite: isFavorite ?? false,
             captureDate: captureDateValue,
@@ -574,6 +594,9 @@ private struct ImmichExifInfo: Decodable {
     let longitude: FlexibleValue?
     let city: String?
     let country: String?
+    let videoCodec: FlexibleValue?
+    let codecName: FlexibleValue?
+    let codec: FlexibleValue?
 }
 
 private struct FlexibleValue: Decodable {

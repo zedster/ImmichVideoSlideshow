@@ -37,13 +37,22 @@ final class ChannelCoordinator: ObservableObject {
     @Published var syncLastError: String = ""
     @Published var statsTotalVideos: Int = 0
     @Published var statsTotalWatchedPlays: Int = 0
+    @Published var statsWatchedPlays7Days: Int = 0
+    @Published var statsWatchedPlays30Days: Int = 0
     @Published var statsVideosWatchedAtLeastOnce: Int = 0
     @Published var statsFavoritesCount: Int = 0
     @Published var statsHiddenCount: Int = 0
+    @Published var sessionVideosWatchedCount: Int = 0
     @Published var statsMostPopularCamera: String = "-"
+    @Published var statsMostPopularCodec: String = "-"
     @Published var statsMostPopularFileType: String = "-"
     @Published var statsMostPopularPlace: String = "-"
     @Published var statsMostPopularYear: String = "-"
+    @Published var statsTopCamerasSummary: String = "-"
+    @Published var statsTopCodecsSummary: String = "-"
+    @Published var statsTopFileTypesSummary: String = "-"
+    @Published var statsTopPlacesSummary: String = "-"
+    @Published var statsTopYearsSummary: String = "-"
     @Published var statsLastError: String = ""
     @Published var shouldOpenSetup: Bool = false
     @Published var setupErrorMessage: String = ""
@@ -104,6 +113,10 @@ final class ChannelCoordinator: ObservableObject {
         applyMuteState(readMutedPreference())
         updateStatus()
         Task {
+            let startedAt = ISO8601DateFormatter().string(from: Date())
+            try? await store.setSyncState(key: "session_started_at", value: startedAt)
+        }
+        Task {
             await checkHiddenAlbumAccessAtStartup()
         }
 
@@ -155,13 +168,22 @@ final class ChannelCoordinator: ObservableObject {
         consecutivePlaybackFailures = 0
         statsTotalVideos = 0
         statsTotalWatchedPlays = 0
+        statsWatchedPlays7Days = 0
+        statsWatchedPlays30Days = 0
         statsVideosWatchedAtLeastOnce = 0
         statsFavoritesCount = 0
         statsHiddenCount = 0
+        sessionVideosWatchedCount = 0
         statsMostPopularCamera = "-"
+        statsMostPopularCodec = "-"
         statsMostPopularFileType = "-"
         statsMostPopularPlace = "-"
         statsMostPopularYear = "-"
+        statsTopCamerasSummary = "-"
+        statsTopCodecsSummary = "-"
+        statsTopFileTypesSummary = "-"
+        statsTopPlacesSummary = "-"
+        statsTopYearsSummary = "-"
         statsLastError = ""
         shouldOpenSetup = false
         setupErrorMessage = ""
@@ -973,7 +995,11 @@ final class ChannelCoordinator: ObservableObject {
         guard shouldUseSQLiteSelection() else { return }
         do {
             let count = try await store.incrementWatchCount(assetId: candidate.id)
+            sessionVideosWatchedCount += 1
             applyWatchCountLocally(assetId: candidate.id, timesWatched: count)
+            if currentItem?.id == candidate.id {
+                currentInfoFields = buildInfoFields(for: candidate.withTimesWatched(count))
+            }
             addDebugMessage("Watch count \(count): \(candidate.title)")
         } catch {
             if configStore.config.debug {
@@ -1040,18 +1066,35 @@ final class ChannelCoordinator: ObservableObject {
             let stats = try await store.getLibraryStats()
             statsTotalVideos = stats.totalVideos
             statsTotalWatchedPlays = stats.totalWatchedPlays
+            statsWatchedPlays7Days = stats.watchedPlays7Days
+            statsWatchedPlays30Days = stats.watchedPlays30Days
             statsVideosWatchedAtLeastOnce = stats.videosWatchedAtLeastOnce
             statsFavoritesCount = stats.favoritesCount
             statsHiddenCount = stats.hiddenCount
+            sessionVideosWatchedCount = stats.currentSessionWatched
             statsMostPopularCamera = stats.mostPopularCamera
+            statsMostPopularCodec = stats.mostPopularCodec
             statsMostPopularFileType = stats.mostPopularFileType
             statsMostPopularPlace = stats.mostPopularPlace
             statsMostPopularYear = stats.mostPopularYear
+            statsTopCamerasSummary = formatTop(stats.topCameras)
+            statsTopCodecsSummary = formatTop(stats.topCodecs)
+            statsTopFileTypesSummary = formatTop(stats.topFileTypes)
+            statsTopPlacesSummary = formatTop(stats.topPlaces)
+            statsTopYearsSummary = formatTop(stats.topYears)
             statsLastError = ""
+            if let currentItem {
+                currentInfoFields = buildInfoFields(for: currentItem)
+            }
         } catch {
             statsLastError = error.localizedDescription
             addDebugMessage("Library stats failed: \(error.localizedDescription)")
         }
+    }
+
+    private func formatTop(_ rows: [SQLiteVideoStore.RankedStat]) -> String {
+        guard !rows.isEmpty else { return "-" }
+        return rows.map { "\($0.label) (\($0.count))" }.joined(separator: ", ")
     }
 
     private func clearPlaybackFailureState() {
@@ -1194,6 +1237,7 @@ final class ChannelCoordinator: ObservableObject {
             VideoInfoField(id: "id", label: "Asset ID", value: nonEmptyOrDash(candidate.id)),
             VideoInfoField(id: "duration", label: "Duration", value: formatDuration(candidate.duration)),
             VideoInfoField(id: "times_watched", label: "Times Watched", value: String(candidate.timesWatched)),
+            VideoInfoField(id: "session_watched", label: "Session Watched", value: String(sessionVideosWatchedCount)),
             VideoInfoField(id: "favorite", label: "Favorite", value: candidate.isFavorite ? "Yes" : "No"),
             VideoInfoField(id: "hidden", label: "Hidden", value: candidate.isHidden ? "Yes" : "No"),
             VideoInfoField(id: "capture_raw", label: "Capture Date (Raw)", value: nonEmptyOrDash(candidate.captureDate)),
