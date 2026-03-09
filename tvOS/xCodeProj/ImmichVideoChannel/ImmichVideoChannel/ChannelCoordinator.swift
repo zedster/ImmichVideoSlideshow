@@ -230,6 +230,18 @@ final class ChannelCoordinator: ObservableObject {
         saveMutedPreference(next)
     }
 
+    func seek(toNormalizedProgress progress: Double) {
+        let clamped = max(0, min(1, progress))
+        guard let item = activePlayer().currentItem else { return }
+        let duration = CMTimeGetSeconds(item.duration)
+        guard duration.isFinite, duration > 0 else { return }
+
+        let targetSeconds = clamped * duration
+        let target = CMTime(seconds: targetSeconds, preferredTimescale: 600)
+        activePlayer().seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
+        onTick(current: targetSeconds)
+    }
+
     func muteButtonLabel() -> String {
         activePlayer().isMuted ? "Unmute" : "Mute"
     }

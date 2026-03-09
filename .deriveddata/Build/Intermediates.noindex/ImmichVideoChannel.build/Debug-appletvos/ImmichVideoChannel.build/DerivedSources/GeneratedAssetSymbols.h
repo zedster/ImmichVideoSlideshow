@@ -12,20 +12,20 @@ static NSString * const ACBundleID AC_SWIFT_PRIVATE = @"uk.co.bananasystems.immi
 /// The "AccentColor" asset catalog color resource.
 static NSString * const ACColorNameAccentColor AC_SWIFT_PRIVATE = @"AccentColor";
 
-/// The "App Icon/Front/Content" asset catalog image resource.
-static NSString * const ACImageNameAppIconFrontContent AC_SWIFT_PRIVATE = @"App Icon/Front/Content";
-
-/// The "App Icon/Back/Content" asset catalog image resource.
-static NSString * const ACImageNameAppIconBackContent AC_SWIFT_PRIVATE = @"App Icon/Back/Content";
-
-/// The "App Icon/Middle/Content" asset catalog image resource.
-static NSString * const ACImageNameAppIconMiddleContent AC_SWIFT_PRIVATE = @"App Icon/Middle/Content";
+/// The "App Icon - App Store/Back/Content" asset catalog image resource.
+static NSString * const ACImageNameAppIconAppStoreBackContent AC_SWIFT_PRIVATE = @"App Icon - App Store/Back/Content";
 
 /// The "App Icon - App Store/Front/Content" asset catalog image resource.
 static NSString * const ACImageNameAppIconAppStoreFrontContent AC_SWIFT_PRIVATE = @"App Icon - App Store/Front/Content";
 
-/// The "App Icon - App Store/Back/Content" asset catalog image resource.
-static NSString * const ACImageNameAppIconAppStoreBackContent AC_SWIFT_PRIVATE = @"App Icon - App Store/Back/Content";
+/// The "App Icon/Front/Content" asset catalog image resource.
+static NSString * const ACImageNameAppIconFrontContent AC_SWIFT_PRIVATE = @"App Icon/Front/Content";
+
+/// The "App Icon/Middle/Content" asset catalog image resource.
+static NSString * const ACImageNameAppIconMiddleContent AC_SWIFT_PRIVATE = @"App Icon/Middle/Content";
+
+/// The "App Icon/Back/Content" asset catalog image resource.
+static NSString * const ACImageNameAppIconBackContent AC_SWIFT_PRIVATE = @"App Icon/Back/Content";
 
 /// The "Top Shelf Image" asset catalog image resource.
 static NSString * const ACImageNameTopShelfImage AC_SWIFT_PRIVATE = @"Top Shelf Image";

@@ -19,11 +19,21 @@
 	<array>
 		<dict>
 			<key>catalogPath</key>
-			<string>/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/tvOS/xCodeProj/ImmichVideoChannel/ImmichVideoChannel/Assets.xcassets</string>
+			<string>/var/folders/n9/k0s3vvsx2sj08gx0z8zjqnh80000gn/T/Large-AppIcon-Scratch-A68C37B3-6A6C-4269-870C-1E7374B620A0.xcassets</string>
 			<key>objcSymbol</key>
 			<string>ACImageNameContent</string>
 			<key>relativePath</key>
-			<string>./Brand Assets.brandassets/App Icon.imagestack/Front.imagestacklayer/Content.imageset</string>
+			<string>./App Icon - App Store.imagestack/Back.imagestacklayer/Content.imageset</string>
+			<key>swiftSymbol</key>
+			<string>content</string>
+		</dict>
+		<dict>
+			<key>catalogPath</key>
+			<string>/var/folders/n9/k0s3vvsx2sj08gx0z8zjqnh80000gn/T/Large-AppIcon-Scratch-A68C37B3-6A6C-4269-870C-1E7374B620A0.xcassets</string>
+			<key>objcSymbol</key>
+			<string>ACImageNameContent</string>
+			<key>relativePath</key>
+			<string>./App Icon - App Store.imagestack/Front.imagestacklayer/Content.imageset</string>
 			<key>swiftSymbol</key>
 			<string>content</string>
 		</dict>
@@ -33,7 +43,7 @@
 			<key>objcSymbol</key>
 			<string>ACImageNameContent</string>
 			<key>relativePath</key>
-			<string>./Brand Assets.brandassets/App Icon.imagestack/Back.imagestacklayer/Content.imageset</string>
+			<string>./Brand Assets.brandassets/App Icon.imagestack/Front.imagestacklayer/Content.imageset</string>
 			<key>swiftSymbol</key>
 			<string>content</string>
 		</dict>
@@ -49,21 +59,11 @@
 		</dict>
 		<dict>
 			<key>catalogPath</key>
-			<string>/var/folders/n9/k0s3vvsx2sj08gx0z8zjqnh80000gn/T/Large-AppIcon-Scratch-4C3DDD50-C707-4B5A-B726-3C7C06CC0071.xcassets</string>
+			<string>/Users/seb/Projects/immichVideoSlideshow/ImmichVideoSlideshow/tvOS/xCodeProj/ImmichVideoChannel/ImmichVideoChannel/Assets.xcassets</string>
 			<key>objcSymbol</key>
 			<string>ACImageNameContent</string>
 			<key>relativePath</key>
-			<string>./App Icon - App Store.imagestack/Front.imagestacklayer/Content.imageset</string>
-			<key>swiftSymbol</key>
-			<string>content</string>
-		</dict>
-		<dict>
-			<key>catalogPath</key>
-			<string>/var/folders/n9/k0s3vvsx2sj08gx0z8zjqnh80000gn/T/Large-AppIcon-Scratch-4C3DDD50-C707-4B5A-B726-3C7C06CC0071.xcassets</string>
-			<key>objcSymbol</key>
-			<string>ACImageNameContent</string>
-			<key>relativePath</key>
-			<string>./App Icon - App Store.imagestack/Back.imagestacklayer/Content.imageset</string>
+			<string>./Brand Assets.brandassets/App Icon.imagestack/Back.imagestacklayer/Content.imageset</string>
 			<key>swiftSymbol</key>
 			<string>content</string>
 		</dict>

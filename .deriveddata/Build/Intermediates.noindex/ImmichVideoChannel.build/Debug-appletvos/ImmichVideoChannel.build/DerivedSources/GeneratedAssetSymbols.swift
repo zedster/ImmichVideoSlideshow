@@ -34,6 +34,29 @@ extension ColorResource {
 @available(iOS 11.0, macOS 10.7, tvOS 11.0, *)
 extension ImageResource {
 
+    /// The "App Icon - App Store" asset catalog resource namespace.
+    enum AppIconAppStore {
+
+        /// The "App Icon - App Store/Back" asset catalog resource namespace.
+        enum Back {
+
+            /// The "App Icon - App Store/Back/Content" asset catalog image resource.
+            @available(watchOS, unavailable)
+            static let content = ImageResource(thinnableName: "App Icon - App Store/Back/Content", bundle: resourceBundle)
+
+        }
+
+        /// The "App Icon - App Store/Front" asset catalog resource namespace.
+        enum Front {
+
+            /// The "App Icon - App Store/Front/Content" asset catalog image resource.
+            @available(watchOS, unavailable)
+            static let content = ImageResource(thinnableName: "App Icon - App Store/Front/Content", bundle: resourceBundle)
+
+        }
+
+    }
+
     /// The "App Icon" asset catalog resource namespace.
     enum AppIcon {
 
@@ -45,14 +68,6 @@ extension ImageResource {
 
         }
 
-        /// The "App Icon/Back" asset catalog resource namespace.
-        enum Back {
-
-            /// The "App Icon/Back/Content" asset catalog image resource.
-            static let content = ImageResource(name: "App Icon/Back/Content", bundle: resourceBundle)
-
-        }
-
         /// The "App Icon/Middle" asset catalog resource namespace.
         enum Middle {
 
@@ -61,26 +76,11 @@ extension ImageResource {
 
         }
 
-    }
-
-    /// The "App Icon - App Store" asset catalog resource namespace.
-    enum AppIconAppStore {
-
-        /// The "App Icon - App Store/Front" asset catalog resource namespace.
-        enum Front {
-
-            /// The "App Icon - App Store/Front/Content" asset catalog image resource.
-            @available(watchOS, unavailable)
-            static let content = ImageResource(thinnableName: "App Icon - App Store/Front/Content", bundle: resourceBundle)
-
-        }
-
-        /// The "App Icon - App Store/Back" asset catalog resource namespace.
+        /// The "App Icon/Back" asset catalog resource namespace.
         enum Back {
 
-            /// The "App Icon - App Store/Back/Content" asset catalog image resource.
-            @available(watchOS, unavailable)
-            static let content = ImageResource(thinnableName: "App Icon - App Store/Back/Content", bundle: resourceBundle)
+            /// The "App Icon/Back/Content" asset catalog image resource.
+            static let content = ImageResource(name: "App Icon/Back/Content", bundle: resourceBundle)
 
         }
 
@@ -155,6 +155,39 @@ extension SwiftUI.ShapeStyle where Self == SwiftUI.Color {
 @available(macCatalyst, unavailable)
 extension AppKit.NSImage {
 
+    /// The "App Icon - App Store" asset catalog resource namespace.
+    enum AppIconAppStore {
+
+        /// The "App Icon - App Store/Back" asset catalog resource namespace.
+        enum Back {
+
+            /// The "App Icon - App Store/Back/Content" asset catalog image.
+            static var content: AppKit.NSImage? {
+#if !targetEnvironment(macCatalyst)
+                .init(thinnableResource: .AppIconAppStore.Back.content)
+#else
+                .init()
+#endif
+            }
+
+        }
+
+        /// The "App Icon - App Store/Front" asset catalog resource namespace.
+        enum Front {
+
+            /// The "App Icon - App Store/Front/Content" asset catalog image.
+            static var content: AppKit.NSImage? {
+#if !targetEnvironment(macCatalyst)
+                .init(thinnableResource: .AppIconAppStore.Front.content)
+#else
+                .init()
+#endif
+            }
+
+        }
+
+    }
+
     /// The "App Icon" asset catalog resource namespace.
     enum AppIcon {
 
@@ -165,20 +198,6 @@ extension AppKit.NSImage {
             static var content: AppKit.NSImage {
 #if !targetEnvironment(macCatalyst)
                 .init(resource: .AppIcon.Front.content)
-#else
-                .init()
-#endif
-            }
-
-        }
-
-        /// The "App Icon/Back" asset catalog resource namespace.
-        enum Back {
-
-            /// The "App Icon/Back/Content" asset catalog image.
-            static var content: AppKit.NSImage {
-#if !targetEnvironment(macCatalyst)
-                .init(resource: .AppIcon.Back.content)
 #else
                 .init()
 #endif
@@ -200,32 +219,13 @@ extension AppKit.NSImage {
 
         }
 
-    }
-
-    /// The "App Icon - App Store" asset catalog resource namespace.
-    enum AppIconAppStore {
-
-        /// The "App Icon - App Store/Front" asset catalog resource namespace.
-        enum Front {
-
-            /// The "App Icon - App Store/Front/Content" asset catalog image.
-            static var content: AppKit.NSImage? {
-#if !targetEnvironment(macCatalyst)
-                .init(thinnableResource: .AppIconAppStore.Front.content)
-#else
-                .init()
-#endif
-            }
-
-        }
-
-        /// The "App Icon - App Store/Back" asset catalog resource namespace.
+        /// The "App Icon/Back" asset catalog resource namespace.
         enum Back {
 
-            /// The "App Icon - App Store/Back/Content" asset catalog image.
-            static var content: AppKit.NSImage? {
+            /// The "App Icon/Back/Content" asset catalog image.
+            static var content: AppKit.NSImage {
 #if !targetEnvironment(macCatalyst)
-                .init(thinnableResource: .AppIconAppStore.Back.content)
+                .init(resource: .AppIcon.Back.content)
 #else
                 .init()
 #endif
@@ -261,6 +261,39 @@ extension AppKit.NSImage {
 @available(watchOS, unavailable)
 extension UIKit.UIImage {
 
+    /// The "App Icon - App Store" asset catalog resource namespace.
+    enum AppIconAppStore {
+
+        /// The "App Icon - App Store/Back" asset catalog resource namespace.
+        enum Back {
+
+            /// The "App Icon - App Store/Back/Content" asset catalog image.
+            static var content: UIKit.UIImage? {
+#if !os(watchOS)
+                .init(thinnableResource: .AppIconAppStore.Back.content)
+#else
+                .init()
+#endif
+            }
+
+        }
+
+        /// The "App Icon - App Store/Front" asset catalog resource namespace.
+        enum Front {
+
+            /// The "App Icon - App Store/Front/Content" asset catalog image.
+            static var content: UIKit.UIImage? {
+#if !os(watchOS)
+                .init(thinnableResource: .AppIconAppStore.Front.content)
+#else
+                .init()
+#endif
+            }
+
+        }
+
+    }
+
     /// The "App Icon" asset catalog resource namespace.
     enum AppIcon {
 
@@ -271,20 +304,6 @@ extension UIKit.UIImage {
             static var content: UIKit.UIImage {
 #if !os(watchOS)
                 .init(resource: .AppIcon.Front.content)
-#else
-                .init()
-#endif
-            }
-
-        }
-
-        /// The "App Icon/Back" asset catalog resource namespace.
-        enum Back {
-
-            /// The "App Icon/Back/Content" asset catalog image.
-            static var content: UIKit.UIImage {
-#if !os(watchOS)
-                .init(resource: .AppIcon.Back.content)
 #else
                 .init()
 #endif
@@ -306,32 +325,13 @@ extension UIKit.UIImage {
 
         }
 
-    }
-
-    /// The "App Icon - App Store" asset catalog resource namespace.
-    enum AppIconAppStore {
-
-        /// The "App Icon - App Store/Front" asset catalog resource namespace.
-        enum Front {
-
-            /// The "App Icon - App Store/Front/Content" asset catalog image.
-            static var content: UIKit.UIImage? {
-#if !os(watchOS)
-                .init(thinnableResource: .AppIconAppStore.Front.content)
-#else
-                .init()
-#endif
-            }
-
-        }
-
-        /// The "App Icon - App Store/Back" asset catalog resource namespace.
+        /// The "App Icon/Back" asset catalog resource namespace.
         enum Back {
 
-            /// The "App Icon - App Store/Back/Content" asset catalog image.
-            static var content: UIKit.UIImage? {
+            /// The "App Icon/Back/Content" asset catalog image.
+            static var content: UIKit.UIImage {
 #if !os(watchOS)
-                .init(thinnableResource: .AppIconAppStore.Back.content)
+                .init(resource: .AppIcon.Back.content)
 #else
                 .init()
 #endif

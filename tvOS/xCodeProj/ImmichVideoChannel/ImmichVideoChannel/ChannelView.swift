@@ -137,16 +137,8 @@ struct ChannelView: View {
                         }
                         .padding(.bottom, 6)
 
-                        GeometryReader { proxy in
-                            ZStack(alignment: .leading) {
-                                Rectangle()
-                                    .fill(Color.white.opacity(0.2))
-                                Rectangle()
-                                    .fill(Color.white.opacity(0.9))
-                                    .frame(width: proxy.size.width * coordinator.playbackProgress)
-                            }
-                        }
-                        .frame(height: 5)
+                        Slider(value: scrubProgressBinding, in: 0...1)
+                            .tint(.white)
                         .padding(.horizontal, 16)
                         .padding(.bottom, 8)
 
@@ -515,6 +507,16 @@ struct ChannelView: View {
         let transformed = output.transformed(by: CGAffineTransform(scaleX: 10, y: 10))
         guard let cgImage = context.createCGImage(transformed, from: transformed.extent) else { return nil }
         return UIImage(cgImage: cgImage)
+    }
+
+    private var scrubProgressBinding: Binding<Double> {
+        Binding(
+            get: { coordinator.playbackProgress },
+            set: { newValue in
+                recordInteraction()
+                coordinator.seek(toNormalizedProgress: newValue)
+            }
+        )
     }
 }
 
