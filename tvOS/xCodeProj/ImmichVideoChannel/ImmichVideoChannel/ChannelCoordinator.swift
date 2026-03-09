@@ -869,6 +869,27 @@ final class ChannelCoordinator: ObservableObject {
             incoming.isMuted = outgoing.isMuted
             try await playWithAutoplayFallback(player: incoming)
 
+            if configStore.config.crossfadeEnabled && configStore.config.crossfadeDurationMs > 0 {
+                withAnimation(.linear(duration: Double(configStore.config.crossfadeDurationMs) / 1000.0)) {
+                    if activeIndex == 0 {
+                        opacityA = 0
+                        opacityB = 1
+                    } else {
+                        opacityA = 1
+                        opacityB = 0
+                    }
+                }
+                try? await Task.sleep(nanoseconds: UInt64(Double(configStore.config.crossfadeDurationMs) * 1_000_000))
+            } else {
+                if activeIndex == 0 {
+                    opacityA = 0
+                    opacityB = 1
+                } else {
+                    opacityA = 1
+                    opacityB = 0
+                }
+            }
+
             outgoing.pause()
             outgoing.replaceCurrentItem(with: nil)
 
