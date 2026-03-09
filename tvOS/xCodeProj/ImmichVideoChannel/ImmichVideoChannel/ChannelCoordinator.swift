@@ -22,6 +22,8 @@ final class ChannelCoordinator: ObservableObject {
     @Published var recentDebugMessages: [String] = []
     @Published var playbackProgress: Double = 0
     @Published var secondsLeftText: String = "--:--"
+    @Published var elapsedText: String = "0:00"
+    @Published var totalDurationText: String = "--:--"
     @Published var isBuffering: Bool = false
     @Published var currentInfoFields: [VideoInfoField] = []
     @Published var currentImmichAssetURL: String = ""
@@ -194,6 +196,8 @@ final class ChannelCoordinator: ObservableObject {
         dateLocationText = ""
         playbackProgress = 0
         secondsLeftText = "--:--"
+        elapsedText = "0:00"
+        totalDurationText = "--:--"
         isBuffering = false
         currentInfoFields = []
         currentImmichAssetURL = ""
@@ -237,6 +241,20 @@ final class ChannelCoordinator: ObservableObject {
         guard duration.isFinite, duration > 0 else { return }
 
         let targetSeconds = clamped * duration
+        let target = CMTime(seconds: targetSeconds, preferredTimescale: 600)
+        activePlayer().seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
+        onTick(current: targetSeconds)
+    }
+
+    func seek(bySeconds delta: Double) {
+        guard let item = activePlayer().currentItem else { return }
+        let duration = CMTimeGetSeconds(item.duration)
+        guard duration.isFinite, duration > 0 else { return }
+
+        let current = CMTimeGetSeconds(activePlayer().currentTime())
+        guard current.isFinite else { return }
+
+        let targetSeconds = max(0, min(duration, current + delta))
         let target = CMTime(seconds: targetSeconds, preferredTimescale: 600)
         activePlayer().seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
         onTick(current: targetSeconds)
@@ -521,8 +539,11 @@ final class ChannelCoordinator: ObservableObject {
         guard duration.isFinite, duration > 0 else { return }
 
         let remaining = duration - current
+        let clampedCurrent = max(0, min(duration, current))
         let clampedProgress = max(0, min(1, current / duration))
         playbackProgress = clampedProgress
+        elapsedText = formatDuration(clampedCurrent)
+        totalDurationText = formatDuration(duration)
         secondsLeftText = "-\(formatDuration(max(0, remaining)))"
         if remaining <= configStore.config.preloadSecondsBeforeEnd {
             Task { @MainActor in
@@ -690,6 +711,8 @@ final class ChannelCoordinator: ObservableObject {
         currentIsFavorite = candidate.isFavorite
         isPlaybackPaused = false
         playbackProgress = 0
+        elapsedText = "0:00"
+        totalDurationText = formatDuration(candidate.duration)
         secondsLeftText = "-\(formatDuration(candidate.duration))"
         currentImmichAssetURL = buildImmichAssetURL(for: candidate)
         currentInfoFields = buildInfoFields(for: candidate)
@@ -790,6 +813,8 @@ final class ChannelCoordinator: ObservableObject {
             currentIsFavorite = next.isFavorite
             isPlaybackPaused = false
             playbackProgress = 0
+            elapsedText = "0:00"
+            totalDurationText = formatDuration(next.duration)
             secondsLeftText = "-\(formatDuration(next.duration))"
             currentImmichAssetURL = buildImmichAssetURL(for: next)
             currentInfoFields = buildInfoFields(for: next)
@@ -853,6 +878,8 @@ final class ChannelCoordinator: ObservableObject {
             currentIsFavorite = previous.isFavorite
             isPlaybackPaused = false
             playbackProgress = 0
+            elapsedText = "0:00"
+            totalDurationText = formatDuration(previous.duration)
             secondsLeftText = "-\(formatDuration(previous.duration))"
             currentImmichAssetURL = buildImmichAssetURL(for: previous)
             currentInfoFields = buildInfoFields(for: previous)

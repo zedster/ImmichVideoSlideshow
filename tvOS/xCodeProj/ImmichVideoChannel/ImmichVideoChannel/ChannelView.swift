@@ -135,13 +135,12 @@ struct ChannelView: View {
                                 .foregroundStyle(.white.opacity(0.9))
                                 .padding(.trailing, 8)
                         }
-                        .padding(.bottom, 6)
+                        .padding(.bottom, 0)
 
-                        ScrubProgressBar(progress: coordinator.playbackProgress) { delta in
+                        ScrubProgressBar(progress: coordinator.playbackProgress) { deltaSeconds in
                             recordInteraction()
-                            coordinator.seek(toNormalizedProgress: coordinator.playbackProgress + delta)
+                            coordinator.seek(bySeconds: deltaSeconds)
                         }
-                        .frame(height: 22)
                         .padding(.horizontal, 16)
                         .padding(.bottom, 8)
 
@@ -515,44 +514,62 @@ struct ChannelView: View {
 }
 
 private struct ScrubProgressBar: View {
+    private let focusedTint = Color(red: 0.78, green: 0.12, blue: 0.34)
+
     let progress: Double
     let onStep: (Double) -> Void
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        Button {
-            // Keep focusable/selectable; scrubbing is handled with left/right.
-        } label: {
-            GeometryReader { proxy in
-                let clamped = max(0, min(1, progress))
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.white.opacity(0.25))
-                    Capsule()
-                        .fill(Color.white)
-                        .frame(width: proxy.size.width * clamped)
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                // Keep focusable/selectable; scrubbing is handled with left/right.
+            } label: {
+                GeometryReader { proxy in
+                    let clamped = max(0, min(1, progress))
+                    let knobX = proxy.size.width * clamped
+                    let knobSize: CGFloat = isFocused ? 22 : 14
+
+                    ZStack(alignment: .topLeading) {
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(Color.white.opacity(0.22))
+                                .frame(height: 8)
+                            Capsule()
+                                .fill(isFocused ? focusedTint : Color.white)
+                                .frame(width: knobX, height: 8)
+
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: knobSize, height: knobSize)
+                                .shadow(color: Color.white.opacity(isFocused ? 0.85 : 0), radius: 8)
+                                .overlay {
+                                    Circle()
+                                        .stroke(Color.white.opacity(isFocused ? 1.0 : 0), lineWidth: 2)
+                                }
+                                .offset(x: max(0, min(proxy.size.width - knobSize, knobX - (knobSize / 2))))
+                        }
+                        .offset(y: 24)
+
+                    }
                 }
+                .frame(height: 52)
+                .padding(.vertical, 2)
             }
-            .padding(.vertical, 6)
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(
-                        isFocused ? Color.white : Color.white.opacity(0.35),
-                        lineWidth: isFocused ? 2 : 1
-                    )
-            )
         }
         .buttonStyle(.plain)
         .focusable(true)
         .focused($isFocused)
         .onMoveCommand { direction in
-            switch direction {
-            case .left:
-                onStep(-0.02)
-            case .right:
-                onStep(0.02)
-            default:
-                break
+            if isFocused {
+                switch direction {
+                case .left:
+                    onStep(-10)
+                case .right:
+                    onStep(10)
+                default:
+                    break
+                }
             }
         }
         .accessibilityLabel("Scrub Position")

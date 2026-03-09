@@ -6,48 +6,6 @@
 	<integer>11</integer>
 	<key>logs</key>
 	<dict>
-		<key>561561CB-BA13-47C3-8105-F683FC22C819</key>
-		<dict>
-			<key>className</key>
-			<string>IDECommandLineBuildLog</string>
-			<key>documentTypeString</key>
-			<string>&lt;nil&gt;</string>
-			<key>domainType</key>
-			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
-			<key>fileName</key>
-			<string>561561CB-BA13-47C3-8105-F683FC22C819.xcactivitylog</string>
-			<key>hasPrimaryLog</key>
-			<true/>
-			<key>primaryObservable</key>
-			<dict>
-				<key>highLevelStatus</key>
-				<string>E</string>
-				<key>totalNumberOfAnalyzerIssues</key>
-				<integer>0</integer>
-				<key>totalNumberOfErrors</key>
-				<integer>1</integer>
-				<key>totalNumberOfTestFailures</key>
-				<integer>0</integer>
-				<key>totalNumberOfWarnings</key>
-				<integer>21</integer>
-			</dict>
-			<key>schemeIdentifier-containerName</key>
-			<string>ImmichVideoChannel project</string>
-			<key>schemeIdentifier-schemeName</key>
-			<string>ImmichVideoChannel</string>
-			<key>schemeIdentifier-sharedScheme</key>
-			<integer>1</integer>
-			<key>signature</key>
-			<string>Building project ImmichVideoChannel with scheme ImmichVideoChannel</string>
-			<key>timeStartedRecording</key>
-			<real>794781616.89632201</real>
-			<key>timeStoppedRecording</key>
-			<real>794781623.47176898</real>
-			<key>title</key>
-			<string>Building project ImmichVideoChannel with scheme ImmichVideoChannel</string>
-			<key>uniqueIdentifier</key>
-			<string>561561CB-BA13-47C3-8105-F683FC22C819</string>
-		</dict>
 		<key>68A07FB4-F513-4394-97A2-D223762AFCF8</key>
 		<dict>
 			<key>className</key>
@@ -89,6 +47,48 @@
 			<string>Building project ImmichVideoChannel with scheme ImmichVideoChannel</string>
 			<key>uniqueIdentifier</key>
 			<string>68A07FB4-F513-4394-97A2-D223762AFCF8</string>
+		</dict>
+		<key>7AB5AEBF-1FC9-49DD-9C5A-7890493133A1</key>
+		<dict>
+			<key>className</key>
+			<string>IDECommandLineBuildLog</string>
+			<key>documentTypeString</key>
+			<string>&lt;nil&gt;</string>
+			<key>domainType</key>
+			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
+			<key>fileName</key>
+			<string>7AB5AEBF-1FC9-49DD-9C5A-7890493133A1.xcactivitylog</string>
+			<key>hasPrimaryLog</key>
+			<true/>
+			<key>primaryObservable</key>
+			<dict>
+				<key>highLevelStatus</key>
+				<string>E</string>
+				<key>totalNumberOfAnalyzerIssues</key>
+				<integer>0</integer>
+				<key>totalNumberOfErrors</key>
+				<integer>2</integer>
+				<key>totalNumberOfTestFailures</key>
+				<integer>0</integer>
+				<key>totalNumberOfWarnings</key>
+				<integer>21</integer>
+			</dict>
+			<key>schemeIdentifier-containerName</key>
+			<string>ImmichVideoChannel project</string>
+			<key>schemeIdentifier-schemeName</key>
+			<string>ImmichVideoChannel</string>
+			<key>schemeIdentifier-sharedScheme</key>
+			<integer>1</integer>
+			<key>signature</key>
+			<string>Building project ImmichVideoChannel with scheme ImmichVideoChannel</string>
+			<key>timeStartedRecording</key>
+			<real>794784884.99250305</real>
+			<key>timeStoppedRecording</key>
+			<real>794784895.93952096</real>
+			<key>title</key>
+			<string>Building project ImmichVideoChannel with scheme ImmichVideoChannel</string>
+			<key>uniqueIdentifier</key>
+			<string>7AB5AEBF-1FC9-49DD-9C5A-7890493133A1</string>
 		</dict>
 	</dict>
 </dict>
