@@ -1,6 +1,30 @@
 import SwiftUI
 
 struct SetupView: View {
+    private enum SettingFocus: Hashable {
+        case immichURL
+        case apiKey
+        case testConnection
+        case minDuration
+        case randomBatchSize
+        case playbackOrder
+        case playbackQuality
+        case onlyFavorites
+        case resetPlayback
+        case crossfadeEnabled
+        case crossfadeDuration
+        case preloadSeconds
+        case queueTarget
+        case useSQLiteCache
+        case syncOnStartup
+        case syncPageSize
+        case syncMaxPages
+        case forceSync
+        case openLibraryStats
+        case debugLogging
+        case saveAndStart
+    }
+
     @EnvironmentObject private var configStore: ConfigStore
     @Environment(\.dismiss) private var dismiss
     var onForceSync: (() -> Void)? = nil
@@ -54,6 +78,7 @@ struct SetupView: View {
     @State private var testMessage = ""
     @State private var testFailed = false
     @State private var testInProgress = false
+    @FocusState private var focusedSetting: SettingFocus?
 
     var body: some View {
         NavigationStack {
@@ -66,23 +91,23 @@ struct SetupView: View {
                         "Immich URL",
                         placeholder: "https://immich.example.com",
                         text: $immichURL,
-                        disableAutocorrect: true
+                        disableAutocorrect: true,
+                        focus: .immichURL
                     )
                     labeledField(
                         "Immich API Key",
                         placeholder: "API key",
                         text: $apiKey,
-                        disableAutocorrect: true
+                        disableAutocorrect: true,
+                        focus: .apiKey
                     )
                     Text("API key is used to fetch and play your videos directly from Immich.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    Button(testInProgress ? "Testing..." : "Test Immich Connection") {
+                    actionRow(testInProgress ? "Testing..." : "Test Immich Connection", focus: .testConnection, disabled: testInProgress) {
                         testImmichConnection()
                     }
-                    .buttonStyle(.bordered)
-                    .disabled(testInProgress)
 
                     if !testMessage.isEmpty {
                         Text(testMessage)
@@ -94,26 +119,20 @@ struct SetupView: View {
                     Text("Controls which videos are eligible and how many are fetched at a time.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    labeledField("Minimum Duration (seconds)", placeholder: "10", text: $minDuration)
-                    labeledField("Random Batch Size", placeholder: "20", text: $randomBatchSize)
-                    Picker("Order", selection: $playbackOrder) {
-                        Text("Random").tag("random")
-                        Text("Sequential Oldest -> Newest").tag("sequential_oldest")
-                        Text("Sequential Newest -> Oldest").tag("sequential_newest")
+                    labeledField("Minimum Duration (seconds)", placeholder: "10", text: $minDuration, focus: .minDuration)
+                    labeledField("Random Batch Size", placeholder: "20", text: $randomBatchSize, focus: .randomBatchSize)
+                    choiceRow("Order", value: playbackOrderDisplayValue, focus: .playbackOrder) {
+                        cyclePlaybackOrder()
                     }
-                    Picker("Picture Quality", selection: $playbackQuality) {
-                        Text("Auto").tag("auto")
-                        Text("High").tag("high")
-                        Text("Medium").tag("medium")
-                        Text("Low").tag("low")
+                    choiceRow("Picture Quality", value: playbackQualityDisplayValue, focus: .playbackQuality) {
+                        cyclePlaybackQuality()
                     }
-                    booleanPicker("Only Favorites", isOn: $onlyFavorites)
+                    booleanPicker("Only Favorites", isOn: $onlyFavorites, focus: .onlyFavorites)
 
                     if onResetPlaybackProgress != nil {
-                        Button("Reset Playback Progress") {
+                        actionRow("Reset Playback Progress", focus: .resetPlayback) {
                             onResetPlaybackProgress?()
                         }
-                        .buttonStyle(.bordered)
                     }
                 }
 
@@ -121,20 +140,20 @@ struct SetupView: View {
                     Text("Crossfade and preload settings control how smooth transitions feel between videos.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    booleanPicker("Crossfade Enabled", isOn: $crossfadeEnabled)
-                    labeledField("Crossfade Duration (ms)", placeholder: "450", text: $crossfadeDuration)
-                    labeledField("Preload Seconds Before End", placeholder: "4", text: $preloadSeconds)
-                    labeledField("Queue Target Size", placeholder: "2", text: $queueTarget)
+                    booleanPicker("Crossfade Enabled", isOn: $crossfadeEnabled, focus: .crossfadeEnabled)
+                    labeledField("Crossfade Duration (ms)", placeholder: "450", text: $crossfadeDuration, focus: .crossfadeDuration)
+                    labeledField("Preload Seconds Before End", placeholder: "4", text: $preloadSeconds, focus: .preloadSeconds)
+                    labeledField("Queue Target Size", placeholder: "2", text: $queueTarget, focus: .queueTarget)
                 }
 
                 Section("Local Cache") {
                     Text("Keeps metadata in local SQLite for faster random selection and better reliability.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    booleanPicker("Use SQLite Cache", isOn: $useSQLiteCache)
-                    booleanPicker("Sync On Startup", isOn: $syncOnStartup)
-                    labeledField("Sync Page Size", placeholder: "200", text: $syncPageSize)
-                    labeledField("Sync Max Pages", placeholder: "200", text: $syncMaxPages)
+                    booleanPicker("Use SQLite Cache", isOn: $useSQLiteCache, focus: .useSQLiteCache)
+                    booleanPicker("Sync On Startup", isOn: $syncOnStartup, focus: .syncOnStartup)
+                    labeledField("Sync Page Size", placeholder: "200", text: $syncPageSize, focus: .syncPageSize)
+                    labeledField("Sync Max Pages", placeholder: "200", text: $syncMaxPages, focus: .syncMaxPages)
 
                     if syncIsSyncing != nil || syncLastSyncAt != nil {
                         Divider()
@@ -151,16 +170,14 @@ struct SetupView: View {
                     }
 
                     if onForceSync != nil {
-                        Button("Force Sync Now") {
+                        actionRow("Force Sync Now", focus: .forceSync, disabled: syncIsSyncing?.wrappedValue == true) {
                             onForceSync?()
                         }
-                        .buttonStyle(.bordered)
-                        .disabled(syncIsSyncing?.wrappedValue == true)
                     }
                 }
 
                 Section("Library Stats") {
-                    NavigationLink("Open Library Stats") {
+                    NavigationLink {
                         LibraryStatsView(
                             onRefreshStats: onRefreshStats,
                             statsTotalVideos: statsTotalVideos,
@@ -183,14 +200,17 @@ struct SetupView: View {
                             statsTopYearsSummary: statsTopYearsSummary,
                             statsLastError: statsLastError
                         )
+                    } label: {
+                        settingRowLabel("Open Library Stats", value: "View", isFocused: focusedSetting == .openLibraryStats)
                     }
+                    .focused($focusedSetting, equals: .openLibraryStats)
                 }
 
                 Section("Advanced") {
                     Text("Debug logging adds technical status info on screen and in console output.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    booleanPicker("Debug Logging", isOn: $debugEnabled)
+                    booleanPicker("Debug Logging", isOn: $debugEnabled, focus: .debugLogging)
                 }
 
                 if !validationError.isEmpty {
@@ -208,10 +228,9 @@ struct SetupView: View {
                 }
 
                 Section {
-                    Button("Save And Start") {
+                    actionRow("Save And Start", focus: .saveAndStart) {
                         save()
                     }
-                    .buttonStyle(.borderedProminent)
                 }
 
                 Section("About") {
@@ -225,6 +244,7 @@ struct SetupView: View {
                             destination: URL(string: "https://github.com/zedster/ImmichVideoSlideshow")!
                         )
                     }
+                    aboutRow("Build", value: buildNumber)
                 }
             }
             .navigationTitle("Immich Channel Setup")
@@ -369,38 +389,81 @@ struct SetupView: View {
         _ label: String,
         placeholder: String,
         text: Binding<String>,
-        disableAutocorrect: Bool = false
+        disableAutocorrect: Bool = false,
+        focus: SettingFocus
     ) -> some View {
+        let isFocused = focusedSetting == focus
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(isFocused ? .black : .white)
             TextField(placeholder, text: text)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled(disableAutocorrect)
+                .foregroundStyle(isFocused ? .black : .white)
+                .focused($focusedSetting, equals: focus)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(isFocused ? Color.white : Color.white.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }
 
     @ViewBuilder
-    private func booleanPicker(_ label: String, isOn: Binding<Bool>) -> some View {
+    private func booleanPicker(_ label: String, isOn: Binding<Bool>, focus: SettingFocus) -> some View {
+        let isFocused = focusedSetting == focus
         Button {
             isOn.wrappedValue.toggle()
         } label: {
-            HStack {
-                Text(label)
-                    .foregroundStyle(.primary)
-                Spacer()
-                Text(isOn.wrappedValue ? "On" : "Off")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(isOn.wrappedValue ? Color.green : Color.gray)
-                    .clipShape(Capsule())
-            }
-            .contentShape(Rectangle())
+            settingRowLabel(label, value: isOn.wrappedValue ? "On" : "Off", isFocused: isFocused)
         }
         .buttonStyle(.plain)
+        .focused($focusedSetting, equals: focus)
+    }
+
+    @ViewBuilder
+    private func choiceRow(_ label: String, value: String, focus: SettingFocus, action: @escaping () -> Void) -> some View {
+        let isFocused = focusedSetting == focus
+        Button(action: action) {
+            settingRowLabel(label, value: value, isFocused: isFocused)
+        }
+        .buttonStyle(.plain)
+        .focused($focusedSetting, equals: focus)
+    }
+
+    @ViewBuilder
+    private func actionRow(_ title: String, focus: SettingFocus, disabled: Bool = false, action: @escaping () -> Void) -> some View {
+        let isFocused = focusedSetting == focus
+        Button(action: action) {
+            HStack {
+                Text(title)
+                    .foregroundStyle(isFocused ? .black : .white)
+                Spacer()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(isFocused ? Color.white : Color.white.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .opacity(disabled ? 0.45 : 1.0)
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .focused($focusedSetting, equals: focus)
+    }
+
+    @ViewBuilder
+    private func settingRowLabel(_ label: String, value: String, isFocused: Bool) -> some View {
+        HStack {
+            Text(label)
+                .foregroundStyle(isFocused ? .black : .white)
+            Spacer()
+            Text(value)
+                .foregroundStyle(isFocused ? .black : .white)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(isFocused ? Color.white : Color.white.opacity(0.12))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     @ViewBuilder
@@ -410,6 +473,60 @@ struct SetupView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text(value)
+        }
+    }
+
+    private var buildNumber: String {
+        let value = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+        let trimmed = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "-" : trimmed
+    }
+
+    private var playbackOrderDisplayValue: String {
+        switch playbackOrder {
+        case "sequential_oldest":
+            return "Sequential Oldest -> Newest"
+        case "sequential_newest":
+            return "Sequential Newest -> Oldest"
+        default:
+            return "Random"
+        }
+    }
+
+    private var playbackQualityDisplayValue: String {
+        switch playbackQuality {
+        case "high":
+            return "High"
+        case "medium":
+            return "Medium"
+        case "low":
+            return "Low"
+        default:
+            return "Auto"
+        }
+    }
+
+    private func cyclePlaybackOrder() {
+        switch playbackOrder {
+        case "random":
+            playbackOrder = "sequential_oldest"
+        case "sequential_oldest":
+            playbackOrder = "sequential_newest"
+        default:
+            playbackOrder = "random"
+        }
+    }
+
+    private func cyclePlaybackQuality() {
+        switch playbackQuality {
+        case "auto":
+            playbackQuality = "high"
+        case "high":
+            playbackQuality = "medium"
+        case "medium":
+            playbackQuality = "low"
+        default:
+            playbackQuality = "auto"
         }
     }
 }
