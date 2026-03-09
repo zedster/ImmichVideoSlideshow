@@ -33,6 +33,12 @@ struct ChannelView: View {
                     .opacity(coordinator.opacityB)
                     .allowsHitTesting(false)
 
+                RemotePressCaptureView { pressType in
+                    handleRemotePress(pressType)
+                }
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+
                 VStack {
                     if !coordinator.fallbackMessage.isEmpty {
                         Text(coordinator.fallbackMessage)
@@ -329,9 +335,6 @@ struct ChannelView: View {
         }
         .onPlayPauseCommand {
             recordInteraction()
-            if !showInfo && !showSetup {
-                coordinator.togglePlayPause()
-            }
         }
         .onTapGesture {
             recordInteraction()
@@ -397,6 +400,14 @@ struct ChannelView: View {
         }
     }
 
+    private func handleRemotePress(_ pressType: UIPress.PressType) {
+        recordInteraction()
+        guard pressType == .playPause else { return }
+        if !showInfo && !showSetup {
+            coordinator.togglePlayPause()
+        }
+    }
+
     private func qrImage(from value: String) -> UIImage? {
         guard !value.isEmpty else { return nil }
         let context = CIContext()
@@ -429,4 +440,38 @@ private struct PlayerSurfaceView: UIViewRepresentable {
 private final class PlayerSurfaceUIView: UIView {
     override static var layerClass: AnyClass { AVPlayerLayer.self }
     var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+}
+
+private struct RemotePressCaptureView: UIViewRepresentable {
+    let onPress: (UIPress.PressType) -> Void
+
+    func makeUIView(context: Context) -> RemotePressCaptureUIView {
+        let view = RemotePressCaptureUIView()
+        view.onPress = onPress
+        return view
+    }
+
+    func updateUIView(_ uiView: RemotePressCaptureUIView, context: Context) {
+        uiView.onPress = onPress
+    }
+}
+
+private final class RemotePressCaptureUIView: UIView {
+    var onPress: ((UIPress.PressType) -> Void)?
+
+    override var canBecomeFirstResponder: Bool { true }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        DispatchQueue.main.async { [weak self] in
+            _ = self?.becomeFirstResponder()
+        }
+    }
+
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        for press in presses {
+            onPress?(press.type)
+        }
+        super.pressesBegan(presses, with: event)
+    }
 }
