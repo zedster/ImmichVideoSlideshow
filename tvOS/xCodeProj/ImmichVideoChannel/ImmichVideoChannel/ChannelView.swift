@@ -91,35 +91,39 @@ struct ChannelView: View {
                     VStack {
                         Spacer()
                         HStack {
-                            outlinedText(
-                                coordinator.dateLocationText,
-                                fontSize: 24,
-                                weight: .semibold,
-                                fill: .gray
-                            )
-                                .lineLimit(2)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(Color.black.opacity(0.6))
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                                .padding(.leading, 16)
-                                .padding(.bottom, max(120, geo.size.height * 0.18))
-                            Spacer()
-                        }
-                    }
-                }
-
-                if configStore.config.debug && !coordinator.title.isEmpty {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            outlinedCaption(coordinator.title)
+                            // outlinedCaption((
+                            //     coordinator.dateLocationText,
+                            //     fontSize: 24,
+                            //     weight: .semibold,
+                            //     fill: .gray
+                            // )
+                            //     .lineLimit(2)
+                            //     .padding(.horizontal, 10)
+                            //     .padding(.vertical, 6)
+                            //     .background(Color.black.opacity(0.6))
+                            //     .clipShape(RoundedRectangle(cornerRadius: 8))
+                            //     .padding(.leading, 16)
+                            //     .padding(.bottom, max(120, geo.size.height * 0.18))
+                            // Spacer()
+                            outlinedCaption(coordinator.dateLocationText)
                                 .padding(.leading, 20)
                                 .padding(.bottom, max(110, geo.size.height * 0.16))
                             Spacer()
                         }
                     }
                 }
+
+                // if configStore.config.debug && !coordinator.title.isEmpty {
+                //     VStack {
+                //         Spacer()
+                //         HStack {
+                //             outlinedCaption(coordinator.title)
+                //                 .padding(.leading, 20)
+                //                 .padding(.bottom, max(110, geo.size.height * 0.16))
+                //             Spacer()
+                //         }
+                //     }
+                // }
 
                 if controlsVisible {
                     VStack {
