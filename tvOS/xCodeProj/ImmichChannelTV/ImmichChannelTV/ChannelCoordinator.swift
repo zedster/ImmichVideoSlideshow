@@ -55,6 +55,8 @@ final class ChannelCoordinator: ObservableObject {
     private let maxConsecutivePlaybackFailures = 5
     private var hiddenAlbumId = ""
     private var hiddenAssetIds = Set<String>()
+    private var sequentialLastAssetId: String?
+    private var sequentialStateLoaded = false
 
     private var timeObserver: Any?
     private var timeObserverPlayer: AVPlayer?
@@ -136,6 +138,8 @@ final class ChannelCoordinator: ObservableObject {
         history = []
         currentItem = nil
         nextPreparedId = ""
+        sequentialLastAssetId = nil
+        sequentialStateLoaded = false
         hiddenAlbumId = ""
         hiddenAssetIds = []
         consecutivePlaybackFailures = 0
@@ -190,6 +194,12 @@ final class ChannelCoordinator: ObservableObject {
         addDebugMessage("Manual sync requested")
         Task {
             await runForceSync()
+        }
+    }
+
+    func resetPlaybackProgress() {
+        Task {
+            await resetSequentialProgress()
         }
     }
 
@@ -284,7 +294,7 @@ final class ChannelCoordinator: ObservableObject {
 
     private func bootstrapPlayback() async {
         do {
-            if configStore.config.useSQLiteCache {
+            if shouldUseSQLiteSelection() {
                 try await store.initializeSchema()
                 syncLastSyncAt = (try await store.getSyncState(key: "last_sync_at")) ?? "-"
                 if configStore.config.syncOnStartup {
@@ -317,7 +327,7 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func runForceSync(silent: Bool = false) async {
-        guard configStore.config.useSQLiteCache else {
+        guard shouldUseSQLiteSelection() else {
             addDebugMessage("Sync skipped: SQLite cache disabled")
             return
         }
@@ -467,7 +477,25 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func fetchNextCandidate() async throws -> VideoCandidate {
-        if configStore.config.useSQLiteCache {
+        let order = configStore.config.playbackOrder
+        if order == "sequential" {
+            await ensureSequentialStateLoaded()
+            if let fromDB = try await store.selectSequential(
+                afterAssetId: sequentialLastAssetId,
+                minDuration: configStore.config.minDuration,
+                onlyFavorites: configStore.config.onlyFavorites
+            ) {
+                return fromDB
+            }
+            await runForceSync(silent: true)
+            if let fromDB = try await store.selectSequential(
+                afterAssetId: sequentialLastAssetId,
+                minDuration: configStore.config.minDuration,
+                onlyFavorites: configStore.config.onlyFavorites
+            ) {
+                return fromDB
+            }
+        } else if configStore.config.useSQLiteCache {
             if let fromDB = try await store.selectRandom(minDuration: configStore.config.minDuration, onlyFavorites: configStore.config.onlyFavorites) {
                 return fromDB
             }
@@ -604,6 +632,7 @@ final class ChannelCoordinator: ObservableObject {
         captionText = overlay.caption
         clearPlaybackFailureState()
         await recordWatchStart(for: candidate)
+        await persistSequentialProgress(for: candidate)
         installTimeObserver()
         updateStatus()
         addDebugMessage("Playing: \(candidate.title)")
@@ -703,6 +732,7 @@ final class ChannelCoordinator: ObservableObject {
             nextPreparedId = ""
             clearPlaybackFailureState()
             await recordWatchStart(for: next)
+            await persistSequentialProgress(for: next)
 
             installTimeObserver()
             await fillQueueIfNeeded()
@@ -764,6 +794,7 @@ final class ChannelCoordinator: ObservableObject {
             nextPreparedId = ""
             clearPlaybackFailureState()
             await recordWatchStart(for: previous)
+            await persistSequentialProgress(for: previous)
 
             if let outgoingCurrent, !queue.contains(where: { $0.id == outgoingCurrent.id }) {
                 queue.insert(outgoingCurrent, at: 0)
@@ -796,11 +827,16 @@ final class ChannelCoordinator: ObservableObject {
         activeIndex == 0 ? playerB : playerA
     }
 
+    private func shouldUseSQLiteSelection() -> Bool {
+        configStore.config.useSQLiteCache || configStore.config.playbackOrder == "sequential"
+    }
+
     private func updateStatus() {
         let mode = configStore.config.crossfadeEnabled ? "fade \(configStore.config.crossfadeDurationMs)ms" : "cut"
+        let orderLabel = configStore.config.playbackOrder == "sequential" ? "seq" : "rand"
         let syncText = isSyncing ? " · syncing p\(syncPagesFetched) r\(syncRowsUpserted)" : ""
         let debugQuality = configStore.config.debug ? " · q \(configStore.config.playbackQualityLabel)" : ""
-        statusText = "Queue \(queue.count)/\(configStore.config.queueTargetSize) · \(mode)\(syncText)\(debugQuality)"
+        statusText = "Queue \(queue.count)/\(configStore.config.queueTargetSize) · \(orderLabel) · \(mode)\(syncText)\(debugQuality)"
     }
 
     private func applyMuteState(_ muted: Bool) {
@@ -905,6 +941,47 @@ final class ChannelCoordinator: ObservableObject {
                 print("[ChannelCoordinator] watch count update failed: \(error)")
             }
             addDebugMessage("Watch count update failed: \(candidate.title)")
+        }
+    }
+
+    private func ensureSequentialStateLoaded() async {
+        guard !sequentialStateLoaded else { return }
+        do {
+            sequentialLastAssetId = try await store.getSequentialLastAssetId()
+            sequentialStateLoaded = true
+            if let sequentialLastAssetId {
+                addDebugMessage("Seq resume at \(sequentialLastAssetId)")
+            } else {
+                addDebugMessage("Seq resume at start")
+            }
+        } catch {
+            sequentialStateLoaded = true
+            addDebugMessage("Seq state load failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func persistSequentialProgress(for candidate: VideoCandidate) async {
+        guard configStore.config.playbackOrder == "sequential" else { return }
+        sequentialLastAssetId = candidate.id
+        sequentialStateLoaded = true
+        do {
+            try await store.setSequentialLastAssetId(candidate.id)
+        } catch {
+            addDebugMessage("Seq progress save failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func resetSequentialProgress() async {
+        do {
+            try await store.clearSequentialLastAssetId()
+            sequentialLastAssetId = nil
+            sequentialStateLoaded = true
+            nextPreparedId = ""
+            queue.removeAll()
+            addDebugMessage("Sequential progress reset")
+            await fillQueueIfNeeded()
+        } catch {
+            addDebugMessage("Seq progress reset failed: \(error.localizedDescription)")
         }
     }
 

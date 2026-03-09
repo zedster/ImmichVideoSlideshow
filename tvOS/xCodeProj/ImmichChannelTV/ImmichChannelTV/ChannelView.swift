@@ -367,6 +367,9 @@ struct ChannelView: View {
             SetupView(onForceSync: {
                 coordinator.forceSyncNow()
             },
+            onResetPlaybackProgress: {
+                coordinator.resetPlaybackProgress()
+            },
             syncIsSyncing: Binding(get: { coordinator.isSyncing }, set: { _ in }),
             syncPagesFetched: Binding(get: { coordinator.syncPagesFetched }, set: { _ in }),
             syncRowsUpserted: Binding(get: { coordinator.syncRowsUpserted }, set: { _ in }),

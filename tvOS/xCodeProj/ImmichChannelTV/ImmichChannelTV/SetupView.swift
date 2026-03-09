@@ -4,6 +4,7 @@ struct SetupView: View {
     @EnvironmentObject private var configStore: ConfigStore
     @Environment(\.dismiss) private var dismiss
     var onForceSync: (() -> Void)? = nil
+    var onResetPlaybackProgress: (() -> Void)? = nil
     var syncIsSyncing: Binding<Bool>? = nil
     var syncPagesFetched: Binding<Int>? = nil
     var syncRowsUpserted: Binding<Int>? = nil
@@ -15,6 +16,7 @@ struct SetupView: View {
     @State private var apiKey = ""
     @State private var minDuration = "10"
     @State private var randomBatchSize = "20"
+    @State private var playbackOrder = "random"
     @State private var playbackQuality = "auto"
     @State private var preloadSeconds = "4"
     @State private var crossfadeDuration = "450"
@@ -74,6 +76,10 @@ struct SetupView: View {
                         .foregroundStyle(.secondary)
                     labeledField("Minimum Duration (seconds)", placeholder: "10", text: $minDuration)
                     labeledField("Random Batch Size", placeholder: "20", text: $randomBatchSize)
+                    Picker("Order", selection: $playbackOrder) {
+                        Text("Random").tag("random")
+                        Text("Sequential").tag("sequential")
+                    }
                     Picker("Picture Quality", selection: $playbackQuality) {
                         Text("Auto").tag("auto")
                         Text("High").tag("high")
@@ -81,6 +87,13 @@ struct SetupView: View {
                         Text("Low").tag("low")
                     }
                     Toggle("Only Favorites", isOn: $onlyFavorites)
+
+                    if onResetPlaybackProgress != nil {
+                        Button("Reset Playback Progress") {
+                            onResetPlaybackProgress?()
+                        }
+                        .buttonStyle(.bordered)
+                    }
                 }
 
                 Section("Smooth Channel") {
@@ -176,6 +189,7 @@ struct SetupView: View {
         apiKey = cfg.apiKey
         minDuration = String(Int(cfg.minDuration))
         randomBatchSize = String(cfg.randomBatchSize)
+        playbackOrder = cfg.playbackOrder
         playbackQuality = cfg.playbackQuality
         preloadSeconds = String(cfg.preloadSecondsBeforeEnd)
         crossfadeDuration = String(cfg.crossfadeDurationMs)
@@ -216,6 +230,7 @@ struct SetupView: View {
         next.apiKey = trimmedKey
         next.minDuration = minDurationValue
         next.randomBatchSize = randomBatchValue
+        next.playbackOrder = playbackOrder
         next.playbackQuality = playbackQuality
         next.onlyFavorites = onlyFavorites
         next.debug = debugEnabled

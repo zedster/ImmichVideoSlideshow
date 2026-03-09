@@ -11,11 +11,53 @@ struct AppConfig: Codable, Equatable {
     var crossfadeDurationMs: Int = 450
     var preloadSecondsBeforeEnd: Double = 4
     var queueTargetSize: Int = 2
+    var playbackOrder: String = "random"
     var playbackQuality: String = "auto"
     var useSQLiteCache: Bool = true
     var syncOnStartup: Bool = true
     var syncPageSize: Int = 200
     var syncMaxPages: Int = 200
+
+    enum CodingKeys: String, CodingKey {
+        case immichURL
+        case apiKey
+        case minDuration
+        case randomBatchSize
+        case onlyFavorites
+        case debug
+        case crossfadeEnabled
+        case crossfadeDurationMs
+        case preloadSecondsBeforeEnd
+        case queueTargetSize
+        case playbackOrder
+        case playbackQuality
+        case useSQLiteCache
+        case syncOnStartup
+        case syncPageSize
+        case syncMaxPages
+    }
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        immichURL = try c.decodeIfPresent(String.self, forKey: .immichURL) ?? ""
+        apiKey = try c.decodeIfPresent(String.self, forKey: .apiKey) ?? ""
+        minDuration = try c.decodeIfPresent(Double.self, forKey: .minDuration) ?? 10
+        randomBatchSize = try c.decodeIfPresent(Int.self, forKey: .randomBatchSize) ?? 20
+        onlyFavorites = try c.decodeIfPresent(Bool.self, forKey: .onlyFavorites) ?? false
+        debug = try c.decodeIfPresent(Bool.self, forKey: .debug) ?? false
+        crossfadeEnabled = try c.decodeIfPresent(Bool.self, forKey: .crossfadeEnabled) ?? true
+        crossfadeDurationMs = try c.decodeIfPresent(Int.self, forKey: .crossfadeDurationMs) ?? 450
+        preloadSecondsBeforeEnd = try c.decodeIfPresent(Double.self, forKey: .preloadSecondsBeforeEnd) ?? 4
+        queueTargetSize = try c.decodeIfPresent(Int.self, forKey: .queueTargetSize) ?? 2
+        playbackOrder = try c.decodeIfPresent(String.self, forKey: .playbackOrder) ?? "random"
+        playbackQuality = try c.decodeIfPresent(String.self, forKey: .playbackQuality) ?? "auto"
+        useSQLiteCache = try c.decodeIfPresent(Bool.self, forKey: .useSQLiteCache) ?? true
+        syncOnStartup = try c.decodeIfPresent(Bool.self, forKey: .syncOnStartup) ?? true
+        syncPageSize = try c.decodeIfPresent(Int.self, forKey: .syncPageSize) ?? 200
+        syncMaxPages = try c.decodeIfPresent(Int.self, forKey: .syncMaxPages) ?? 200
+    }
 
     var isConfigured: Bool {
         !immichURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&

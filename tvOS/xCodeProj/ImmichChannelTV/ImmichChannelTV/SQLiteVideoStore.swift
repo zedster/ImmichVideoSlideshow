@@ -7,6 +7,8 @@ actor SQLiteVideoStore {
         let rowsUpserted: Int
     }
 
+    private let sequentialLastAssetIdKey = "playback.sequential.last_asset_id"
+
     private let dbPath: String
     private let dbDirectoryPath: String
 
@@ -189,6 +191,20 @@ actor SQLiteVideoStore {
         }
     }
 
+    func getSequentialLastAssetId() throws -> String? {
+        let value = try getSyncState(key: sequentialLastAssetIdKey)
+        guard let value, !value.isEmpty else { return nil }
+        return value
+    }
+
+    func setSequentialLastAssetId(_ assetId: String) throws {
+        try setSyncState(key: sequentialLastAssetIdKey, value: assetId)
+    }
+
+    func clearSequentialLastAssetId() throws {
+        try setSyncState(key: sequentialLastAssetIdKey, value: "")
+    }
+
     func countQualifying(minDuration: Double, onlyFavorites: Bool) throws -> Int {
         try withDatabase { db in
             let sql = onlyFavorites
@@ -223,46 +239,61 @@ actor SQLiteVideoStore {
             guard sqlite3_step(stmt) == SQLITE_ROW else {
                 return nil
             }
+            return decodeCandidate(stmt: stmt)
+        }
+    }
 
-            guard let idC = sqlite3_column_text(stmt, 0) else { return nil }
-            let id = String(cString: idC)
-            let title = sqlite3_column_text(stmt, 1).map { String(cString: $0) } ?? "Untitled"
-            let duration = sqlite3_column_double(stmt, 2)
-            let isFavorite = sqlite3_column_int(stmt, 3) == 1
-            let isHidden = sqlite3_column_int(stmt, 4) == 1
-            let timesWatched = Int(sqlite3_column_int64(stmt, 5))
-            let captureDate = sqlite3_column_text(stmt, 6).map { String(cString: $0) } ?? ""
-            let city = sqlite3_column_text(stmt, 7).map { String(cString: $0) } ?? ""
-            let country = sqlite3_column_text(stmt, 8).map { String(cString: $0) } ?? ""
-            let cameraMake = sqlite3_column_text(stmt, 9).map { String(cString: $0) } ?? ""
-            let cameraModel = sqlite3_column_text(stmt, 10).map { String(cString: $0) } ?? ""
-            let lensModel = sqlite3_column_text(stmt, 11).map { String(cString: $0) } ?? ""
-            let fNumber = sqlite3_column_text(stmt, 12).map { String(cString: $0) } ?? ""
-            let focalLength = sqlite3_column_text(stmt, 13).map { String(cString: $0) } ?? ""
-            let iso = sqlite3_column_text(stmt, 14).map { String(cString: $0) } ?? ""
-            let exposureTime = sqlite3_column_text(stmt, 15).map { String(cString: $0) } ?? ""
-            let latitude = sqlite3_column_text(stmt, 16).map { String(cString: $0) } ?? ""
-            let longitude = sqlite3_column_text(stmt, 17).map { String(cString: $0) } ?? ""
-            return VideoCandidate(
-                id: id,
-                title: title,
-                duration: duration,
-                isFavorite: isFavorite,
-                isHidden: isHidden,
-                timesWatched: timesWatched,
-                captureDate: captureDate,
-                city: city,
-                country: country,
-                cameraMake: cameraMake,
-                cameraModel: cameraModel,
-                lensModel: lensModel,
-                fNumber: fNumber,
-                focalLength: focalLength,
-                iso: iso,
-                exposureTime: exposureTime,
-                latitude: latitude,
-                longitude: longitude
-            )
+    func selectSequential(afterAssetId: String?, minDuration: Double, onlyFavorites: Bool) throws -> VideoCandidate? {
+        try withDatabase { db in
+            let baseWhere = onlyFavorites
+                ? "duration >= ? AND is_favorite = 1 AND COALESCE(is_hidden, 0) = 0"
+                : "duration >= ? AND COALESCE(is_hidden, 0) = 0"
+
+            if let afterAssetId, let anchor = try selectSortAnchor(db: db, assetId: afterAssetId) {
+                let sql = """
+                SELECT asset_id, title, duration, is_favorite, is_hidden, times_watched, capture_date, city, country, camera_make, camera_model, lens_model, f_number, focal_length, iso, exposure_time, latitude, longitude
+                FROM videos
+                WHERE \(baseWhere)
+                  AND (
+                    COALESCE(capture_date, '') > ?
+                    OR (COALESCE(capture_date, '') = ? AND asset_id > ?)
+                  )
+                ORDER BY COALESCE(capture_date, '') ASC, asset_id ASC
+                LIMIT 1
+                """
+                var stmt: OpaquePointer?
+                guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+                    throw storeError(db, fallback: "prepare selectSequential greater-than failed")
+                }
+                defer { sqlite3_finalize(stmt) }
+
+                sqlite3_bind_double(stmt, 1, minDuration)
+                sqlite3_bind_text(stmt, 2, (anchor.captureDate as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 3, (anchor.captureDate as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 4, (anchor.assetId as NSString).utf8String, -1, nil)
+                if sqlite3_step(stmt) == SQLITE_ROW {
+                    return decodeCandidate(stmt: stmt)
+                }
+            }
+
+            let fallbackSQL = """
+            SELECT asset_id, title, duration, is_favorite, is_hidden, times_watched, capture_date, city, country, camera_make, camera_model, lens_model, f_number, focal_length, iso, exposure_time, latitude, longitude
+            FROM videos
+            WHERE \(baseWhere)
+            ORDER BY COALESCE(capture_date, '') ASC, asset_id ASC
+            LIMIT 1
+            """
+            var fallbackStmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, fallbackSQL, -1, &fallbackStmt, nil) == SQLITE_OK else {
+                throw storeError(db, fallback: "prepare selectSequential fallback failed")
+            }
+            defer { sqlite3_finalize(fallbackStmt) }
+
+            sqlite3_bind_double(fallbackStmt, 1, minDuration)
+            guard sqlite3_step(fallbackStmt) == SQLITE_ROW else {
+                return nil
+            }
+            return decodeCandidate(stmt: fallbackStmt)
         }
     }
 
@@ -380,6 +411,67 @@ actor SQLiteVideoStore {
         defer { sqlite3_close(db) }
 
         return try body(db)
+    }
+
+    private func selectSortAnchor(db: OpaquePointer, assetId: String) throws -> (captureDate: String, assetId: String)? {
+        let sql = "SELECT COALESCE(capture_date, ''), asset_id FROM videos WHERE asset_id = ? LIMIT 1"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            throw storeError(db, fallback: "prepare selectSortAnchor failed")
+        }
+        defer { sqlite3_finalize(stmt) }
+
+        sqlite3_bind_text(stmt, 1, (assetId as NSString).utf8String, -1, nil)
+        guard sqlite3_step(stmt) == SQLITE_ROW else {
+            return nil
+        }
+
+        let captureDate = sqlite3_column_text(stmt, 0).map { String(cString: $0) } ?? ""
+        let resolvedAssetId = sqlite3_column_text(stmt, 1).map { String(cString: $0) } ?? assetId
+        return (captureDate, resolvedAssetId)
+    }
+
+    private func decodeCandidate(stmt: OpaquePointer?) -> VideoCandidate? {
+        guard let stmt else { return nil }
+        guard let idC = sqlite3_column_text(stmt, 0) else { return nil }
+        let id = String(cString: idC)
+        let title = sqlite3_column_text(stmt, 1).map { String(cString: $0) } ?? "Untitled"
+        let duration = sqlite3_column_double(stmt, 2)
+        let isFavorite = sqlite3_column_int(stmt, 3) == 1
+        let isHidden = sqlite3_column_int(stmt, 4) == 1
+        let timesWatched = Int(sqlite3_column_int64(stmt, 5))
+        let captureDate = sqlite3_column_text(stmt, 6).map { String(cString: $0) } ?? ""
+        let city = sqlite3_column_text(stmt, 7).map { String(cString: $0) } ?? ""
+        let country = sqlite3_column_text(stmt, 8).map { String(cString: $0) } ?? ""
+        let cameraMake = sqlite3_column_text(stmt, 9).map { String(cString: $0) } ?? ""
+        let cameraModel = sqlite3_column_text(stmt, 10).map { String(cString: $0) } ?? ""
+        let lensModel = sqlite3_column_text(stmt, 11).map { String(cString: $0) } ?? ""
+        let fNumber = sqlite3_column_text(stmt, 12).map { String(cString: $0) } ?? ""
+        let focalLength = sqlite3_column_text(stmt, 13).map { String(cString: $0) } ?? ""
+        let iso = sqlite3_column_text(stmt, 14).map { String(cString: $0) } ?? ""
+        let exposureTime = sqlite3_column_text(stmt, 15).map { String(cString: $0) } ?? ""
+        let latitude = sqlite3_column_text(stmt, 16).map { String(cString: $0) } ?? ""
+        let longitude = sqlite3_column_text(stmt, 17).map { String(cString: $0) } ?? ""
+        return VideoCandidate(
+            id: id,
+            title: title,
+            duration: duration,
+            isFavorite: isFavorite,
+            isHidden: isHidden,
+            timesWatched: timesWatched,
+            captureDate: captureDate,
+            city: city,
+            country: country,
+            cameraMake: cameraMake,
+            cameraModel: cameraModel,
+            lensModel: lensModel,
+            fNumber: fNumber,
+            focalLength: focalLength,
+            iso: iso,
+            exposureTime: exposureTime,
+            latitude: latitude,
+            longitude: longitude
+        )
     }
 
     private static func resolveWritableBaseDirectory(fileManager fm: FileManager) -> URL {
