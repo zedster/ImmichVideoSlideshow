@@ -137,8 +137,11 @@ struct ChannelView: View {
                         }
                         .padding(.bottom, 6)
 
-                        Slider(value: scrubProgressBinding, in: 0...1)
-                            .tint(.white)
+                        ScrubProgressBar(progress: coordinator.playbackProgress) { delta in
+                            recordInteraction()
+                            coordinator.seek(toNormalizedProgress: coordinator.playbackProgress + delta)
+                        }
+                        .frame(height: 22)
                         .padding(.horizontal, 16)
                         .padding(.bottom, 8)
 
@@ -509,14 +512,50 @@ struct ChannelView: View {
         return UIImage(cgImage: cgImage)
     }
 
-    private var scrubProgressBinding: Binding<Double> {
-        Binding(
-            get: { coordinator.playbackProgress },
-            set: { newValue in
-                recordInteraction()
-                coordinator.seek(toNormalizedProgress: newValue)
+}
+
+private struct ScrubProgressBar: View {
+    let progress: Double
+    let onStep: (Double) -> Void
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        Button {
+            // Keep focusable/selectable; scrubbing is handled with left/right.
+        } label: {
+            GeometryReader { proxy in
+                let clamped = max(0, min(1, progress))
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.25))
+                    Capsule()
+                        .fill(Color.white)
+                        .frame(width: proxy.size.width * clamped)
+                }
             }
-        )
+            .padding(.vertical, 6)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(
+                        isFocused ? Color.white : Color.white.opacity(0.35),
+                        lineWidth: isFocused ? 2 : 1
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .focusable(true)
+        .focused($isFocused)
+        .onMoveCommand { direction in
+            switch direction {
+            case .left:
+                onStep(-0.02)
+            case .right:
+                onStep(0.02)
+            default:
+                break
+            }
+        }
+        .accessibilityLabel("Scrub Position")
     }
 }
 
