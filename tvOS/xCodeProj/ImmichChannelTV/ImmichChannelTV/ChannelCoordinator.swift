@@ -26,6 +26,8 @@ final class ChannelCoordinator: ObservableObject {
     @Published var currentImmichAssetURL: String = ""
     @Published var canGoBack: Bool = false
     @Published var currentIsFavorite: Bool = false
+    @Published var canHideToAlbum: Bool = false
+    @Published var hideUpdateInProgress: Bool = false
     @Published var isPlaybackPaused: Bool = false
     @Published var favoriteUpdateInProgress: Bool = false
     @Published var isSyncing: Bool = false
@@ -51,6 +53,8 @@ final class ChannelCoordinator: ObservableObject {
     private var started = false
     private var consecutivePlaybackFailures = 0
     private let maxConsecutivePlaybackFailures = 5
+    private var hiddenAlbumId = ""
+    private var hiddenAssetIds = Set<String>()
 
     private var timeObserver: Any?
     private var timeObserverPlayer: AVPlayer?
@@ -87,6 +91,9 @@ final class ChannelCoordinator: ObservableObject {
         setupEndObserver()
         applyMuteState(readMutedPreference())
         updateStatus()
+        Task {
+            await checkHiddenAlbumAccessAtStartup()
+        }
 
         Task {
             await bootstrapPlayback()
@@ -129,6 +136,8 @@ final class ChannelCoordinator: ObservableObject {
         history = []
         currentItem = nil
         nextPreparedId = ""
+        hiddenAlbumId = ""
+        hiddenAssetIds = []
         consecutivePlaybackFailures = 0
         shouldOpenSetup = false
         setupErrorMessage = ""
@@ -142,6 +151,8 @@ final class ChannelCoordinator: ObservableObject {
         currentImmichAssetURL = ""
         canGoBack = false
         currentIsFavorite = false
+        canHideToAlbum = false
+        hideUpdateInProgress = false
         isPlaybackPaused = false
         favoriteUpdateInProgress = false
         opacityA = 1
@@ -190,6 +201,10 @@ final class ChannelCoordinator: ObservableObject {
         currentIsFavorite ? "heart.fill" : "heart"
     }
 
+    func hideButtonSystemImage() -> String {
+        "eye.slash"
+    }
+
     func playPauseButtonSystemImage() -> String {
         isPlaybackPaused ? "play.fill" : "pause.fill"
     }
@@ -227,6 +242,46 @@ final class ChannelCoordinator: ObservableObject {
         }
     }
 
+    func hideCurrentVideo() {
+        guard let currentItem else {
+            addDebugMessage("Hide ignored: no current item")
+            return
+        }
+        guard canHideToAlbum, !hiddenAlbumId.isEmpty else {
+            addDebugMessage("Hide unavailable: hidden album access not ready")
+            return
+        }
+        guard !hideUpdateInProgress else {
+            addDebugMessage("Hide skipped: update in progress")
+            return
+        }
+
+        hideUpdateInProgress = true
+        let target = currentItem
+        Task {
+            defer { self.hideUpdateInProgress = false }
+            addDebugMessage("Hide requested: \(target.title)")
+
+            do {
+                try await client.addAssetToAlbum(assetId: target.id, albumId: hiddenAlbumId, config: configStore.config)
+                if configStore.config.useSQLiteCache {
+                    try await store.initializeSchema()
+                    try await store.setHidden(assetId: target.id, isHidden: true)
+                }
+                applyHiddenStateLocally(assetId: target.id, isHidden: true)
+                fallbackMessage = "Hidden: \(target.title)"
+                addDebugMessage("Hidden in album: \(target.title)")
+                await transitionToNext(reason: "manual_hide")
+            } catch {
+                fallbackMessage = "Hide failed: \(error.localizedDescription)"
+                if configStore.config.debug {
+                    print("[ChannelCoordinator] hide failed: \(error)")
+                }
+                addDebugMessage("Hide failed: \(target.title)")
+            }
+        }
+    }
+
     private func bootstrapPlayback() async {
         do {
             if configStore.config.useSQLiteCache {
@@ -252,6 +307,13 @@ final class ChannelCoordinator: ObservableObject {
             }
             addDebugMessage("Bootstrap failed: \(error.localizedDescription)")
         }
+    }
+
+    private func checkHiddenAlbumAccessAtStartup() async {
+        let access = await client.resolveHiddenAlbumAccess(config: configStore.config, albumName: "Hidden")
+        canHideToAlbum = access.canHide
+        hiddenAlbumId = access.albumId
+        addDebugMessage("Hide capability: \(access.detail)")
     }
 
     private func runForceSync(silent: Bool = false) async {
@@ -415,7 +477,15 @@ final class ChannelCoordinator: ObservableObject {
             }
         }
 
-        return try await client.fetchRandomEligibleVideo(config: configStore.config)
+        for _ in 0..<10 {
+            let candidate = try await client.fetchRandomEligibleVideo(config: configStore.config)
+            if hiddenAssetIds.contains(candidate.id) {
+                addDebugMessage("Skipped hidden candidate: \(candidate.title)")
+                continue
+            }
+            return candidate
+        }
+        throw ImmichAPIError.noEligibleVideo
     }
 
     private func fillQueueIfNeeded() async {
@@ -428,6 +498,7 @@ final class ChannelCoordinator: ObservableObject {
             do {
                 let item = try await fetchNextCandidate()
                 if currentItem?.id == item.id { continue }
+                if hiddenAssetIds.contains(item.id) { continue }
                 if queue.contains(where: { $0.id == item.id }) { continue }
                 queue.append(item)
                 updateStatus()
@@ -528,22 +599,30 @@ final class ChannelCoordinator: ObservableObject {
         secondsLeftText = "-\(formatDuration(candidate.duration))"
         currentImmichAssetURL = buildImmichAssetURL(for: candidate)
         currentInfoFields = buildInfoFields(for: candidate)
-        title = candidate.title
-        captionText = formatCaption(for: candidate)
+        let overlay = overlayTexts(for: candidate)
+        title = overlay.title
+        captionText = overlay.caption
         clearPlaybackFailureState()
+        await recordWatchStart(for: candidate)
         installTimeObserver()
         updateStatus()
         addDebugMessage("Playing: \(candidate.title)")
     }
 
     private func playWithAutoplayFallback(player: AVPlayer) async throws {
+        let wasMuted = player.isMuted
         do {
             try await player.playAsync()
         } catch {
             addDebugMessage("Autoplay fallback: mute and retry")
             player.isMuted = true
-            applyMuteState(true)
-            try await player.playAsync()
+            do {
+                try await player.playAsync()
+                player.isMuted = wasMuted
+            } catch {
+                player.isMuted = wasMuted
+                throw error
+            }
         }
     }
 
@@ -618,10 +697,12 @@ final class ChannelCoordinator: ObservableObject {
             secondsLeftText = "-\(formatDuration(next.duration))"
             currentImmichAssetURL = buildImmichAssetURL(for: next)
             currentInfoFields = buildInfoFields(for: next)
-            title = next.title
-            captionText = formatCaption(for: next)
+            let overlay = overlayTexts(for: next)
+            title = overlay.title
+            captionText = overlay.caption
             nextPreparedId = ""
             clearPlaybackFailureState()
+            await recordWatchStart(for: next)
 
             installTimeObserver()
             await fillQueueIfNeeded()
@@ -677,10 +758,12 @@ final class ChannelCoordinator: ObservableObject {
             secondsLeftText = "-\(formatDuration(previous.duration))"
             currentImmichAssetURL = buildImmichAssetURL(for: previous)
             currentInfoFields = buildInfoFields(for: previous)
-            title = previous.title
-            captionText = formatCaption(for: previous)
+            let overlay = overlayTexts(for: previous)
+            title = overlay.title
+            captionText = overlay.caption
             nextPreparedId = ""
             clearPlaybackFailureState()
+            await recordWatchStart(for: previous)
 
             if let outgoingCurrent, !queue.contains(where: { $0.id == outgoingCurrent.id }) {
                 queue.insert(outgoingCurrent, at: 0)
@@ -729,7 +812,7 @@ final class ChannelCoordinator: ObservableObject {
     private func readMutedPreference() -> Bool {
         let key = "ImmichChannelTV.Muted"
         if UserDefaults.standard.object(forKey: key) == nil {
-            return true
+            return false
         }
         return UserDefaults.standard.bool(forKey: key)
     }
@@ -778,6 +861,53 @@ final class ChannelCoordinator: ObservableObject {
         }
     }
 
+    private func applyHiddenStateLocally(assetId: String, isHidden: Bool) {
+        if isHidden {
+            hiddenAssetIds.insert(assetId)
+        } else {
+            hiddenAssetIds.remove(assetId)
+        }
+
+        if let item = currentItem, item.id == assetId {
+            let updated = item.withHidden(isHidden)
+            currentItem = updated
+            currentInfoFields = buildInfoFields(for: updated)
+        }
+
+        queue.removeAll(where: { $0.id == assetId })
+        for i in history.indices where history[i].id == assetId {
+            history[i] = history[i].withHidden(isHidden)
+        }
+    }
+
+    private func applyWatchCountLocally(assetId: String, timesWatched: Int) {
+        if let item = currentItem, item.id == assetId {
+            let updated = item.withTimesWatched(timesWatched)
+            currentItem = updated
+            currentInfoFields = buildInfoFields(for: updated)
+        }
+        if let index = queue.firstIndex(where: { $0.id == assetId }) {
+            queue[index] = queue[index].withTimesWatched(timesWatched)
+        }
+        for i in history.indices where history[i].id == assetId {
+            history[i] = history[i].withTimesWatched(timesWatched)
+        }
+    }
+
+    private func recordWatchStart(for candidate: VideoCandidate) async {
+        guard configStore.config.useSQLiteCache else { return }
+        do {
+            let count = try await store.incrementWatchCount(assetId: candidate.id)
+            applyWatchCountLocally(assetId: candidate.id, timesWatched: count)
+            addDebugMessage("Watch count \(count): \(candidate.title)")
+        } catch {
+            if configStore.config.debug {
+                print("[ChannelCoordinator] watch count update failed: \(error)")
+            }
+            addDebugMessage("Watch count update failed: \(candidate.title)")
+        }
+    }
+
     private func clearPlaybackFailureState() {
         consecutivePlaybackFailures = 0
         fallbackMessage = ""
@@ -817,13 +947,37 @@ final class ChannelCoordinator: ObservableObject {
         return "\(monthYear)\n\(location)"
     }
 
+    private func overlayTexts(for candidate: VideoCandidate) -> (title: String, caption: String) {
+        let dateAndLocation = formatCaption(for: candidate)
+        if dateAndLocation.isEmpty {
+            return (candidate.title, "")
+        }
+        return (dateAndLocation, candidate.title)
+    }
+
     private func formatLocation(city: String, country: String) -> String {
-        let c = city.trimmingCharacters(in: .whitespacesAndNewlines)
-        let k = country.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !c.isEmpty && !k.isEmpty { return "\(c), \(k)" }
+        let c = normalizedLocationPart(city)
+        let k = normalizedLocationPart(country)
+
+        if !c.isEmpty && !k.isEmpty {
+            let cLower = c.lowercased()
+            let kLower = k.lowercased()
+            if cLower == kLower || cLower.hasSuffix(", \(kLower)") || cLower.hasSuffix(kLower) {
+                return c
+            }
+            return "\(c), \(k)"
+        }
         if !c.isEmpty { return c }
         if !k.isEmpty { return k }
         return ""
+    }
+
+    private func normalizedLocationPart(_ raw: String) -> String {
+        let parts = raw
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return parts.joined(separator: ", ")
     }
 
     private func formatMonthYear(_ raw: String) -> String {
@@ -893,7 +1047,9 @@ final class ChannelCoordinator: ObservableObject {
             VideoInfoField(id: "title", label: "Title", value: nonEmptyOrDash(candidate.title)),
             VideoInfoField(id: "id", label: "Asset ID", value: nonEmptyOrDash(candidate.id)),
             VideoInfoField(id: "duration", label: "Duration", value: formatDuration(candidate.duration)),
+            VideoInfoField(id: "times_watched", label: "Times Watched", value: String(candidate.timesWatched)),
             VideoInfoField(id: "favorite", label: "Favorite", value: candidate.isFavorite ? "Yes" : "No"),
+            VideoInfoField(id: "hidden", label: "Hidden", value: candidate.isHidden ? "Yes" : "No"),
             VideoInfoField(id: "capture_raw", label: "Capture Date (Raw)", value: nonEmptyOrDash(candidate.captureDate)),
             VideoInfoField(id: "capture_fmt", label: "Capture Date (Parsed)", value: nonEmptyOrDash(dateTime)),
             VideoInfoField(id: "city", label: "City", value: nonEmptyOrDash(candidate.city)),

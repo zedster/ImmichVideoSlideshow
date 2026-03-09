@@ -8,12 +8,18 @@ actor SQLiteVideoStore {
     }
 
     private let dbPath: String
+    private let dbDirectoryPath: String
 
     init(dbFileName: String = "videos.sqlite") {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let dir = appSupport.appendingPathComponent("ImmichChannelTV", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        dbPath = dir.appendingPathComponent(dbFileName).path
+        let fm = FileManager.default
+        let baseDirectory = Self.resolveWritableBaseDirectory(fileManager: fm)
+        let dbURL = baseDirectory.appendingPathComponent(dbFileName, isDirectory: false)
+
+        dbDirectoryPath = baseDirectory.path
+        dbPath = dbURL.path
+
+        print("DB directory:", dbDirectoryPath)
+        print("DB file:", dbPath)
     }
 
     func initializeSchema() throws {
@@ -24,6 +30,8 @@ actor SQLiteVideoStore {
                 title TEXT,
                 duration REAL NOT NULL,
                 is_favorite INTEGER NOT NULL DEFAULT 0,
+                is_hidden INTEGER NOT NULL DEFAULT 0,
+                times_watched INTEGER NOT NULL DEFAULT 0,
                 capture_date TEXT,
                 city TEXT,
                 country TEXT,
@@ -42,6 +50,10 @@ actor SQLiteVideoStore {
 
             try exec(db, sql: "CREATE INDEX IF NOT EXISTS idx_videos_duration ON videos(duration)")
             try exec(db, sql: "CREATE INDEX IF NOT EXISTS idx_videos_favorite ON videos(is_favorite)")
+            try exec(db, sql: "CREATE INDEX IF NOT EXISTS idx_videos_hidden ON videos(is_hidden)")
+            try exec(db, sql: "CREATE INDEX IF NOT EXISTS idx_videos_times_watched ON videos(times_watched)")
+            try ensureColumn(db, table: "videos", column: "is_hidden", type: "INTEGER NOT NULL DEFAULT 0")
+            try ensureColumn(db, table: "videos", column: "times_watched", type: "INTEGER NOT NULL DEFAULT 0")
             try ensureColumn(db, table: "videos", column: "capture_date", type: "TEXT")
             try ensureColumn(db, table: "videos", column: "city", type: "TEXT")
             try ensureColumn(db, table: "videos", column: "country", type: "TEXT")
@@ -74,11 +86,11 @@ actor SQLiteVideoStore {
 
             let sql = """
             INSERT INTO videos (
-                asset_id, title, duration, is_favorite, capture_date, city, country,
+                asset_id, title, duration, is_favorite, is_hidden, times_watched, capture_date, city, country,
                 camera_make, camera_model, lens_model, f_number, focal_length, iso,
                 exposure_time, latitude, longitude, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(asset_id) DO UPDATE SET
                 title=excluded.title,
                 duration=excluded.duration,
@@ -114,19 +126,21 @@ actor SQLiteVideoStore {
                 sqlite3_bind_text(stmt, 2, (record.title as NSString).utf8String, -1, nil)
                 sqlite3_bind_double(stmt, 3, record.duration)
                 sqlite3_bind_int(stmt, 4, record.isFavorite ? 1 : 0)
-                sqlite3_bind_text(stmt, 5, (record.captureDate as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 6, (record.city as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 7, (record.country as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 8, (record.cameraMake as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 9, (record.cameraModel as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 10, (record.lensModel as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 11, (record.fNumber as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 12, (record.focalLength as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 13, (record.iso as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 14, (record.exposureTime as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 15, (record.latitude as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 16, (record.longitude as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 17, (now as NSString).utf8String, -1, nil)
+                sqlite3_bind_int(stmt, 5, 0)
+                sqlite3_bind_int(stmt, 6, 0)
+                sqlite3_bind_text(stmt, 7, (record.captureDate as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 8, (record.city as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 9, (record.country as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 10, (record.cameraMake as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 11, (record.cameraModel as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 12, (record.lensModel as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 13, (record.fNumber as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 14, (record.focalLength as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 15, (record.iso as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 16, (record.exposureTime as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 17, (record.latitude as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 18, (record.longitude as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 19, (now as NSString).utf8String, -1, nil)
 
                 guard sqlite3_step(stmt) == SQLITE_DONE else {
                     throw storeError(db, fallback: "upsert step failed")
@@ -178,8 +192,8 @@ actor SQLiteVideoStore {
     func countQualifying(minDuration: Double, onlyFavorites: Bool) throws -> Int {
         try withDatabase { db in
             let sql = onlyFavorites
-                ? "SELECT COUNT(*) FROM videos WHERE duration >= ? AND is_favorite = 1"
-                : "SELECT COUNT(*) FROM videos WHERE duration >= ?"
+                ? "SELECT COUNT(*) FROM videos WHERE duration >= ? AND is_favorite = 1 AND COALESCE(is_hidden, 0) = 0"
+                : "SELECT COUNT(*) FROM videos WHERE duration >= ? AND COALESCE(is_hidden, 0) = 0"
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
                 throw storeError(db, fallback: "prepare countQualifying failed")
@@ -197,8 +211,8 @@ actor SQLiteVideoStore {
     func selectRandom(minDuration: Double, onlyFavorites: Bool) throws -> VideoCandidate? {
         try withDatabase { db in
             let sql = onlyFavorites
-                ? "SELECT asset_id, title, duration, is_favorite, capture_date, city, country, camera_make, camera_model, lens_model, f_number, focal_length, iso, exposure_time, latitude, longitude FROM videos WHERE duration >= ? AND is_favorite = 1 ORDER BY RANDOM() LIMIT 1"
-                : "SELECT asset_id, title, duration, is_favorite, capture_date, city, country, camera_make, camera_model, lens_model, f_number, focal_length, iso, exposure_time, latitude, longitude FROM videos WHERE duration >= ? ORDER BY RANDOM() LIMIT 1"
+                ? "SELECT asset_id, title, duration, is_favorite, is_hidden, times_watched, capture_date, city, country, camera_make, camera_model, lens_model, f_number, focal_length, iso, exposure_time, latitude, longitude FROM videos WHERE duration >= ? AND is_favorite = 1 AND COALESCE(is_hidden, 0) = 0 ORDER BY CASE WHEN COALESCE(times_watched, 0) = 0 THEN 0 ELSE 1 END ASC, RANDOM() LIMIT 1"
+                : "SELECT asset_id, title, duration, is_favorite, is_hidden, times_watched, capture_date, city, country, camera_make, camera_model, lens_model, f_number, focal_length, iso, exposure_time, latitude, longitude FROM videos WHERE duration >= ? AND COALESCE(is_hidden, 0) = 0 ORDER BY CASE WHEN COALESCE(times_watched, 0) = 0 THEN 0 ELSE 1 END ASC, RANDOM() LIMIT 1"
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
                 throw storeError(db, fallback: "prepare selectRandom failed")
@@ -215,23 +229,27 @@ actor SQLiteVideoStore {
             let title = sqlite3_column_text(stmt, 1).map { String(cString: $0) } ?? "Untitled"
             let duration = sqlite3_column_double(stmt, 2)
             let isFavorite = sqlite3_column_int(stmt, 3) == 1
-            let captureDate = sqlite3_column_text(stmt, 4).map { String(cString: $0) } ?? ""
-            let city = sqlite3_column_text(stmt, 5).map { String(cString: $0) } ?? ""
-            let country = sqlite3_column_text(stmt, 6).map { String(cString: $0) } ?? ""
-            let cameraMake = sqlite3_column_text(stmt, 7).map { String(cString: $0) } ?? ""
-            let cameraModel = sqlite3_column_text(stmt, 8).map { String(cString: $0) } ?? ""
-            let lensModel = sqlite3_column_text(stmt, 9).map { String(cString: $0) } ?? ""
-            let fNumber = sqlite3_column_text(stmt, 10).map { String(cString: $0) } ?? ""
-            let focalLength = sqlite3_column_text(stmt, 11).map { String(cString: $0) } ?? ""
-            let iso = sqlite3_column_text(stmt, 12).map { String(cString: $0) } ?? ""
-            let exposureTime = sqlite3_column_text(stmt, 13).map { String(cString: $0) } ?? ""
-            let latitude = sqlite3_column_text(stmt, 14).map { String(cString: $0) } ?? ""
-            let longitude = sqlite3_column_text(stmt, 15).map { String(cString: $0) } ?? ""
+            let isHidden = sqlite3_column_int(stmt, 4) == 1
+            let timesWatched = Int(sqlite3_column_int64(stmt, 5))
+            let captureDate = sqlite3_column_text(stmt, 6).map { String(cString: $0) } ?? ""
+            let city = sqlite3_column_text(stmt, 7).map { String(cString: $0) } ?? ""
+            let country = sqlite3_column_text(stmt, 8).map { String(cString: $0) } ?? ""
+            let cameraMake = sqlite3_column_text(stmt, 9).map { String(cString: $0) } ?? ""
+            let cameraModel = sqlite3_column_text(stmt, 10).map { String(cString: $0) } ?? ""
+            let lensModel = sqlite3_column_text(stmt, 11).map { String(cString: $0) } ?? ""
+            let fNumber = sqlite3_column_text(stmt, 12).map { String(cString: $0) } ?? ""
+            let focalLength = sqlite3_column_text(stmt, 13).map { String(cString: $0) } ?? ""
+            let iso = sqlite3_column_text(stmt, 14).map { String(cString: $0) } ?? ""
+            let exposureTime = sqlite3_column_text(stmt, 15).map { String(cString: $0) } ?? ""
+            let latitude = sqlite3_column_text(stmt, 16).map { String(cString: $0) } ?? ""
+            let longitude = sqlite3_column_text(stmt, 17).map { String(cString: $0) } ?? ""
             return VideoCandidate(
                 id: id,
                 title: title,
                 duration: duration,
                 isFavorite: isFavorite,
+                isHidden: isHidden,
+                timesWatched: timesWatched,
                 captureDate: captureDate,
                 city: city,
                 country: country,
@@ -245,6 +263,29 @@ actor SQLiteVideoStore {
                 latitude: latitude,
                 longitude: longitude
             )
+        }
+    }
+
+    func setHidden(assetId: String, isHidden: Bool) throws {
+        try withDatabase { db in
+            let sql = """
+            UPDATE videos
+            SET is_hidden = ?, updated_at = ?
+            WHERE asset_id = ?
+            """
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+                throw storeError(db, fallback: "prepare setHidden failed")
+            }
+            defer { sqlite3_finalize(stmt) }
+
+            let now = ISO8601DateFormatter().string(from: Date())
+            sqlite3_bind_int(stmt, 1, isHidden ? 1 : 0)
+            sqlite3_bind_text(stmt, 2, (now as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 3, (assetId as NSString).utf8String, -1, nil)
+            guard sqlite3_step(stmt) == SQLITE_DONE else {
+                throw storeError(db, fallback: "setHidden step failed")
+            }
         }
     }
 
@@ -271,14 +312,94 @@ actor SQLiteVideoStore {
         }
     }
 
-    private func withDatabase<T>(_ body: (OpaquePointer) throws -> T) throws -> T {
-        var db: OpaquePointer?
-        guard sqlite3_open(dbPath, &db) == SQLITE_OK, let db else {
-            throw NSError(domain: "SQLiteVideoStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "Cannot open sqlite DB at \(dbPath)"])
+    func incrementWatchCount(assetId: String) throws -> Int {
+        try withDatabase { db in
+            let now = ISO8601DateFormatter().string(from: Date())
+
+            let updateSQL = """
+            UPDATE videos
+            SET times_watched = COALESCE(times_watched, 0) + 1,
+                updated_at = ?
+            WHERE asset_id = ?
+            """
+            var updateStmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, updateSQL, -1, &updateStmt, nil) == SQLITE_OK else {
+                throw storeError(db, fallback: "prepare incrementWatchCount failed")
+            }
+            defer { sqlite3_finalize(updateStmt) }
+
+            sqlite3_bind_text(updateStmt, 1, (now as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(updateStmt, 2, (assetId as NSString).utf8String, -1, nil)
+            guard sqlite3_step(updateStmt) == SQLITE_DONE else {
+                throw storeError(db, fallback: "incrementWatchCount step failed")
+            }
+
+            let selectSQL = "SELECT COALESCE(times_watched, 0) FROM videos WHERE asset_id = ? LIMIT 1"
+            var selectStmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, selectSQL, -1, &selectStmt, nil) == SQLITE_OK else {
+                throw storeError(db, fallback: "prepare select watch count failed")
+            }
+            defer { sqlite3_finalize(selectStmt) }
+
+            sqlite3_bind_text(selectStmt, 1, (assetId as NSString).utf8String, -1, nil)
+            guard sqlite3_step(selectStmt) == SQLITE_ROW else {
+                return 0
+            }
+            return Int(sqlite3_column_int64(selectStmt, 0))
         }
+    }
+
+    private func withDatabase<T>(_ body: (OpaquePointer) throws -> T) throws -> T {
+        let fm = FileManager.default
+
+        do {
+            try fm.createDirectory(atPath: dbDirectoryPath, withIntermediateDirectories: true)
+            try fm.setAttributes([.protectionKey: FileProtectionType.none], ofItemAtPath: dbDirectoryPath)
+        } catch {
+            throw NSError(
+                domain: "SQLiteVideoStore",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Cannot prepare sqlite DB directory at \(dbDirectoryPath): \(error.localizedDescription)"]
+            )
+        }
+
+        var db: OpaquePointer?
+
+        let flags = SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX
+
+        guard sqlite3_open_v2(dbPath, &db, flags, nil) == SQLITE_OK, let db else {
+            throw NSError(
+                domain: "SQLiteVideoStore",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Cannot open sqlite DB at \(dbPath)"]
+            )
+        }
+
+        _ = try? fm.setAttributes([.protectionKey: FileProtectionType.none], ofItemAtPath: dbPath)
+
         defer { sqlite3_close(db) }
 
         return try body(db)
+    }
+
+    private static func resolveWritableBaseDirectory(fileManager fm: FileManager) -> URL {
+        let candidates: [URL] = [
+            fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first,
+            fm.urls(for: .cachesDirectory, in: .userDomainMask).first,
+            URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+        ].compactMap { $0 }
+
+        for candidate in candidates {
+            do {
+                try fm.createDirectory(at: candidate, withIntermediateDirectories: true)
+                try fm.setAttributes([.protectionKey: FileProtectionType.none], ofItemAtPath: candidate.path)
+                return candidate
+            } catch {
+                continue
+            }
+        }
+
+        return URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
     }
 
     private func exec(_ db: OpaquePointer, sql: String) throws {

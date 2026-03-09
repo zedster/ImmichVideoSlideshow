@@ -6,6 +6,8 @@ struct VideoCandidate: Equatable {
     let title: String
     let duration: Double
     let isFavorite: Bool
+    let isHidden: Bool
+    let timesWatched: Int
     let captureDate: String
     let city: String
     let country: String
@@ -27,6 +29,54 @@ extension VideoCandidate {
             title: title,
             duration: duration,
             isFavorite: isFavorite,
+            isHidden: isHidden,
+            timesWatched: timesWatched,
+            captureDate: captureDate,
+            city: city,
+            country: country,
+            cameraMake: cameraMake,
+            cameraModel: cameraModel,
+            lensModel: lensModel,
+            fNumber: fNumber,
+            focalLength: focalLength,
+            iso: iso,
+            exposureTime: exposureTime,
+            latitude: latitude,
+            longitude: longitude
+        )
+    }
+
+    func withTimesWatched(_ timesWatched: Int) -> VideoCandidate {
+        VideoCandidate(
+            id: id,
+            title: title,
+            duration: duration,
+            isFavorite: isFavorite,
+            isHidden: isHidden,
+            timesWatched: timesWatched,
+            captureDate: captureDate,
+            city: city,
+            country: country,
+            cameraMake: cameraMake,
+            cameraModel: cameraModel,
+            lensModel: lensModel,
+            fNumber: fNumber,
+            focalLength: focalLength,
+            iso: iso,
+            exposureTime: exposureTime,
+            latitude: latitude,
+            longitude: longitude
+        )
+    }
+
+    func withHidden(_ isHidden: Bool) -> VideoCandidate {
+        VideoCandidate(
+            id: id,
+            title: title,
+            duration: duration,
+            isFavorite: isFavorite,
+            isHidden: isHidden,
+            timesWatched: timesWatched,
             captureDate: captureDate,
             city: city,
             country: country,
@@ -82,6 +132,12 @@ enum ImmichAPIError: LocalizedError {
     }
 }
 
+struct HiddenAlbumAccess: Equatable {
+    let canHide: Bool
+    let albumId: String
+    let detail: String
+}
+
 final class ImmichAPIClient {
     private let session: URLSession
 
@@ -108,6 +164,8 @@ final class ImmichAPIClient {
                     title: item.title,
                     duration: item.duration,
                     isFavorite: item.isFavorite,
+                    isHidden: false,
+                    timesWatched: 0,
                     captureDate: item.captureDate,
                     city: item.city,
                     country: item.country,
@@ -124,6 +182,54 @@ final class ImmichAPIClient {
             }
         }
         throw ImmichAPIError.noEligibleVideo
+    }
+
+    func resolveHiddenAlbumAccess(config: AppConfig, albumName: String = "Hidden") async -> HiddenAlbumAccess {
+        do {
+            let albumId = try await getOrCreateAlbumId(config: config, albumName: albumName)
+            return HiddenAlbumAccess(canHide: true, albumId: albumId, detail: "hidden album ready (\(albumName))")
+        } catch ImmichAPIError.httpStatus(let code) {
+            return HiddenAlbumAccess(canHide: false, albumId: "", detail: "hidden album unavailable (HTTP \(code))")
+        } catch {
+            return HiddenAlbumAccess(canHide: false, albumId: "", detail: "hidden album unavailable (\(error.localizedDescription))")
+        }
+    }
+
+    func addAssetToAlbum(assetId: String, albumId: String, config: AppConfig) async throws {
+        guard let url = URL(string: "\(config.normalizedImmichBaseURL)/api/albums/\(albumId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? albumId)/assets") else {
+            throw ImmichAPIError.invalidBaseURL
+        }
+
+        let payloads: [[String: Any]] = [
+            ["ids": [assetId]],
+            ["assetIds": [assetId]]
+        ]
+        let methods = ["PUT", "POST", "PATCH"]
+        var lastStatus = -1
+
+        for payload in payloads {
+            let body = try JSONSerialization.data(withJSONObject: payload, options: [])
+            for method in methods {
+                var request = URLRequest(url: url)
+                request.httpMethod = method
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.setValue("application/json", forHTTPHeaderField: "Accept")
+                request.setValue(config.apiKey, forHTTPHeaderField: "x-api-key")
+                request.timeoutInterval = 30
+                request.httpBody = body
+
+                let (_, response) = try await session.data(for: request)
+                guard let http = response as? HTTPURLResponse else {
+                    throw ImmichAPIError.invalidResponse
+                }
+                if 200..<300 ~= http.statusCode {
+                    return
+                }
+                lastStatus = http.statusCode
+            }
+        }
+
+        throw ImmichAPIError.httpStatus(lastStatus)
     }
 
     func fetchRandomBatch(config: AppConfig, size: Int) async throws -> [ImmichAssetRecord] {
@@ -228,6 +334,92 @@ final class ImmichAPIClient {
 
         let decoded = try JSONDecoder().decode(ImmichMetadataSearchResponse.self, from: data)
         return decoded.assets.items
+    }
+
+    private func getOrCreateAlbumId(config: AppConfig, albumName: String) async throws -> String {
+        let normalizedName = albumName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalizedName.isEmpty {
+            throw ImmichAPIError.invalidResponse
+        }
+
+        if let existing = try await findAlbumId(config: config, albumName: normalizedName) {
+            return existing
+        }
+
+        return try await createAlbum(config: config, albumName: normalizedName)
+    }
+
+    private func findAlbumId(config: AppConfig, albumName: String) async throws -> String? {
+        guard let url = URL(string: "\(config.normalizedImmichBaseURL)/api/albums") else {
+            throw ImmichAPIError.invalidBaseURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(config.apiKey, forHTTPHeaderField: "x-api-key")
+        request.timeoutInterval = 30
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw ImmichAPIError.invalidResponse
+        }
+        guard 200..<300 ~= http.statusCode else {
+            throw ImmichAPIError.httpStatus(http.statusCode)
+        }
+
+        guard let raw = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            return nil
+        }
+
+        let target = albumName.lowercased()
+        for item in raw {
+            let name = (item["albumName"] as? String ?? item["name"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let id = (item["id"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !id.isEmpty, name.lowercased() == target {
+                return id
+            }
+        }
+        return nil
+    }
+
+    private func createAlbum(config: AppConfig, albumName: String) async throws -> String {
+        guard let url = URL(string: "\(config.normalizedImmichBaseURL)/api/albums") else {
+            throw ImmichAPIError.invalidBaseURL
+        }
+        let payloads: [[String: Any]] = [
+            ["albumName": albumName],
+            ["name": albumName]
+        ]
+        var lastStatus = -1
+
+        for payload in payloads {
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            request.setValue(config.apiKey, forHTTPHeaderField: "x-api-key")
+            request.timeoutInterval = 30
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload, options: [])
+
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw ImmichAPIError.invalidResponse
+            }
+            if 200..<300 ~= http.statusCode {
+                if let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let id = obj["id"] as? String,
+                   !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return id
+                }
+                if let id = try await findAlbumId(config: config, albumName: albumName) {
+                    return id
+                }
+                throw ImmichAPIError.invalidResponse
+            }
+            lastStatus = http.statusCode
+        }
+
+        throw ImmichAPIError.httpStatus(lastStatus)
     }
 }
 

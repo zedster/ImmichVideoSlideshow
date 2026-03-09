@@ -10,6 +10,8 @@ struct ChannelView: View {
     @State private var showInfo = false
     @State private var shouldResumeAfterSettings = false
     @State private var infoScrollIndex = 0
+    @State private var controlsVisible = true
+    @State private var hideControlsTask: Task<Void, Never>?
 
     init(configStore: ConfigStore) {
         self._configStore = ObservedObject(wrappedValue: configStore)
@@ -75,11 +77,11 @@ struct ChannelView: View {
                         .clipShape(Circle())
                 }
 
-                if !coordinator.captionText.isEmpty {
+                if configStore.config.debug && !coordinator.title.isEmpty {
                     VStack {
                         Spacer()
                         HStack {
-                            outlinedCaption(coordinator.captionText)
+                            outlinedCaption(coordinator.title)
                                 .padding(.leading, 20)
                                 .padding(.bottom, max(110, geo.size.height * 0.16))
                             Spacer()
@@ -87,104 +89,117 @@ struct ChannelView: View {
                     }
                 }
 
-                VStack {
-                    Spacer()
-                    HStack {
+                if controlsVisible {
+                    VStack {
                         Spacer()
-                        Text(coordinator.secondsLeftText)
-                            .font(.caption2.monospaced())
-                            .foregroundStyle(.white.opacity(0.9))
-                            .padding(.trailing, 8)
-                    }
-                    .padding(.bottom, 6)
-
-                    GeometryReader { proxy in
-                        ZStack(alignment: .leading) {
-                            Rectangle()
-                                .fill(Color.white.opacity(0.2))
-                            Rectangle()
-                                .fill(Color.white.opacity(0.9))
-                                .frame(width: proxy.size.width * coordinator.playbackProgress)
-                        }
-                    }
-                    .frame(height: 5)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
-
-                    HStack(spacing: 10) {
-                        Text(coordinator.title)
-                            .font(.caption)
-                            .lineLimit(1)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.black.opacity(0.6))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                        Spacer()
-
-                        if configStore.config.debug {
-                            Text(coordinator.statusText)
+                        HStack {
+                            Spacer()
+                            Text(coordinator.secondsLeftText)
                                 .font(.caption2.monospaced())
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(Color.black.opacity(0.6))
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .foregroundStyle(.white.opacity(0.9))
+                                .padding(.trailing, 8)
                         }
+                        .padding(.bottom, 6)
 
-                        if coordinator.canGoBack {
+                        GeometryReader { proxy in
+                            ZStack(alignment: .leading) {
+                                Rectangle()
+                                    .fill(Color.white.opacity(0.2))
+                                Rectangle()
+                                    .fill(Color.white.opacity(0.9))
+                                    .frame(width: proxy.size.width * coordinator.playbackProgress)
+                            }
+                        }
+                        .frame(height: 5)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+
+                        //text
+                        HStack(spacing: 10) {
+                            if !coordinator.captionText.isEmpty {
+                                Text(coordinator.captionText)
+                                    .font(.caption)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(Color.black.opacity(0.6))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+
+                            Spacer()
+
+                            if configStore.config.debug {
+                                Text(coordinator.statusText)
+                                    .font(.caption2.monospaced())
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(Color.black.opacity(0.6))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+
+                            if coordinator.canGoBack {
+                                Button {
+                                    recordInteraction()
+                                    coordinator.goBack()
+                                } label: {
+                                    Image(systemName: "backward.end.fill")
+                                }
+                                .buttonStyle(.bordered)
+                                .accessibilityLabel("Back")
+                            }
+
                             Button {
-                                coordinator.goBack()
+                                recordInteraction()
+                                coordinator.togglePlayPause()
                             } label: {
-                                Image(systemName: "backward.end.fill")
+                                Image(systemName: coordinator.playPauseButtonSystemImage())
                             }
                             .buttonStyle(.bordered)
-                            .accessibilityLabel("Back")
-                        }
+                            .accessibilityLabel("Play Pause")
 
-                        Button {
-                            coordinator.togglePlayPause()
-                        } label: {
-                            Image(systemName: coordinator.playPauseButtonSystemImage())
-                        }
-                        .buttonStyle(.bordered)
-                        .accessibilityLabel("Play Pause")
+                            Button {
+                                recordInteraction()
+                                coordinator.skip()
+                            } label: {
+                                Image(systemName: "forward.end.fill")
+                            }
+                            .buttonStyle(.bordered)
+                            .accessibilityLabel("Skip")
 
-                        Button {
-                            coordinator.skip()
-                        } label: {
-                            Image(systemName: "forward.end.fill")
-                        }
-                        .buttonStyle(.bordered)
-                        .accessibilityLabel("Skip")
+                            Button {
+                                recordInteraction()
+                                coordinator.toggleFavorite()
+                            } label: {
+                                Image(systemName: coordinator.favoriteButtonSystemImage())
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(coordinator.favoriteUpdateInProgress)
+                            .accessibilityLabel(coordinator.favoriteButtonLabel())
 
-                        Button {
-                            coordinator.toggleFavorite()
-                        } label: {
-                            Image(systemName: coordinator.favoriteButtonSystemImage())
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(coordinator.favoriteUpdateInProgress)
-                        .accessibilityLabel(coordinator.favoriteButtonLabel())
+                            Button {
+                                recordInteraction()
+                                showInfo.toggle()
+                            } label: {
+                                Image(systemName: "info.circle")
+                            }
+                            .buttonStyle(.bordered)
+                            .accessibilityLabel("Info")
 
-                        Button {
-                            showInfo.toggle()
-                        } label: {
-                            Image(systemName: "info.circle")
+                            Button {
+                                recordInteraction()
+                                showSetup = true
+                            } label: {
+                                Image(systemName: "gearshape")
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .accessibilityLabel("Settings")
                         }
-                        .buttonStyle(.bordered)
-                        .accessibilityLabel("Info")
-
-                        Button {
-                            showSetup = true
-                        } label: {
-                            Image(systemName: "gearshape")
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .accessibilityLabel("Settings")
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                        .padding(.bottom, 0)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .padding(.bottom, 0)
+                    .transition(.opacity)
                 }
 
                 if showInfo {
@@ -264,9 +279,11 @@ struct ChannelView: View {
         }
         .onAppear {
             coordinator.start()
+            recordInteraction()
         }
         .onDisappear {
             coordinator.stop()
+            hideControlsTask?.cancel()
         }
         .onChange(of: configStore.config) { _ in
             coordinator.restart()
@@ -280,6 +297,7 @@ struct ChannelView: View {
             if isVisible {
                 infoScrollIndex = 0
             }
+            recordInteraction()
         }
         .onChange(of: showSetup) { isPresented in
             if isPresented {
@@ -296,6 +314,7 @@ struct ChannelView: View {
             if !isPresented {
                 coordinator.clearDebugMessages()
             }
+            recordInteraction()
         }
         .onChange(of: configStore.config.debug) { debugEnabled in
             if !debugEnabled {
@@ -303,11 +322,22 @@ struct ChannelView: View {
             }
         }
         .onExitCommand {
+            recordInteraction()
             if showInfo {
                 showInfo = false
             }
         }
+        .onPlayPauseCommand {
+            recordInteraction()
+            if !showInfo && !showSetup {
+                coordinator.togglePlayPause()
+            }
+        }
+        .onTapGesture {
+            recordInteraction()
+        }
         .onMoveCommand { direction in
+            recordInteraction()
             guard showInfo else { return }
             let maxIndex = coordinator.currentInfoFields.count
             switch direction {
@@ -348,6 +378,22 @@ struct ChannelView: View {
             base.foregroundColor(.black).offset(x: 0, y: 1.6)
             base.foregroundColor(.black).offset(x: 0, y: -1.6)
             base.foregroundColor(.white)
+        }
+    }
+
+    private func recordInteraction() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            controlsVisible = true
+        }
+        hideControlsTask?.cancel()
+        guard !showInfo, !showSetup else { return }
+
+        hideControlsTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 10_000_000_000)
+            guard !Task.isCancelled, !showInfo, !showSetup else { return }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                controlsVisible = false
+            }
         }
     }
 
