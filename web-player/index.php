@@ -994,7 +994,6 @@ $settings = [
       if (transitionInProgress) {
         return;
       }
-      noteInteraction();
       if (reason === 'ended' || reason === 'near_end_crossfade') {
         await markCurrentVideoWatched();
       }
