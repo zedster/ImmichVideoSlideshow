@@ -35,13 +35,14 @@ $settings = [
     'crossfadeDurationMs' => max(0, envInt('CROSSFADE_DURATION', 450)),
     'preloadSecondsBeforeEnd' => max(0.25, envFloat('PRELOAD_SECONDS_BEFORE_END', 4.0)),
     'queueTargetSize' => max(1, min(5, envInt('QUEUE_TARGET_SIZE', 2))),
+    'debugEnabled' => envFlag('DEBUG', false),
 ];
 ?>
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Immich Video Channel</title>
   <style>
     html, body {
@@ -51,6 +52,8 @@ $settings = [
       background: #000;
       overflow: hidden;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      -webkit-text-size-adjust: 100%;
+      touch-action: manipulation;
     }
 
     #stage {
@@ -78,15 +81,16 @@ $settings = [
 
     .hud {
       position: fixed;
-      left: 12px;
-      right: 12px;
-      bottom: 12px;
+      left: calc(12px + env(safe-area-inset-left));
+      right: calc(12px + env(safe-area-inset-right));
+      bottom: calc(12px + env(safe-area-inset-bottom));
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 10px;
       z-index: 20;
       pointer-events: none;
+      transition: opacity 180ms ease;
     }
 
     .chip {
@@ -137,6 +141,7 @@ $settings = [
       display: flex;
       gap: 8px;
       pointer-events: auto;
+      flex-wrap: wrap;
     }
 
     .btn {
@@ -144,12 +149,13 @@ $settings = [
       color: #fff;
       background: rgba(0, 0, 0, 0.6);
       border-radius: 6px;
-      min-width: 34px;
-      min-height: 30px;
-      padding: 4px 8px;
+      min-width: 44px;
+      min-height: 44px;
+      padding: 8px 10px;
       font-size: 16px;
       line-height: 1;
       cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
     }
 
     .btn[aria-pressed="true"] {
@@ -159,11 +165,11 @@ $settings = [
 
     .panel {
       position: fixed;
-      top: 12px;
-      left: 12px;
+      top: calc(12px + env(safe-area-inset-top));
+      left: calc(12px + env(safe-area-inset-left));
       z-index: 24;
       min-width: 260px;
-      max-width: min(40vw, 420px);
+      max-width: min(86vw, 420px);
       max-height: 62vh;
       overflow: auto;
       display: none;
@@ -188,9 +194,64 @@ $settings = [
       word-break: break-word;
     }
 
+    .meta-caption {
+      position: fixed;
+      left: calc(24px + env(safe-area-inset-left));
+      bottom: 10vh;
+      z-index: 18;
+      color: #fff;
+      font-size: clamp(18px, 3.2vw, 46px);
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: 0.01em;
+      text-shadow:
+        -2px -2px 0 #000,
+         2px -2px 0 #000,
+        -2px  2px 0 #000,
+         2px  2px 0 #000,
+         0px  3px 8px rgba(0, 0, 0, 0.7);
+      max-width: 80vw;
+      pointer-events: none;
+      display: none;
+      white-space: pre-line;
+    }
+
+    .progress-wrap {
+      position: fixed;
+      left: calc(12px + env(safe-area-inset-left));
+      right: calc(12px + env(safe-area-inset-right));
+      bottom: calc(52px + env(safe-area-inset-bottom));
+      z-index: 19;
+      pointer-events: none;
+      transition: opacity 180ms ease;
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.25);
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      width: 0%;
+      height: 100%;
+      background: #ffffff;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2) inset;
+    }
+
+    .progress-remaining {
+      margin-top: 4px;
+      font-size: 12px;
+      color: #fff;
+      text-align: right;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+    }
+
     #fallback {
       position: fixed;
-      top: 12px;
+      top: calc(12px + env(safe-area-inset-top));
       left: 50%;
       transform: translateX(-50%);
       z-index: 30;
@@ -205,6 +266,28 @@ $settings = [
       text-align: center;
       max-width: 90vw;
     }
+
+    body.controls-hidden .hud,
+    body.controls-hidden .progress-wrap {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    @media (max-width: 900px) {
+      .controls {
+        gap: 6px;
+      }
+
+      .btn {
+        min-width: 42px;
+        min-height: 42px;
+        font-size: 15px;
+      }
+
+      .chip {
+        font-size: 11px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -214,19 +297,29 @@ $settings = [
   </div>
 
   <div id="fallback"></div>
+  <div id="metaCaption" class="meta-caption"></div>
+  <div id="progressWrap" class="progress-wrap">
+    <div class="progress-track">
+      <div id="progressFill" class="progress-fill"></div>
+    </div>
+    <div id="progressRemaining" class="progress-remaining"></div>
+  </div>
   <div id="infoPanel" class="panel"></div>
   <div id="statsPanel" class="panel"></div>
 
   <div class="hud">
-    <div id="title" class="chip">Loading…</div>
     <div class="controls">
+      <button id="backBtn" class="btn" type="button" title="Back to previous video (←)">⏮</button>
       <button id="skipBtn" class="btn" type="button" title="Skip">⏭</button>
+      <button id="pauseBtn" class="btn" type="button" title="Pause or play (space)">⏸</button>
       <button id="favoriteBtn" class="btn" type="button" title="Toggle favorite (f)">♡</button>
       <button id="muteBtn" class="btn" type="button" title="Mute or unmute">🔇</button>
       <button id="infoBtn" class="btn" type="button" title="Video info (i)" aria-pressed="false">ℹ</button>
       <button id="statsBtn" class="btn" type="button" title="Library stats (s)" aria-pressed="false">📊</button>
       <button id="fullscreenBtn" class="btn" type="button" title="Toggle fullscreen">⤢</button>
+      <?php if ($settings['debugEnabled']): ?>
       <div id="status" class="chip"></div>
+      <?php endif; ?>
     </div>
   </div>
 
@@ -238,17 +331,23 @@ $settings = [
       document.getElementById('v0'),
       document.getElementById('v1'),
     ];
-    const titleEl = document.getElementById('title');
     const statusEl = document.getElementById('status');
     const fallbackEl = document.getElementById('fallback');
+    const metaCaptionEl = document.getElementById('metaCaption');
+    const progressWrapEl = document.getElementById('progressWrap');
+    const progressFillEl = document.getElementById('progressFill');
+    const progressRemainingEl = document.getElementById('progressRemaining');
     const infoPanelEl = document.getElementById('infoPanel');
     const statsPanelEl = document.getElementById('statsPanel');
+    const backBtn = document.getElementById('backBtn');
     const skipBtn = document.getElementById('skipBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
     const favoriteBtn = document.getElementById('favoriteBtn');
     const muteBtn = document.getElementById('muteBtn');
     const infoBtn = document.getElementById('infoBtn');
     const statsBtn = document.getElementById('statsBtn');
     const fullscreenBtn = document.getElementById('fullscreenBtn');
+    const CONTROL_INACTIVITY_MS = 10000;
 
     const muteStorageKey = 'immichChannelMuted';
     let activeIndex = 0;
@@ -260,8 +359,11 @@ $settings = [
     let currentItem = null;
     let infoVisible = false;
     let statsVisible = false;
+    let historyStack = [];
     let sessionVideosStarted = 0;
     let sessionSkips = 0;
+    let currentPlaybackWatchMarked = false;
+    let controlsHideTimer = null;
     const sessionUniqueIds = new Set();
 
     const readMutedPreference = () => {
@@ -290,6 +392,38 @@ $settings = [
       const muted = players[activeIndex].muted;
       muteBtn.textContent = muted ? '🔇' : '🔊';
       muteBtn.title = muted ? 'Unmute' : 'Mute';
+    };
+
+    const hideControls = () => {
+      if (infoVisible || statsVisible) {
+        scheduleControlsHide();
+        return;
+      }
+      document.body.classList.add('controls-hidden');
+    };
+
+    const showControls = () => {
+      document.body.classList.remove('controls-hidden');
+    };
+
+    const scheduleControlsHide = () => {
+      if (controlsHideTimer !== null) {
+        window.clearTimeout(controlsHideTimer);
+      }
+      controlsHideTimer = window.setTimeout(() => {
+        hideControls();
+      }, CONTROL_INACTIVITY_MS);
+    };
+
+    const noteInteraction = () => {
+      showControls();
+      scheduleControlsHide();
+    };
+
+    const updatePauseButton = () => {
+      const paused = activePlayer().paused;
+      pauseBtn.textContent = paused ? '▶' : '⏸';
+      pauseBtn.title = paused ? 'Play (space)' : 'Pause (space)';
     };
 
     const isFullscreen = () => {
@@ -405,6 +539,54 @@ $settings = [
       return `${m}:${String(s).padStart(2, '0')}`;
     };
 
+    const formatMonthYearFromCaptureDate = (value) => {
+      if (!value) return '';
+      const date = new Date(String(value));
+      if (!Number.isNaN(date.getTime())) {
+        return date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+      }
+
+      const match = String(value).match(/(\d{4})-(\d{2})/);
+      if (match) {
+        const year = Number(match[1]);
+        const month = Number(match[2]);
+        if (month >= 1 && month <= 12) {
+          const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          return `${names[month - 1]} ${year}`;
+        }
+      }
+      return '';
+    };
+
+    const updateMetaCaption = (item) => {
+      const metadata = item?.metadata || {};
+      const monthYear = formatMonthYearFromCaptureDate(metadata.capture_date);
+      const location = [metadata.city, metadata.country].filter(Boolean).join(', ');
+      const lines = [monthYear, location].filter(Boolean);
+      if (lines.length === 0) {
+        metaCaptionEl.style.display = 'none';
+        metaCaptionEl.textContent = '';
+        return;
+      }
+      metaCaptionEl.textContent = lines.join('\n');
+      metaCaptionEl.style.display = 'block';
+    };
+
+    const updateProgressUI = (video) => {
+      if (!video || !Number.isFinite(video.duration) || video.duration <= 0) {
+        progressFillEl.style.width = '0%';
+        progressRemainingEl.textContent = '';
+        return;
+      }
+
+      const current = Math.max(0, Number(video.currentTime) || 0);
+      const duration = Number(video.duration);
+      const ratio = Math.max(0, Math.min(1, current / duration));
+      const remaining = Math.max(0, duration - current);
+      progressFillEl.style.width = `${(ratio * 100).toFixed(2)}%`;
+      progressRemainingEl.textContent = `${Math.ceil(remaining)}s remaining`;
+    };
+
     const renderInfoPanel = (item) => {
       const metadata = item?.metadata || {};
       const metadataRows = Object.keys(metadata)
@@ -469,12 +651,14 @@ $settings = [
       infoVisible = !infoVisible;
       if (infoVisible && currentItem) renderInfoPanel(currentItem);
       syncPanelVisibility();
+      noteInteraction();
     };
 
     const toggleStatsPanel = () => {
       statsVisible = !statsVisible;
       if (statsVisible && currentItem) renderStatsPanel(currentItem);
       syncPanelVisibility();
+      noteInteraction();
     };
 
     const metadataValueToString = (value) => {
@@ -522,6 +706,7 @@ $settings = [
 
       const nextFavorite = !currentItem.isFavorite;
       favoriteBtn.disabled = true;
+      noteInteraction();
       try {
         const body = new URLSearchParams();
         body.set('id', currentItem.id);
@@ -556,6 +741,46 @@ $settings = [
       } finally {
         favoriteBtn.disabled = false;
       }
+    };
+
+    const markCurrentVideoWatched = async () => {
+      if (!currentItem || !currentItem.id || currentPlaybackWatchMarked) {
+        return;
+      }
+
+      currentPlaybackWatchMarked = true;
+      try {
+        const body = new URLSearchParams();
+        body.set('id', currentItem.id);
+
+        const resp = await fetch('/watch.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          },
+          body: body.toString(),
+          cache: 'no-store',
+        });
+        const payload = await resp.json().catch(() => ({}));
+        if (!resp.ok || payload.ok !== true) {
+          throw new Error(payload.error || `HTTP ${resp.status}`);
+        }
+      } catch (err) {
+        // Allow retry on next ended/crossfade trigger if the request failed.
+        currentPlaybackWatchMarked = false;
+        console.error('Watch increment failed', err);
+      }
+    };
+
+    const togglePause = () => {
+      const v = activePlayer();
+      if (v.paused) {
+        v.play().catch(() => {});
+      } else {
+        v.pause();
+      }
+      updatePauseButton();
+      noteInteraction();
     };
 
     const fillQueue = async () => {
@@ -682,11 +907,13 @@ $settings = [
       });
       currentItem = item;
       recordSessionVideo(item);
-      titleEl.textContent = item.title;
+      currentPlaybackWatchMarked = false;
+      updateMetaCaption(item);
       updateFavoriteButton();
       if (infoVisible) renderInfoPanel(item);
       if (statsVisible) renderStatsPanel(item);
       updateStatus();
+      updateProgressUI(active);
     };
 
     const swapPlayers = () => {
@@ -695,9 +922,81 @@ $settings = [
       clearPlayer(players[outgoingIdx]);
     };
 
+    const transitionToItem = async (nextItem, reason) => {
+      const outgoing = activePlayer();
+      const incoming = hiddenPlayer();
+
+      await prepareHiddenWith(nextItem);
+
+      incoming.muted = outgoing.muted;
+      incoming.classList.add('active');
+      incoming.style.transitionDuration = '0ms';
+      incoming.style.opacity = settings.crossfadeEnabled ? '0' : '1';
+
+      await incoming.play();
+
+      if (settings.crossfadeEnabled && settings.crossfadeDurationMs > 0) {
+        const duration = settings.crossfadeDurationMs;
+        incoming.style.transitionDuration = `${duration}ms`;
+        outgoing.style.transitionDuration = `${duration}ms`;
+        requestAnimationFrame(() => {
+          incoming.style.opacity = '1';
+          outgoing.style.opacity = '0';
+        });
+        await new Promise((resolve) => setTimeout(resolve, duration));
+      } else {
+        outgoing.style.opacity = '0';
+        incoming.style.opacity = '1';
+      }
+
+      swapPlayers();
+      currentItem = nextItem;
+      recordSessionVideo(nextItem);
+      currentPlaybackWatchMarked = false;
+      updateMetaCaption(nextItem);
+      updateFavoriteButton();
+      if (infoVisible) renderInfoPanel(nextItem);
+      if (statsVisible) renderStatsPanel(nextItem);
+      updatePauseButton();
+      nextPreparedId = '';
+      setFallback('');
+    };
+
+    const goBackToPrevious = async () => {
+      if (transitionInProgress) {
+        return;
+      }
+      noteInteraction();
+
+      while (historyStack.length > 0 && currentItem && historyStack[historyStack.length - 1].id === currentItem.id) {
+        historyStack.pop();
+      }
+      const previousItem = historyStack.pop();
+      if (!previousItem) {
+        setFallback('No previous video in session history.');
+        return;
+      }
+
+      transitionInProgress = true;
+      try {
+        await transitionToItem(previousItem, 'back');
+        fillQueue();
+        maybePrepareNext();
+      } catch (err) {
+        console.error('Back transition failed', err);
+        setFallback('Could not go back to previous video.');
+      } finally {
+        transitionInProgress = false;
+      }
+    };
+
     const transitionToNext = async (reason) => {
       if (transitionInProgress) {
         return;
+      }
+      noteInteraction();
+      if (reason === 'ended' || reason === 'near_end_crossfade') {
+        await markCurrentVideoWatched();
       }
       if (reason === 'manual_skip' || reason === 'arrow_skip') {
         sessionSkips += 1;
@@ -719,42 +1018,10 @@ $settings = [
 
         const nextItem = queue.shift();
         updateStatus();
-
-        await prepareHiddenWith(nextItem);
-
-        const outgoing = activePlayer();
-        const incoming = hiddenPlayer();
-
-        incoming.muted = outgoing.muted;
-        incoming.classList.add('active');
-        incoming.style.transitionDuration = '0ms';
-        incoming.style.opacity = settings.crossfadeEnabled ? '0' : '1';
-
-        await incoming.play();
-
-        if (settings.crossfadeEnabled && settings.crossfadeDurationMs > 0) {
-          const duration = settings.crossfadeDurationMs;
-          incoming.style.transitionDuration = `${duration}ms`;
-          outgoing.style.transitionDuration = `${duration}ms`;
-          requestAnimationFrame(() => {
-            incoming.style.opacity = '1';
-            outgoing.style.opacity = '0';
-          });
-          await new Promise((resolve) => setTimeout(resolve, duration));
-        } else {
-          outgoing.style.opacity = '0';
-          incoming.style.opacity = '1';
+        if (currentItem) {
+          historyStack.push(currentItem);
         }
-
-        swapPlayers();
-        currentItem = nextItem;
-        recordSessionVideo(nextItem);
-        titleEl.textContent = nextItem.title;
-        updateFavoriteButton();
-        if (infoVisible) renderInfoPanel(nextItem);
-        if (statsVisible) renderStatsPanel(nextItem);
-        nextPreparedId = '';
-        setFallback('');
+        await transitionToItem(nextItem, reason);
 
         fillQueue();
         maybePrepareNext();
@@ -771,12 +1038,16 @@ $settings = [
     };
 
     const updateStatus = () => {
+      if (!statusEl) {
+        return;
+      }
       const mode = settings.crossfadeEnabled ? `fade ${settings.crossfadeDurationMs}ms` : 'cut';
       statusEl.textContent = `Queue ${queue.length}/${settings.queueTargetSize} · ${mode}`;
     };
 
     const onActiveTimeUpdate = () => {
       const video = activePlayer();
+      updateProgressUI(video);
       if (!isFinite(video.duration) || video.duration <= 0) {
         return;
       }
@@ -807,11 +1078,25 @@ $settings = [
             transitionToNext('active_error');
           }
         });
+        video.addEventListener('play', () => {
+          if (idx === activeIndex) updatePauseButton();
+        });
+        video.addEventListener('pause', () => {
+          if (idx === activeIndex) updatePauseButton();
+        });
       });
     };
 
+    backBtn.addEventListener('click', () => {
+      goBackToPrevious();
+    });
+
     skipBtn.addEventListener('click', () => {
       transitionToNext('manual_skip');
+    });
+
+    pauseBtn.addEventListener('click', () => {
+      togglePause();
     });
 
     favoriteBtn.addEventListener('click', () => {
@@ -824,6 +1109,7 @@ $settings = [
       players[1].muted = nextMuted;
       saveMutedPreference(nextMuted);
       updateMuteButton();
+      noteInteraction();
     });
 
     infoBtn.addEventListener('click', () => {
@@ -836,18 +1122,22 @@ $settings = [
 
     fullscreenBtn.addEventListener('click', () => {
       toggleFullscreen();
+      noteInteraction();
     });
 
     window.addEventListener('keydown', (event) => {
+      noteInteraction();
       if (event.code === 'Space') {
         event.preventDefault();
-        const v = activePlayer();
-        if (v.paused) v.play().catch(() => {});
-        else v.pause();
+        togglePause();
       }
       if (event.key === 'ArrowRight') {
         event.preventDefault();
         transitionToNext('arrow_skip');
+      }
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        goBackToPrevious();
       }
       if (event.key.toLowerCase() === 'f') {
         event.preventDefault();
@@ -863,12 +1153,19 @@ $settings = [
       }
     });
 
+    ['pointerdown', 'pointermove', 'touchstart', 'touchmove', 'mousemove', 'wheel', 'click'].forEach((eventName) => {
+      window.addEventListener(eventName, noteInteraction, { passive: true });
+    });
+
     const bootstrap = async () => {
       bindPlayerEvents();
       updateMuteButton();
+      updatePauseButton();
       updateFullscreenButton();
       updateStatus();
       syncPanelVisibility();
+      showControls();
+      scheduleControlsHide();
 
       document.addEventListener('fullscreenchange', updateFullscreenButton);
       document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
