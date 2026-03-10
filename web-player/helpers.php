@@ -681,6 +681,24 @@ function topCodecs(PDO $pdo, int $limit = 5): array
     return is_array($rows) ? $rows : [];
 }
 
+function normalizePlaybackOrder(string $order): string
+{
+    $value = trim(strtolower($order));
+    if ($value === 'sequential') {
+        return 'sequential_oldest';
+    }
+    if ($value === 'sequential_oldest' || $value === 'sequential_newest') {
+        return $value;
+    }
+    return 'random';
+}
+
+function isSequentialPlaybackOrder(string $order): bool
+{
+    $normalized = normalizePlaybackOrder($order);
+    return $normalized === 'sequential_oldest' || $normalized === 'sequential_newest';
+}
+
 function selectRandomVideo(PDO $pdo, float $minDuration, bool $onlyFavorites = false): ?array
 {
     if ($onlyFavorites) {
@@ -703,6 +721,81 @@ function selectRandomVideo(PDO $pdo, float $minDuration, bool $onlyFavorites = f
     $stmt->execute([':min_duration' => $minDuration]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     return is_array($row) ? $row : null;
+}
+
+function selectSequentialVideo(PDO $pdo, ?string $afterAssetId, bool $newestFirst, float $minDuration, bool $onlyFavorites = false): ?array
+{
+    $columns = 'asset_id, duration, duration_raw, is_favorite, capture_date, camera_make, camera_model, camera_lens, video_codec, video_fps, video_width, video_height, video_bitrate, file_name, original_path, city, country, latitude, longitude, faces_count, watched_count';
+    $baseWhere = $onlyFavorites
+        ? 'duration >= :min_duration AND is_favorite = 1'
+        : 'duration >= :min_duration';
+    $sortExpr = "CASE WHEN COALESCE(capture_date, '') = '' THEN 1 ELSE 0 END";
+    $compareDate = $newestFirst ? '<' : '>';
+    $compareBucket = $newestFirst ? '<' : '>';
+    $orderDirection = $newestFirst ? 'DESC' : 'ASC';
+
+    $anchor = null;
+    if (is_string($afterAssetId) && trim($afterAssetId) !== '') {
+        $anchorStmt = $pdo->prepare(
+            "SELECT
+                asset_id,
+                COALESCE(capture_date, '') AS capture_date,
+                {$sortExpr} AS empty_date_bucket
+             FROM videos
+             WHERE asset_id = :asset_id
+             LIMIT 1"
+        );
+        $anchorStmt->execute([':asset_id' => trim($afterAssetId)]);
+        $anchorRow = $anchorStmt->fetch(PDO::FETCH_ASSOC);
+        if (is_array($anchorRow)) {
+            $anchor = [
+                'asset_id' => (string) ($anchorRow['asset_id'] ?? ''),
+                'capture_date' => (string) ($anchorRow['capture_date'] ?? ''),
+                'empty_date_bucket' => (int) ($anchorRow['empty_date_bucket'] ?? 1),
+            ];
+        }
+    }
+
+    if ($anchor !== null && $anchor['asset_id'] !== '') {
+        $stmt = $pdo->prepare(
+            "SELECT {$columns}
+             FROM videos
+             WHERE {$baseWhere}
+               AND (
+                 {$sortExpr} {$compareBucket} :anchor_bucket
+                 OR (
+                   {$sortExpr} = :anchor_bucket
+                   AND (
+                     COALESCE(capture_date, '') {$compareDate} :anchor_capture_date
+                     OR (COALESCE(capture_date, '') = :anchor_capture_date AND asset_id {$compareDate} :anchor_asset_id)
+                   )
+                 )
+               )
+             ORDER BY {$sortExpr} {$orderDirection}, COALESCE(capture_date, '') {$orderDirection}, asset_id {$orderDirection}
+             LIMIT 1"
+        );
+        $stmt->execute([
+            ':min_duration' => $minDuration,
+            ':anchor_bucket' => $anchor['empty_date_bucket'],
+            ':anchor_capture_date' => $anchor['capture_date'],
+            ':anchor_asset_id' => $anchor['asset_id'],
+        ]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (is_array($row)) {
+            return $row;
+        }
+    }
+
+    $fallbackStmt = $pdo->prepare(
+        "SELECT {$columns}
+         FROM videos
+         WHERE {$baseWhere}
+         ORDER BY {$sortExpr} {$orderDirection}, COALESCE(capture_date, '') {$orderDirection}, asset_id {$orderDirection}
+         LIMIT 1"
+    );
+    $fallbackStmt->execute([':min_duration' => $minDuration]);
+    $fallbackRow = $fallbackStmt->fetch(PDO::FETCH_ASSOC);
+    return is_array($fallbackRow) ? $fallbackRow : null;
 }
 
 function jsString(string $value): string
@@ -748,7 +841,7 @@ function finishSyncStatusOutput(bool $success): void
 {
     $msg = $success ? 'Sync complete. Reloading slideshow...' : 'Sync finished with errors. Reloading slideshow...';
     echo '<script>addLog(' . jsString($msg) . ');';
-    echo 'setTimeout(()=>{const p=new URLSearchParams(window.location.search);const next=new URL(window.location.origin+window.location.pathname);if(p.get("favOnly")==="1"){next.searchParams.set("favOnly","1");}window.location.href=next.toString();},1200);';
+    echo 'setTimeout(()=>{const p=new URLSearchParams(window.location.search);const next=new URL(window.location.origin+window.location.pathname);if(p.get("favOnly")==="1"){next.searchParams.set("favOnly","1");}const order=(p.get("playbackOrder")||"").trim();if(order!==""){next.searchParams.set("playbackOrder",order);}window.location.href=next.toString();},1200);';
     echo '</script></div></body></html>';
     @flush();
 }

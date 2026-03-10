@@ -20,6 +20,14 @@ $onlyFavorites = $defaultOnlyFavorites;
 if (isset($_GET['favOnly'])) {
     $onlyFavorites = ((string) $_GET['favOnly']) === '1';
 }
+$playbackOrder = normalizePlaybackOrder((string) (getenv('PLAYBACK_ORDER') ?: 'random'));
+if (isset($_GET['playbackOrder'])) {
+    $playbackOrder = normalizePlaybackOrder((string) $_GET['playbackOrder']);
+}
+$afterAssetId = null;
+if (isset($_GET['afterAssetId']) && is_string($_GET['afterAssetId']) && trim($_GET['afterAssetId']) !== '') {
+    $afterAssetId = trim((string) $_GET['afterAssetId']);
+}
 $requestId = bin2hex(random_bytes(6));
 
 ini_set('log_errors', '1');
@@ -52,6 +60,8 @@ kioskLog('api', 'Incoming slideshow request', [
     'batch_size' => $batchSize,
     'use_sqlite' => $useSqlite,
     'only_favorites' => $onlyFavorites,
+    'playback_order' => $playbackOrder,
+    'after_asset_id' => $afterAssetId,
     'show_qr_code' => $showQrCode,
     'sqlite_path' => $sqlitePath,
     'remote_addr' => $_SERVER['REMOTE_ADDR'] ?? '',
@@ -112,10 +122,21 @@ if ($useSqlite && extension_loaded('pdo_sqlite')) {
             $syncStats = syncVideosFromImmich($pdo, $immichUrl, $apiKey, $requestId, $syncPageSize, $syncMaxPages);
         }
 
-        $selected = selectRandomVideo($pdo, $minDuration, $onlyFavorites);
+        if (isSequentialPlaybackOrder($playbackOrder)) {
+            $selected = selectSequentialVideo(
+                $pdo,
+                $afterAssetId,
+                $playbackOrder === 'sequential_newest',
+                $minDuration,
+                $onlyFavorites
+            );
+        } else {
+            $selected = selectRandomVideo($pdo, $minDuration, $onlyFavorites);
+        }
         $dbStats = [
             'sqlite_enabled' => true,
             'sqlite_path' => $sqlitePath,
+            'playback_order' => $playbackOrder,
             'db_total_videos' => countVideos($pdo),
             'db_qualifying_videos' => countQualifyingVideos($pdo, $minDuration, $onlyFavorites),
             'db_favorite_videos' => countFavoriteVideos($pdo),
@@ -130,7 +151,17 @@ if ($useSqlite && extension_loaded('pdo_sqlite')) {
 
         if ($selected === null && !$forcedSync) {
             $syncStats = syncVideosFromImmich($pdo, $immichUrl, $apiKey, $requestId, $syncPageSize, $syncMaxPages);
-            $selected = selectRandomVideo($pdo, $minDuration, $onlyFavorites);
+            if (isSequentialPlaybackOrder($playbackOrder)) {
+                $selected = selectSequentialVideo(
+                    $pdo,
+                    $afterAssetId,
+                    $playbackOrder === 'sequential_newest',
+                    $minDuration,
+                    $onlyFavorites
+                );
+            } else {
+                $selected = selectRandomVideo($pdo, $minDuration, $onlyFavorites);
+            }
             $dbStats['db_total_videos'] = countVideos($pdo);
             $dbStats['db_qualifying_videos'] = countQualifyingVideos($pdo, $minDuration, $onlyFavorites);
             $dbStats['db_favorite_videos'] = countFavoriteVideos($pdo);
@@ -166,6 +197,11 @@ if ($useSqlite && extension_loaded('pdo_sqlite')) {
 }
 
 if (!$useSqlite) {
+    $effectivePlaybackOrder = $playbackOrder;
+    if (isSequentialPlaybackOrder($playbackOrder)) {
+        $effectivePlaybackOrder = 'random';
+    }
+    $playbackOrder = $effectivePlaybackOrder;
     $maxAttempts = DEFAULT_LIVE_SELECTION_MAX_ATTEMPTS;
     $seenAssetIds = [];
     for ($i = 0; $i < $maxAttempts; $i++) {
@@ -223,6 +259,7 @@ if ($selected === null) {
         'request_id' => $requestId,
         'min_duration' => $minDuration,
         'only_favorites' => $onlyFavorites,
+        'playback_order' => $playbackOrder,
         'use_sqlite' => $useSqlite,
         'sync_stats' => $syncStats,
         'db_stats' => $dbStats,
@@ -296,6 +333,7 @@ $metadataPayload = [
 $statsPayload = [
     'use_sqlite' => $useSqlite ? 'true' : 'false',
     'only_favorites' => $onlyFavorites ? 'true' : 'false',
+    'playback_order' => $playbackOrder,
     'min_duration' => (string) $minDuration,
     'db_total_videos' => isset($dbStats['db_total_videos']) ? (string) $dbStats['db_total_videos'] : '',
     'db_qualifying_videos' => isset($dbStats['db_qualifying_videos']) ? (string) $dbStats['db_qualifying_videos'] : '',
@@ -323,6 +361,8 @@ if ($debug) {
         'use_sqlite' => $useSqlite,
         'sqlite_path' => $sqlitePath,
         'min_duration' => $minDuration,
+        'playback_order' => $playbackOrder,
+        'after_asset_id' => $afterAssetId,
         'sqlite_diagnostics' => $sqliteDiagnostics,
         'sync_stats' => $syncStats,
         'attempt_trace' => $attemptTrace,

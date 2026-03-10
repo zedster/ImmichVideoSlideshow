@@ -36,6 +36,7 @@ $settings = [
     'preloadSecondsBeforeEnd' => max(0.25, envFloat('PRELOAD_SECONDS_BEFORE_END', 4.0)),
     'queueTargetSize' => max(1, min(5, envInt('QUEUE_TARGET_SIZE', 2))),
     'debugEnabled' => envFlag('DEBUG', false),
+    'playbackOrder' => (string) (getenv('PLAYBACK_ORDER') ?: 'random'),
 ];
 ?>
 <!doctype html>
@@ -332,6 +333,7 @@ $settings = [
     <h3>Admin</h3>
     <div class="panel-row">Manage current video and local cache sync.</div>
     <div class="admin-actions">
+      <button id="adminPlaybackOrderBtn" class="admin-btn" type="button">Playback Order</button>
       <button id="adminFavOnlyBtn" class="admin-btn" type="button">Toggle Favorites Filter</button>
       <button id="adminHideBtn" class="admin-btn danger" type="button">Hide Forever Current Video</button>
       <button id="adminResyncBtn" class="admin-btn" type="button">Force Resync SQLite from Immich</button>
@@ -372,6 +374,7 @@ $settings = [
     const progressFillEl = document.getElementById('progressFill');
     const progressRemainingEl = document.getElementById('progressRemaining');
     const adminPanelEl = document.getElementById('adminPanel');
+    const adminPlaybackOrderBtn = document.getElementById('adminPlaybackOrderBtn');
     const adminFavOnlyBtn = document.getElementById('adminFavOnlyBtn');
     const adminHideBtn = document.getElementById('adminHideBtn');
     const adminResyncBtn = document.getElementById('adminResyncBtn');
@@ -409,6 +412,31 @@ $settings = [
     const sessionUniqueIds = new Set();
     const failedAssetMap = new Map();
     const FAILED_ASSET_COOLDOWN_MS = 5 * 60 * 1000;
+    const PLAYBACK_ORDER_VALUES = ['random', 'sequential_oldest', 'sequential_newest'];
+
+    const normalizePlaybackOrder = (value) => {
+      const raw = String(value || '').trim().toLowerCase();
+      if (raw === 'sequential') return 'sequential_oldest';
+      if (PLAYBACK_ORDER_VALUES.includes(raw)) return raw;
+      return 'random';
+    };
+
+    const playbackOrderLabel = (value) => {
+      const order = normalizePlaybackOrder(value);
+      if (order === 'sequential_oldest') return 'Sequential Oldest -> Newest';
+      if (order === 'sequential_newest') return 'Sequential Newest -> Oldest';
+      return 'Random';
+    };
+
+    const getPlaybackOrder = () => {
+      const current = new URL(window.location.href);
+      return normalizePlaybackOrder(current.searchParams.get('playbackOrder') || settings.playbackOrder || 'random');
+    };
+
+    const isSequentialMode = () => {
+      const order = getPlaybackOrder();
+      return order === 'sequential_oldest' || order === 'sequential_newest';
+    };
 
     const readMutedPreference = () => {
       try {
@@ -527,12 +555,17 @@ $settings = [
       fallbackEl.style.display = text ? 'block' : 'none';
     };
 
-    const apiNextUrl = () => {
+    const apiNextUrl = (afterAssetId = '') => {
       const url = new URL('/api.php', window.location.origin);
       url.searchParams.set('next', '1');
       const current = new URL(window.location.href);
       if (current.searchParams.get('favOnly') === '1') {
         url.searchParams.set('favOnly', '1');
+      }
+      const playbackOrder = normalizePlaybackOrder(current.searchParams.get('playbackOrder') || settings.playbackOrder || 'random');
+      url.searchParams.set('playbackOrder', playbackOrder);
+      if (afterAssetId) {
+        url.searchParams.set('afterAssetId', String(afterAssetId));
       }
       url.searchParams.set('t', String(Date.now()));
       return url.toString();
@@ -769,6 +802,7 @@ $settings = [
         ${panelRow('Min Duration', stats.min_duration)}
         ${panelRow('SQLite', stats.use_sqlite)}
         ${panelRow('Favorites Only', stats.only_favorites)}
+        ${panelRow('Playback Order', stats.playback_order || playbackOrderLabel(getPlaybackOrder()))}
         ${panelRow('Total Videos', stats.db_total_videos)}
         ${panelRow('Videos Matching Filter', stats.db_qualifying_videos)}
         ${panelRow('Favorite Videos', stats.db_favorite_videos)}
@@ -835,8 +869,8 @@ $settings = [
       sessionUniqueIds.add(item.id);
     };
 
-    const fetchNextItem = async () => {
-      const resp = await fetch(apiNextUrl(), { cache: 'no-store' });
+    const fetchNextItem = async (afterAssetId = '') => {
+      const resp = await fetch(apiNextUrl(afterAssetId), { cache: 'no-store' });
       const body = await resp.json().catch(() => ({}));
       if (!resp.ok || body.ok !== true) {
         const message = body.error || `HTTP ${resp.status}`;
@@ -1037,9 +1071,47 @@ $settings = [
     };
 
     const fillQueue = async () => {
+      if (isSequentialMode()) {
+        if (inflightFetches > 0) {
+          return;
+        }
+        const targetSize = settings.queueTargetSize;
+        let attempts = 0;
+        while ((queue.length + inflightFetches) < targetSize && attempts < (targetSize * 3)) {
+          attempts += 1;
+          inflightFetches++;
+          try {
+            const afterAssetId = queue.length > 0
+              ? queue[queue.length - 1].id
+              : (currentItem?.id || '');
+            const item = await fetchNextItem(afterAssetId);
+            if (currentItem && item.id === currentItem.id) {
+              continue;
+            }
+            if (queue.some((q) => q.id === item.id)) {
+              continue;
+            }
+            if (isAssetCoolingDown(item.id)) {
+              continue;
+            }
+            queue.push(item);
+            updateStatus();
+            maybePrepareNext();
+            setFallback('');
+          } catch (err) {
+            console.error('Queue fetch failed', err);
+            setFallback('Could not fetch next video. Retrying…');
+          } finally {
+            inflightFetches--;
+            updateStatus();
+          }
+        }
+        return;
+      }
+
       while ((queue.length + inflightFetches) < settings.queueTargetSize) {
         inflightFetches++;
-        fetchNextItem()
+        fetchNextItem('')
           .then((item) => {
             if (currentItem && item.id === currentItem.id) {
               return;
@@ -1362,8 +1434,9 @@ $settings = [
       if (!statusEl) {
         return;
       }
+      const order = playbackOrderLabel(getPlaybackOrder());
       const mode = settings.crossfadeEnabled ? `fade ${settings.crossfadeDurationMs}ms` : 'cut';
-      statusEl.textContent = `Queue ${queue.length}/${settings.queueTargetSize} · ${mode}`;
+      statusEl.textContent = `Queue ${queue.length}/${settings.queueTargetSize} · ${order} · ${mode}`;
     };
 
     const onActiveTimeUpdate = () => {
@@ -1432,6 +1505,10 @@ $settings = [
       toggleFavOnlyMode();
     });
 
+    adminPlaybackOrderBtn.addEventListener('click', () => {
+      cyclePlaybackOrder();
+    });
+
     adminHideBtn.addEventListener('click', () => {
       hideCurrentVideoForever();
     });
@@ -1492,6 +1569,10 @@ $settings = [
         event.preventDefault();
         toggleAdminPanel();
       }
+      if (event.key.toLowerCase() === 'o') {
+        event.preventDefault();
+        cyclePlaybackOrder();
+      }
     });
 
     ['pointerdown', 'pointermove', 'touchstart', 'touchmove', 'mousemove', 'wheel', 'click'].forEach((eventName) => {
@@ -1504,6 +1585,7 @@ $settings = [
       updatePauseButton();
       updateFullscreenButton();
       updateStatus();
+      updateAdminPlaybackOrderButton();
       updateAdminFavOnlyButton();
       syncPanelVisibility();
       showControls();
@@ -1513,7 +1595,7 @@ $settings = [
       document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
 
       try {
-        const first = await fetchNextItem();
+        const first = await fetchNextItem(currentItem?.id || '');
         await playOnActivePlayer(first);
         fillQueue();
       } catch (err) {
@@ -1529,7 +1611,7 @@ $settings = [
       // If startup failed, retry until recovered.
       window.setInterval(() => {
         if (!currentItem && !transitionInProgress) {
-          fetchNextItem()
+          fetchNextItem(currentItem?.id || '')
             .then((item) => playOnActivePlayer(item))
             .then(() => {
               setFallback('');
