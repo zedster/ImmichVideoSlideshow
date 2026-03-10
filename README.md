@@ -17,6 +17,23 @@ Demo: https://bananasystems.co.uk/immich-video-slideshow
 - Designed for large libraries
 - Tested with 26k videos
 
+## Web vs tvOS Feature Comparison
+
+| Capability | Web Player (`web-player`) | tvOS App (`tvos-app`) |
+|---|---|---|
+| Platform | Browser (desktop/mobile/kiosk) | Native Apple TV (SwiftUI) |
+| Core playback | Continuous shuffled playback | Continuous playback with additional native flow control |
+| Minimum duration filter | Yes | Yes |
+| Favorites mode | Yes (runtime toggle in Admin panel) | Yes (config + in-player control) |
+| Hide forever | Yes (archives in Immich via `hide.php`, with confirmation) | Yes (archive/hide flow in native client) |
+| Watch count increment | Yes (`watch.php` from playback transitions) | Yes (native/local watch tracking) |
+| Info overlay | Full metadata + watched count + QR link | Rich native info fields |
+| Stats overlay | Session + SQLite stats in player | Extended library/session stats in native UI |
+| Playback controls | Back, skip, pause/play, mute, favorite, fullscreen | Apple TV remote-optimized controls |
+| Admin controls | Force resync, favorites-only mode toggle, hide action | Native settings and sync controls |
+| Crossfade/preload | Yes (web transition pipeline) | Yes (native playback tuning options) |
+| Deployment | PHP web server or Docker | Xcode build/run on Apple TV |
+
 ## Project Structure
 
 - `tvos-app/` - Native Apple TV app (Swift/tvOS)

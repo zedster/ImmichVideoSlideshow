@@ -194,6 +194,30 @@ $settings = [
       word-break: break-word;
     }
 
+    .admin-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .admin-btn {
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      color: #fff;
+      background: rgba(0, 0, 0, 0.6);
+      border-radius: 6px;
+      min-height: 38px;
+      padding: 8px 10px;
+      font-size: 13px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .admin-btn.danger {
+      border-color: rgba(255, 120, 120, 0.7);
+      background: rgba(60, 0, 0, 0.65);
+    }
+
     .meta-caption {
       position: fixed;
       left: calc(24px + env(safe-area-inset-left));
@@ -304,6 +328,15 @@ $settings = [
     </div>
     <div id="progressRemaining" class="progress-remaining"></div>
   </div>
+  <div id="adminPanel" class="panel">
+    <h3>Admin</h3>
+    <div class="panel-row">Manage current video and local cache sync.</div>
+    <div class="admin-actions">
+      <button id="adminFavOnlyBtn" class="admin-btn" type="button">Toggle Favorites Filter</button>
+      <button id="adminHideBtn" class="admin-btn danger" type="button">Hide Forever Current Video</button>
+      <button id="adminResyncBtn" class="admin-btn" type="button">Force Resync SQLite from Immich</button>
+    </div>
+  </div>
   <div id="infoPanel" class="panel"></div>
   <div id="statsPanel" class="panel"></div>
 
@@ -313,7 +346,7 @@ $settings = [
       <button id="skipBtn" class="btn" type="button" title="Skip">⏭</button>
       <button id="pauseBtn" class="btn" type="button" title="Pause or play (space)">⏸</button>
       <button id="favoriteBtn" class="btn" type="button" title="Toggle favorite (f)">♡</button>
-      <button id="hideBtn" class="btn" type="button" title="Hide forever">🗄</button>
+      <button id="adminBtn" class="btn" type="button" title="Admin" aria-pressed="false">⚙</button>
       <button id="muteBtn" class="btn" type="button" title="Mute or unmute">🔇</button>
       <button id="infoBtn" class="btn" type="button" title="Video info (i)" aria-pressed="false">ℹ</button>
       <button id="statsBtn" class="btn" type="button" title="Library stats (s)" aria-pressed="false">📊</button>
@@ -338,13 +371,17 @@ $settings = [
     const progressWrapEl = document.getElementById('progressWrap');
     const progressFillEl = document.getElementById('progressFill');
     const progressRemainingEl = document.getElementById('progressRemaining');
+    const adminPanelEl = document.getElementById('adminPanel');
+    const adminFavOnlyBtn = document.getElementById('adminFavOnlyBtn');
+    const adminHideBtn = document.getElementById('adminHideBtn');
+    const adminResyncBtn = document.getElementById('adminResyncBtn');
     const infoPanelEl = document.getElementById('infoPanel');
     const statsPanelEl = document.getElementById('statsPanel');
     const backBtn = document.getElementById('backBtn');
     const skipBtn = document.getElementById('skipBtn');
     const pauseBtn = document.getElementById('pauseBtn');
     const favoriteBtn = document.getElementById('favoriteBtn');
-    const hideBtn = document.getElementById('hideBtn');
+    const adminBtn = document.getElementById('adminBtn');
     const muteBtn = document.getElementById('muteBtn');
     const infoBtn = document.getElementById('infoBtn');
     const statsBtn = document.getElementById('statsBtn');
@@ -359,12 +396,14 @@ $settings = [
     let preparingNext = false;
     let nextPreparedId = '';
     let currentItem = null;
+    let adminVisible = false;
     let infoVisible = false;
     let statsVisible = false;
     let historyStack = [];
     let sessionVideosStarted = 0;
     let sessionSkips = 0;
     let hideUpdateInProgress = false;
+    let resyncInProgress = false;
     let currentPlaybackWatchMarked = false;
     let controlsHideTimer = null;
     const sessionUniqueIds = new Set();
@@ -497,6 +536,51 @@ $settings = [
       }
       url.searchParams.set('t', String(Date.now()));
       return url.toString();
+    };
+
+    const isFavOnlyMode = () => {
+      const current = new URL(window.location.href);
+      return current.searchParams.get('favOnly') === '1';
+    };
+
+    const updateAdminFavOnlyButton = () => {
+      if (isFavOnlyMode()) {
+        adminFavOnlyBtn.textContent = 'Mode: Favorites Only (Show All)';
+      } else {
+        adminFavOnlyBtn.textContent = 'Mode: All Videos (Favorites Only)';
+      }
+    };
+
+    const setFavOnlyMode = (enabled) => {
+      const current = new URL(window.location.href);
+      if (enabled) {
+        current.searchParams.set('favOnly', '1');
+      } else {
+        current.searchParams.delete('favOnly');
+      }
+      window.history.replaceState({}, '', current.toString());
+      updateAdminFavOnlyButton();
+    };
+
+    const toggleFavOnlyMode = () => {
+      noteInteraction();
+      const enableFavoritesOnly = !isFavOnlyMode();
+      setFavOnlyMode(enableFavoritesOnly);
+
+      queue = [];
+      nextPreparedId = '';
+      failedAssetMap.clear();
+      clearPlayer(hiddenPlayer());
+      fillQueue();
+      maybePrepareNext();
+
+      setFallback(enableFavoritesOnly ? 'Favorites-only mode enabled.' : 'Favorites-only mode disabled.');
+      window.setTimeout(() => {
+        const text = fallbackEl.textContent || '';
+        if (text.startsWith('Favorites-only mode')) {
+          setFallback('');
+        }
+      }, 1400);
     };
 
     const normalizeItem = (payload) => {
@@ -655,6 +739,28 @@ $settings = [
 
     const renderStatsPanel = (item) => {
       const stats = item?.stats || {};
+      const parseTopList = (raw, nameKey) => {
+        try {
+          const parsed = JSON.parse(String(raw || '[]'));
+          if (!Array.isArray(parsed)) return '';
+          return parsed
+            .filter((row) => row && typeof row === 'object')
+            .map((row) => {
+              const name = String(row[nameKey] ?? '').trim() || 'Unknown';
+              const count = Number.parseInt(String(row.cnt ?? '0'), 10) || 0;
+              return `${name} (${count})`;
+            })
+            .join(', ');
+        } catch (_e) {
+          return '';
+        }
+      };
+      const topCameras = parseTopList(stats.db_top_cameras, 'camera_name');
+      const topCodecs = parseTopList(stats.db_top_codecs, 'codec_name');
+      const topResolutions = parseTopList(stats.db_top_resolutions, 'resolution_name');
+      const topBitrates = parseTopList(stats.db_top_bitrates, 'bitrate_name');
+      const topLocations = parseTopList(stats.db_top_locations, 'location_name');
+
       statsPanelEl.innerHTML = `
         <h3>Library Stats</h3>
         ${panelRow('Session Videos Started', sessionVideosStarted)}
@@ -667,15 +773,28 @@ $settings = [
         ${panelRow('Videos Matching Filter', stats.db_qualifying_videos)}
         ${panelRow('Favorite Videos', stats.db_favorite_videos)}
         ${panelRow('Total Watched', stats.db_total_watched)}
+        ${panelRow('Top Cameras', topCameras)}
+        ${panelRow('Top Codecs', topCodecs)}
+        ${panelRow('Top Resolutions', topResolutions)}
+        ${panelRow('Top Bitrates', topBitrates)}
+        ${panelRow('Top Locations', topLocations)}
         ${panelRow('Last Sync', stats.last_sync_at)}
       `;
     };
 
     const syncPanelVisibility = () => {
+      adminPanelEl.style.display = adminVisible ? 'block' : 'none';
       infoPanelEl.style.display = infoVisible ? 'block' : 'none';
       statsPanelEl.style.display = statsVisible ? 'block' : 'none';
+      adminBtn.setAttribute('aria-pressed', adminVisible ? 'true' : 'false');
       infoBtn.setAttribute('aria-pressed', infoVisible ? 'true' : 'false');
       statsBtn.setAttribute('aria-pressed', statsVisible ? 'true' : 'false');
+    };
+
+    const toggleAdminPanel = () => {
+      adminVisible = !adminVisible;
+      syncPanelVisibility();
+      noteInteraction();
     };
 
     const toggleInfoPanel = () => {
@@ -788,7 +907,7 @@ $settings = [
       }
 
       hideUpdateInProgress = true;
-      hideBtn.disabled = true;
+      adminHideBtn.disabled = true;
       const targetId = currentItem.id;
       try {
         const body = new URLSearchParams();
@@ -817,7 +936,59 @@ $settings = [
         setFallback('Hide forever failed.');
       } finally {
         hideUpdateInProgress = false;
-        hideBtn.disabled = false;
+        adminHideBtn.disabled = false;
+      }
+    };
+
+    const forceResyncFromImmich = async () => {
+      if (resyncInProgress) {
+        return;
+      }
+
+      noteInteraction();
+      const confirmed = window.confirm(
+        'Force resync SQLite from Immich now? This may take a while on large libraries.'
+      );
+      if (!confirmed) {
+        return;
+      }
+
+      resyncInProgress = true;
+      adminResyncBtn.disabled = true;
+      try {
+        const url = new URL('/api.php', window.location.origin);
+        url.searchParams.set('next', '1');
+        url.searchParams.set('sync', '1');
+        url.searchParams.set('t', String(Date.now()));
+
+        const resp = await fetch(url.toString(), {
+          method: 'GET',
+          cache: 'no-store',
+        });
+        const payload = await resp.json().catch(() => ({}));
+        if (!resp.ok || payload.ok !== true) {
+          throw new Error(payload.error || `HTTP ${resp.status}`);
+        }
+
+        failedAssetMap.clear();
+        fillQueue();
+        const rows = payload?.debug?.sync_stats?.rows_upserted;
+        if (Number.isFinite(rows)) {
+          setFallback(`Resync complete: +${rows} rows`);
+        } else {
+          setFallback('Resync complete.');
+        }
+        window.setTimeout(() => {
+          if ((fallbackEl.textContent || '').startsWith('Resync complete')) {
+            setFallback('');
+          }
+        }, 2000);
+      } catch (err) {
+        console.error('Resync failed', err);
+        setFallback('Force resync failed.');
+      } finally {
+        resyncInProgress = false;
+        adminResyncBtn.disabled = false;
       }
     };
 
@@ -1253,8 +1424,20 @@ $settings = [
       toggleFavorite();
     });
 
-    hideBtn.addEventListener('click', () => {
+    adminBtn.addEventListener('click', () => {
+      toggleAdminPanel();
+    });
+
+    adminFavOnlyBtn.addEventListener('click', () => {
+      toggleFavOnlyMode();
+    });
+
+    adminHideBtn.addEventListener('click', () => {
       hideCurrentVideoForever();
+    });
+
+    adminResyncBtn.addEventListener('click', () => {
+      forceResyncFromImmich();
     });
 
     muteBtn.addEventListener('click', () => {
@@ -1305,6 +1488,10 @@ $settings = [
         event.preventDefault();
         toggleStatsPanel();
       }
+      if (event.key.toLowerCase() === 'a') {
+        event.preventDefault();
+        toggleAdminPanel();
+      }
     });
 
     ['pointerdown', 'pointermove', 'touchstart', 'touchmove', 'mousemove', 'wheel', 'click'].forEach((eventName) => {
@@ -1317,6 +1504,7 @@ $settings = [
       updatePauseButton();
       updateFullscreenButton();
       updateStatus();
+      updateAdminFavOnlyButton();
       syncPanelVisibility();
       showControls();
       scheduleControlsHide();

@@ -34,6 +34,7 @@ const SCHEMA_MIGRATION_002_CAPTURE_DATE = 2;
 const SCHEMA_MIGRATION_003_WATCHED_COUNT = 3;
 const SCHEMA_MIGRATION_004_IS_FAVORITE = 4;
 const SCHEMA_MIGRATION_005_CAMERA_COLUMNS = 5;
+const SCHEMA_MIGRATION_006_VIDEO_BITRATE = 6;
 
 function envFlag(string $name, bool $default = false): bool
 {
@@ -306,6 +307,14 @@ function normalizeVideoItem(array $item): ?array
         }
     }
 
+    $videoBitrate = null;
+    foreach (['bitrate', 'bitRate', 'avgBitrate', 'videoBitrate'] as $k) {
+        if (isset($exif[$k]) && is_numeric($exif[$k])) {
+            $videoBitrate = (int) $exif[$k];
+            break;
+        }
+    }
+
     return [
         'asset_id' => $id,
         'duration' => $duration,
@@ -319,6 +328,7 @@ function normalizeVideoItem(array $item): ?array
         'video_fps' => $videoFps,
         'video_width' => $videoWidth,
         'video_height' => $videoHeight,
+        'video_bitrate' => $videoBitrate,
         'file_name' => isset($item['originalFileName']) && is_string($item['originalFileName']) ? $item['originalFileName'] : '',
         'original_path' => isset($item['originalPath']) && is_string($item['originalPath']) ? $item['originalPath'] : '',
         'city' => $city,
@@ -439,6 +449,7 @@ function initSchema(PDO $pdo): void
             video_fps REAL,
             video_width INTEGER,
             video_height INTEGER,
+            video_bitrate INTEGER,
             file_name TEXT,
             original_path TEXT,
             city TEXT,
@@ -499,6 +510,7 @@ function initSchema(PDO $pdo): void
         'video_fps' => 'REAL',
         'video_width' => 'INTEGER',
         'video_height' => 'INTEGER',
+        'video_bitrate' => 'INTEGER',
     ];
     $existing = [];
     foreach ($columns as $column) {
@@ -512,6 +524,7 @@ function initSchema(PDO $pdo): void
         }
     }
     $recordMigration(SCHEMA_MIGRATION_005_CAMERA_COLUMNS, 'add_camera_codec_resolution_columns');
+    $recordMigration(SCHEMA_MIGRATION_006_VIDEO_BITRATE, 'add_video_bitrate_column');
 
     $pdo->exec(
         'CREATE TABLE IF NOT EXISTS sync_state (
@@ -526,9 +539,9 @@ function upsertVideo(PDO $pdo, array $video): void
 {
     $stmt = $pdo->prepare(
         'INSERT INTO videos (
-            asset_id, duration, duration_raw, is_favorite, capture_date, camera_make, camera_model, camera_lens, video_codec, video_fps, video_width, video_height, file_name, original_path, city, country, latitude, longitude, faces_count, watched_count, metadata_json, updated_at
+            asset_id, duration, duration_raw, is_favorite, capture_date, camera_make, camera_model, camera_lens, video_codec, video_fps, video_width, video_height, video_bitrate, file_name, original_path, city, country, latitude, longitude, faces_count, watched_count, metadata_json, updated_at
         ) VALUES (
-            :asset_id, :duration, :duration_raw, :is_favorite, :capture_date, :camera_make, :camera_model, :camera_lens, :video_codec, :video_fps, :video_width, :video_height, :file_name, :original_path, :city, :country, :latitude, :longitude, :faces_count, :watched_count, :metadata_json, :updated_at
+            :asset_id, :duration, :duration_raw, :is_favorite, :capture_date, :camera_make, :camera_model, :camera_lens, :video_codec, :video_fps, :video_width, :video_height, :video_bitrate, :file_name, :original_path, :city, :country, :latitude, :longitude, :faces_count, :watched_count, :metadata_json, :updated_at
         )
         ON CONFLICT(asset_id) DO UPDATE SET
             duration=excluded.duration,
@@ -542,6 +555,7 @@ function upsertVideo(PDO $pdo, array $video): void
             video_fps=excluded.video_fps,
             video_width=excluded.video_width,
             video_height=excluded.video_height,
+            video_bitrate=excluded.video_bitrate,
             file_name=excluded.file_name,
             original_path=excluded.original_path,
             city=excluded.city,
@@ -566,6 +580,7 @@ function upsertVideo(PDO $pdo, array $video): void
         ':video_fps' => $video['video_fps'],
         ':video_width' => $video['video_width'],
         ':video_height' => $video['video_height'],
+        ':video_bitrate' => $video['video_bitrate'],
         ':file_name' => $video['file_name'],
         ':original_path' => $video['original_path'],
         ':city' => $video['city'],
@@ -670,7 +685,7 @@ function selectRandomVideo(PDO $pdo, float $minDuration, bool $onlyFavorites = f
 {
     if ($onlyFavorites) {
         $stmt = $pdo->prepare(
-            'SELECT asset_id, duration, duration_raw, is_favorite, capture_date, camera_make, camera_model, camera_lens, video_codec, video_fps, video_width, video_height, file_name, original_path, city, country, latitude, longitude, faces_count, watched_count
+            'SELECT asset_id, duration, duration_raw, is_favorite, capture_date, camera_make, camera_model, camera_lens, video_codec, video_fps, video_width, video_height, video_bitrate, file_name, original_path, city, country, latitude, longitude, faces_count, watched_count
              FROM videos
              WHERE duration >= :min_duration AND is_favorite = 1
              ORDER BY RANDOM()
@@ -678,7 +693,7 @@ function selectRandomVideo(PDO $pdo, float $minDuration, bool $onlyFavorites = f
         );
     } else {
         $stmt = $pdo->prepare(
-            'SELECT asset_id, duration, duration_raw, is_favorite, capture_date, camera_make, camera_model, camera_lens, video_codec, video_fps, video_width, video_height, file_name, original_path, city, country, latitude, longitude, faces_count, watched_count
+            'SELECT asset_id, duration, duration_raw, is_favorite, capture_date, camera_make, camera_model, camera_lens, video_codec, video_fps, video_width, video_height, video_bitrate, file_name, original_path, city, country, latitude, longitude, faces_count, watched_count
              FROM videos
              WHERE duration >= :min_duration
              ORDER BY RANDOM()
@@ -932,6 +947,70 @@ function syncFavoriteToImmich(string $immichUrl, string $apiKey, string $assetId
     }
 
     return ['ok' => false, 'error' => implode('; ', $errors)];
+}
+
+function topLocations(PDO $pdo, int $limit = 5): array
+{
+    $stmt = $pdo->prepare(
+        'SELECT
+            CASE
+              WHEN TRIM(COALESCE(city, \'\')) = \'\' AND TRIM(COALESCE(country, \'\')) = \'\' THEN \'Unknown\'
+              WHEN TRIM(COALESCE(city, \'\')) = \'\' THEN TRIM(country)
+              WHEN TRIM(COALESCE(country, \'\')) = \'\' THEN TRIM(city)
+              ELSE TRIM(city) || \', \' || TRIM(country)
+            END AS location_name,
+            COUNT(*) AS cnt
+         FROM videos
+         GROUP BY location_name
+         ORDER BY cnt DESC, location_name ASC
+         LIMIT :limit'
+    );
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    return is_array($rows) ? $rows : [];
+}
+
+function topResolutions(PDO $pdo, int $limit = 5): array
+{
+    $stmt = $pdo->prepare(
+        'SELECT
+            CASE
+              WHEN COALESCE(video_width, 0) > 0 AND COALESCE(video_height, 0) > 0
+                THEN CAST(video_width AS TEXT) || \'x\' || CAST(video_height AS TEXT)
+              ELSE \'Unknown\'
+            END AS resolution_name,
+            COUNT(*) AS cnt
+         FROM videos
+         GROUP BY resolution_name
+         ORDER BY cnt DESC, resolution_name ASC
+         LIMIT :limit'
+    );
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    return is_array($rows) ? $rows : [];
+}
+
+function topBitrates(PDO $pdo, int $limit = 5): array
+{
+    $stmt = $pdo->prepare(
+        'SELECT
+            CASE
+              WHEN COALESCE(video_bitrate, 0) > 0
+                THEN printf(\'%.2f Mbps\', video_bitrate / 1000000.0)
+              ELSE \'Unknown\'
+            END AS bitrate_name,
+            COUNT(*) AS cnt
+         FROM videos
+         GROUP BY bitrate_name
+         ORDER BY cnt DESC, bitrate_name ASC
+         LIMIT :limit'
+    );
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    return is_array($rows) ? $rows : [];
 }
 
 function archiveAssetToImmich(string $immichUrl, string $apiKey, string $assetId, bool $isArchived = true): array

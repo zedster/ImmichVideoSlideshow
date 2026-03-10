@@ -122,6 +122,9 @@ if ($useSqlite && extension_loaded('pdo_sqlite')) {
             'db_total_watched' => countTotalWatchedVideos($pdo),
             'db_top_cameras' => topCameras($pdo, 5),
             'db_top_codecs' => topCodecs($pdo, 5),
+            'db_top_resolutions' => topResolutions($pdo, 5),
+            'db_top_bitrates' => topBitrates($pdo, 5),
+            'db_top_locations' => topLocations($pdo, 5),
             'last_sync_at' => getSyncState($pdo, 'last_sync_at'),
         ];
 
@@ -134,6 +137,9 @@ if ($useSqlite && extension_loaded('pdo_sqlite')) {
             $dbStats['db_total_watched'] = countTotalWatchedVideos($pdo);
             $dbStats['db_top_cameras'] = topCameras($pdo, 5);
             $dbStats['db_top_codecs'] = topCodecs($pdo, 5);
+            $dbStats['db_top_resolutions'] = topResolutions($pdo, 5);
+            $dbStats['db_top_bitrates'] = topBitrates($pdo, 5);
+            $dbStats['db_top_locations'] = topLocations($pdo, 5);
             $dbStats['last_sync_at'] = getSyncState($pdo, 'last_sync_at');
         }
     } catch (Throwable $e) {
@@ -262,11 +268,19 @@ $metadataPayload = [
     'capture_date' => (string) ($selected['capture_date'] ?? ''),
     'camera_make' => (string) ($selected['camera_make'] ?? ''),
     'camera_model' => (string) ($selected['camera_model'] ?? ''),
+    'camera' => trim(((string) ($selected['camera_make'] ?? '')) . ' ' . ((string) ($selected['camera_model'] ?? ''))),
     'camera_lens' => (string) ($selected['camera_lens'] ?? ''),
     'video_codec' => (string) ($selected['video_codec'] ?? ''),
     'video_fps' => isset($selected['video_fps']) ? (string) $selected['video_fps'] : '',
     'video_width' => isset($selected['video_width']) ? (string) $selected['video_width'] : '',
     'video_height' => isset($selected['video_height']) ? (string) $selected['video_height'] : '',
+    'video_resolution' => (isset($selected['video_width'], $selected['video_height']) && (int) $selected['video_width'] > 0 && (int) $selected['video_height'] > 0)
+        ? ((string) $selected['video_width'] . 'x' . (string) $selected['video_height'])
+        : '',
+    'video_bitrate' => isset($selected['video_bitrate']) ? (string) $selected['video_bitrate'] : '',
+    'video_bitrate_mbps' => (isset($selected['video_bitrate']) && is_numeric($selected['video_bitrate']) && (float) $selected['video_bitrate'] > 0)
+        ? number_format(((float) $selected['video_bitrate']) / 1000000.0, 2)
+        : '',
     'duration' => (string) ($selected['duration'] ?? ''),
     'duration_raw' => (string) ($selected['duration_raw'] ?? ''),
     'city' => (string) ($selected['city'] ?? ''),
@@ -289,6 +303,9 @@ $statsPayload = [
     'db_total_watched' => isset($dbStats['db_total_watched']) ? (string) $dbStats['db_total_watched'] : '',
     'db_top_cameras' => isset($dbStats['db_top_cameras']) ? json_encode($dbStats['db_top_cameras']) : '[]',
     'db_top_codecs' => isset($dbStats['db_top_codecs']) ? json_encode($dbStats['db_top_codecs']) : '[]',
+    'db_top_resolutions' => isset($dbStats['db_top_resolutions']) ? json_encode($dbStats['db_top_resolutions']) : '[]',
+    'db_top_bitrates' => isset($dbStats['db_top_bitrates']) ? json_encode($dbStats['db_top_bitrates']) : '[]',
+    'db_top_locations' => isset($dbStats['db_top_locations']) ? json_encode($dbStats['db_top_locations']) : '[]',
     'last_sync_at' => isset($dbStats['last_sync_at']) ? (string) $dbStats['last_sync_at'] : '',
 ];
 
