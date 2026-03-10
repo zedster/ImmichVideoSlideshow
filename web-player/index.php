@@ -200,7 +200,7 @@ $settings = [
       bottom: 10vh;
       z-index: 18;
       color: #fff;
-      font-size: clamp(18px, 3.2vw, 46px);
+      font-size: clamp(14px, 2.6vw, 37px);
       font-weight: 700;
       line-height: 1.1;
       letter-spacing: 0.01em;
@@ -292,8 +292,8 @@ $settings = [
 </head>
 <body>
   <div id="stage">
-    <video id="v0" class="player active" autoplay muted playsinline preload="auto"></video>
-    <video id="v1" class="player" autoplay muted playsinline preload="auto"></video>
+    <video id="v0" class="player active" muted playsinline preload="auto"></video>
+    <video id="v1" class="player" muted playsinline preload="auto"></video>
   </div>
 
   <div id="fallback"></div>
@@ -313,6 +313,7 @@ $settings = [
       <button id="skipBtn" class="btn" type="button" title="Skip">⏭</button>
       <button id="pauseBtn" class="btn" type="button" title="Pause or play (space)">⏸</button>
       <button id="favoriteBtn" class="btn" type="button" title="Toggle favorite (f)">♡</button>
+      <button id="hideBtn" class="btn" type="button" title="Hide forever">🗄</button>
       <button id="muteBtn" class="btn" type="button" title="Mute or unmute">🔇</button>
       <button id="infoBtn" class="btn" type="button" title="Video info (i)" aria-pressed="false">ℹ</button>
       <button id="statsBtn" class="btn" type="button" title="Library stats (s)" aria-pressed="false">📊</button>
@@ -343,6 +344,7 @@ $settings = [
     const skipBtn = document.getElementById('skipBtn');
     const pauseBtn = document.getElementById('pauseBtn');
     const favoriteBtn = document.getElementById('favoriteBtn');
+    const hideBtn = document.getElementById('hideBtn');
     const muteBtn = document.getElementById('muteBtn');
     const infoBtn = document.getElementById('infoBtn');
     const statsBtn = document.getElementById('statsBtn');
@@ -362,6 +364,7 @@ $settings = [
     let historyStack = [];
     let sessionVideosStarted = 0;
     let sessionSkips = 0;
+    let hideUpdateInProgress = false;
     let currentPlaybackWatchMarked = false;
     let controlsHideTimer = null;
     const sessionUniqueIds = new Set();
@@ -589,6 +592,7 @@ $settings = [
 
     const renderInfoPanel = (item) => {
       const metadata = item?.metadata || {};
+      const watchedSeen = Number.parseInt(String(metadata.watched_count ?? '0'), 10);
       const metadataRows = Object.keys(metadata)
         .sort((a, b) => a.localeCompare(b))
         .map((key) => panelRow(formatMetadataLabel(key), metadataValueToString(metadata[key])))
@@ -597,6 +601,7 @@ $settings = [
       infoPanelEl.innerHTML = `
         <h3>Video Info</h3>
         ${panelRow('Session Playback Time', formatDuration(item.duration || metadata.duration))}
+        ${panelRow('Times Watched/Seen', Number.isFinite(watchedSeen) ? watchedSeen : 0)}
         ${metadataRows}
         ${item.showQrCode && item.immichAssetUrl ? `
           <div class="info-qr-wrap">
@@ -743,6 +748,53 @@ $settings = [
       }
     };
 
+    const hideCurrentVideoForever = async () => {
+      if (!currentItem || !currentItem.id || hideUpdateInProgress) {
+        return;
+      }
+
+      noteInteraction();
+      const confirmed = window.confirm(
+        'Are you sure? This hides the video in Immich too. The only way to unhide it is via the Immich website/app.'
+      );
+      if (!confirmed) {
+        return;
+      }
+
+      hideUpdateInProgress = true;
+      hideBtn.disabled = true;
+      const targetId = currentItem.id;
+      try {
+        const body = new URLSearchParams();
+        body.set('id', targetId);
+
+        const resp = await fetch('/hide.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          },
+          body: body.toString(),
+          cache: 'no-store',
+        });
+        const payload = await resp.json().catch(() => ({}));
+        if (!resp.ok || payload.ok !== true) {
+          const message = payload.error || `HTTP ${resp.status}`;
+          throw new Error(message);
+        }
+
+        queue = queue.filter((item) => item.id !== targetId);
+        historyStack = historyStack.filter((item) => item.id !== targetId);
+
+        await transitionToNext('manual_hide');
+      } catch (err) {
+        console.error('Hide forever failed', err);
+        setFallback('Hide forever failed.');
+      } finally {
+        hideUpdateInProgress = false;
+        hideBtn.disabled = false;
+      }
+    };
+
     const markCurrentVideoWatched = async () => {
       if (!currentItem || !currentItem.id || currentPlaybackWatchMarked) {
         return;
@@ -775,9 +827,13 @@ $settings = [
     const togglePause = () => {
       const v = activePlayer();
       if (v.paused) {
+        // Resume only the active player; keep hidden player silent.
+        hiddenPlayer().pause();
         v.play().catch(() => {});
       } else {
-        v.pause();
+        // Pause both players to prevent hidden-element audio bleed.
+        players[0].pause();
+        players[1].pause();
       }
       updatePauseButton();
       noteInteraction();
@@ -888,6 +944,20 @@ $settings = [
     };
 
     const playOnActivePlayer = async (item) => {
+      const playWithMutedFallback = async (video, contextLabel) => {
+        try {
+          await video.play();
+        } catch (err) {
+          console.warn(`${contextLabel} play failed, retrying muted`, err);
+          video.muted = true;
+          players[0].muted = true;
+          players[1].muted = true;
+          saveMutedPreference(true);
+          updateMuteButton();
+          await video.play();
+        }
+      };
+
       const active = activePlayer();
       active.src = item.src;
       active.dataset.assetId = item.id;
@@ -896,15 +966,7 @@ $settings = [
       active.style.transitionDuration = '0ms';
       active.muted = players[0].muted;
       active.load();
-      await active.play().catch((err) => {
-        console.warn('Autoplay failed, retrying muted', err);
-        active.muted = true;
-        players[0].muted = true;
-        players[1].muted = true;
-        saveMutedPreference(true);
-        updateMuteButton();
-        return active.play();
-      });
+      await playWithMutedFallback(active, 'Initial');
       currentItem = item;
       recordSessionVideo(item);
       currentPlaybackWatchMarked = false;
@@ -923,19 +985,53 @@ $settings = [
     };
 
     const transitionToItem = async (nextItem, reason) => {
+      const playWithMutedFallback = async (video, contextLabel) => {
+        try {
+          await video.play();
+        } catch (err) {
+          console.warn(`${contextLabel} play failed, retrying muted`, err);
+          video.muted = true;
+          players[0].muted = true;
+          players[1].muted = true;
+          saveMutedPreference(true);
+          updateMuteButton();
+          await video.play();
+        }
+      };
+
       const outgoing = activePlayer();
       const incoming = hiddenPlayer();
+      const shouldCrossfade = settings.crossfadeEnabled;
 
-      await prepareHiddenWith(nextItem);
+      try {
+        await prepareHiddenWith(nextItem);
+      } catch (err) {
+        // Manual transitions should still work if hidden prebuffering times out.
+        if (shouldCrossfade) {
+          throw err;
+        }
+        console.warn('Prepare hidden timed out; falling back to direct load for manual transition', err);
+        incoming.src = nextItem.src;
+        incoming.dataset.assetId = nextItem.id;
+        incoming.preload = 'auto';
+        incoming.load();
+      }
 
       incoming.muted = outgoing.muted;
       incoming.classList.add('active');
       incoming.style.transitionDuration = '0ms';
-      incoming.style.opacity = settings.crossfadeEnabled ? '0' : '1';
+      incoming.style.opacity = shouldCrossfade ? '0' : '1';
 
-      await incoming.play();
+      // Keep single-audio behavior even when fading visuals.
+      if (shouldCrossfade) {
+        outgoing.muted = true;
+      } else {
+        outgoing.pause();
+      }
 
-      if (settings.crossfadeEnabled && settings.crossfadeDurationMs > 0) {
+      await playWithMutedFallback(incoming, 'Transition');
+
+      if (shouldCrossfade && settings.crossfadeDurationMs > 0) {
         const duration = settings.crossfadeDurationMs;
         incoming.style.transitionDuration = `${duration}ms`;
         outgoing.style.transitionDuration = `${duration}ms`;
@@ -1100,6 +1196,10 @@ $settings = [
 
     favoriteBtn.addEventListener('click', () => {
       toggleFavorite();
+    });
+
+    hideBtn.addEventListener('click', () => {
+      hideCurrentVideoForever();
     });
 
     muteBtn.addEventListener('click', () => {

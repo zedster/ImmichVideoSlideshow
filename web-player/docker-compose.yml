@@ -12,6 +12,7 @@ services:
       - ./video.php:/var/www/html/video.php:ro
       - ./watch.php:/var/www/html/watch.php:ro
       - ./favorite.php:/var/www/html/favorite.php:ro
+      - ./hide.php:/var/www/html/hide.php:ro
       - ./apache-kiosk.conf:/etc/apache2/conf-enabled/zzz-kiosk.conf:ro
       - ./data:/var/www/html/data
     restart: unless-stopped

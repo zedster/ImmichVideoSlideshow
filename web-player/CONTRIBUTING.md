@@ -43,6 +43,7 @@ docker compose config
 - `GET /api.php?next=1`
 - `POST /watch.php?id=<assetId>`
 - `POST /favorite.php?id=<assetId>&favorite=1`
+- `POST /hide.php?id=<assetId>`
 
 ## Pull requests
 

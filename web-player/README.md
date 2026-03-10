@@ -23,8 +23,14 @@ docker compose up -d
 
 - Keep `DEBUG=false` in production.
 - Mutation endpoints are POST-only.
-- Set `MUTATION_TOKEN` and send it as `X-Mutation-Token` for `watch.php` and `favorite.php`.
+- Set `MUTATION_TOKEN` and send it as `X-Mutation-Token` for `watch.php`, `favorite.php`, and `hide.php`.
 - QR rendering is client-side using `qrcode.js` (no external QR image API).
+
+## UI Actions
+
+- Favorite/unfavorite current video.
+- Hide Forever: archives the current video to Immich locked/archived state.
+- Hiding is destructive for slideshow visibility; unhide from Immich website/app only.
 
 ## License
 

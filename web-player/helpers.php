@@ -15,6 +15,7 @@ const IMMICH_PATH_ASSETS = '/api/assets';
 
 const CURL_TIMEOUT_METADATA_SECONDS = 30;
 const CURL_TIMEOUT_FAVORITE_SECONDS = 20;
+const CURL_TIMEOUT_ARCHIVE_SECONDS = 20;
 
 const ERROR_MISSING_IMMICH_ENV = 'E_MISSING_IMMICH_ENV';
 const ERROR_SQLITE_INITIALIZATION_FAILED = 'E_SQLITE_INITIALIZATION_FAILED';
@@ -23,6 +24,7 @@ const ERROR_NO_QUALIFYING_VIDEO = 'E_NO_QUALIFYING_VIDEO';
 const ERROR_MISSING_ID = 'E_MISSING_ID';
 const ERROR_INVALID_FAVORITE = 'E_INVALID_FAVORITE';
 const ERROR_FAILED_UPDATE_IMMICH_FAVORITE = 'E_FAILED_UPDATE_IMMICH_FAVORITE';
+const ERROR_FAILED_ARCHIVE_IMMICH_ASSET = 'E_FAILED_ARCHIVE_IMMICH_ASSET';
 const ERROR_SQLITE_WRITE_FAILED = 'E_SQLITE_WRITE_FAILED';
 const ERROR_METHOD_NOT_ALLOWED = 'E_METHOD_NOT_ALLOWED';
 const ERROR_UNAUTHORIZED_MUTATION = 'E_UNAUTHORIZED_MUTATION';
@@ -927,6 +929,93 @@ function syncFavoriteToImmich(string $immichUrl, string $apiKey, string $assetId
         }
 
         $errors[] = $method . ':http_status:' . $status;
+    }
+
+    return ['ok' => false, 'error' => implode('; ', $errors)];
+}
+
+function archiveAssetToImmich(string $immichUrl, string $apiKey, string $assetId, bool $isArchived = true): array
+{
+    // Use explicit update verbs for archive updates to avoid no-op POST responses.
+    $methods = ['PATCH', 'PUT'];
+    $errors = [];
+
+    $singleEndpoint = buildApiUrl($immichUrl, IMMICH_PATH_ASSETS . '/' . rawurlencode($assetId));
+    $singlePayloads = [
+        ['isArchived' => $isArchived],
+        ['isArchived' => $isArchived, 'id' => $assetId],
+    ];
+
+    foreach ($singlePayloads as $payloadObj) {
+        $payload = json_encode($payloadObj, JSON_THROW_ON_ERROR);
+        foreach ($methods as $method) {
+            $ch = curl_init($singleEndpoint);
+            curl_setopt_array($ch, [
+                CURLOPT_CUSTOMREQUEST => $method,
+                CURLOPT_POSTFIELDS => $payload,
+                CURLOPT_HTTPHEADER => [
+                    'Accept: application/json',
+                    'Content-Type: application/json',
+                    'x-api-key: ' . $apiKey,
+                ],
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => CURL_TIMEOUT_ARCHIVE_SECONDS,
+            ]);
+
+            $raw = curl_exec($ch);
+            if ($raw === false) {
+                $errors[] = 'single:' . $method . ':curl_error:' . curl_error($ch);
+                curl_close($ch);
+                continue;
+            }
+
+            $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            curl_close($ch);
+            if ($status >= 200 && $status < 300) {
+                return ['ok' => true, 'status' => $status, 'method' => $method, 'route' => 'single'];
+            }
+
+            $errors[] = 'single:' . $method . ':http_status:' . $status;
+        }
+    }
+
+    $batchEndpoint = buildApiUrl($immichUrl, IMMICH_PATH_ASSETS);
+    $batchPayloads = [
+        ['ids' => [$assetId], 'isArchived' => $isArchived],
+        ['assetIds' => [$assetId], 'isArchived' => $isArchived],
+    ];
+
+    foreach ($batchPayloads as $payloadObj) {
+        $payload = json_encode($payloadObj, JSON_THROW_ON_ERROR);
+        foreach ($methods as $method) {
+            $ch = curl_init($batchEndpoint);
+            curl_setopt_array($ch, [
+                CURLOPT_CUSTOMREQUEST => $method,
+                CURLOPT_POSTFIELDS => $payload,
+                CURLOPT_HTTPHEADER => [
+                    'Accept: application/json',
+                    'Content-Type: application/json',
+                    'x-api-key: ' . $apiKey,
+                ],
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => CURL_TIMEOUT_ARCHIVE_SECONDS,
+            ]);
+
+            $raw = curl_exec($ch);
+            if ($raw === false) {
+                $errors[] = 'batch:' . $method . ':curl_error:' . curl_error($ch);
+                curl_close($ch);
+                continue;
+            }
+
+            $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            curl_close($ch);
+            if ($status >= 200 && $status < 300) {
+                return ['ok' => true, 'status' => $status, 'method' => $method, 'route' => 'batch'];
+            }
+
+            $errors[] = 'batch:' . $method . ':http_status:' . $status;
+        }
     }
 
     return ['ok' => false, 'error' => implode('; ', $errors)];
