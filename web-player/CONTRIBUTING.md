@@ -49,3 +49,7 @@ docker compose config
 - Keep PRs focused and small.
 - Include user-visible behavior changes in `CHANGELOG.md`.
 - Update README when endpoint contracts or environment variables change.
+
+## License
+
+This component is licensed under the MIT License. See the repository root LICENSE.

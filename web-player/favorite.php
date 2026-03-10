@@ -9,16 +9,17 @@ error_reporting(E_ALL);
 $immichUrl = getenv('IMMICH_URL') ?: '';
 $apiKey = getenv('IMMICH_API_KEY') ?: '';
 $sqlitePath = getenv('SQLITE_PATH') ?: DEFAULT_SQLITE_PATH;
-$assetId = $_GET['id'] ?? '';
-$favoriteRaw = $_GET['favorite'] ?? '';
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if ($assetId === '') {
-        $assetId = $_POST['id'] ?? '';
-    }
-    if ($favoriteRaw === '') {
-        $favoriteRaw = $_POST['favorite'] ?? '';
-    }
+$requestSecurity = enforceMutationRequestSecurity();
+if ($requestSecurity !== null) {
+    jsonErrorResponse(
+        (int) $requestSecurity['status'],
+        (string) $requestSecurity['code'],
+        (string) $requestSecurity['message']
+    );
+    exit;
 }
+$assetId = $_POST['id'] ?? ($_GET['id'] ?? '');
+$favoriteRaw = $_POST['favorite'] ?? ($_GET['favorite'] ?? '');
 
 if (!is_string($assetId) || $assetId === '') {
     jsonErrorResponse(400, ERROR_MISSING_ID, 'missing_id');

@@ -17,6 +17,12 @@ Demo: https://bananasystems.co.uk/immich-video-slideshow
 - Designed for large libraries
 - Tested with 26k videos
 
+## Project Structure
+
+- `tvos-app/` - Native Apple TV app (Swift/tvOS)
+- `web-player/` - PHP web slideshow player
+- `docs/screenshots/` - Documentation screenshots
+
 ## Installation
 
 ### tvOS App
@@ -27,8 +33,8 @@ Demo: https://bananasystems.co.uk/immich-video-slideshow
 ### Web Player
 
 1. Copy the PHP web player files from `web-player/` to your web server.
-2. Configure your Immich API endpoint and credentials for your deployment.
-3. Optional: use Docker with `web-player/docker-compose.yml`.
+2. Configure your Immich API endpoint and credentials.
+3. Optional: run with Docker via `web-player/docker-compose.yml`.
 
 ## Usage
 
@@ -43,7 +49,11 @@ Demo: https://bananasystems.co.uk/immich-video-slideshow
 
 ## Contributing
 
-Contributions are welcome. Please open an issue or pull request with clear details and reproduction steps for bugs.
+See `CONTRIBUTING.md` for contribution workflow.
+
+## Security
+
+See `SECURITY.md` for reporting security issues and deployment hardening notes.
 
 ## License
 

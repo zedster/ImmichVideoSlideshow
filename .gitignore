@@ -1,10 +1,26 @@
 # macOS
 .DS_Store
 
+# Environment
+.env
+.env.local
+
 # Xcode
 DerivedData/
 build/
 *.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.code-workspace
 
-# logs
+# PHP/SQLite runtime
+web-player/data/*.sqlite
+web-player/data/*.sqlite-shm
+web-player/data/*.sqlite-wal
+
+# Logs
 *.log
+
+# IDE/editor
+.vscode/
+.idea/

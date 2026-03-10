@@ -24,6 +24,8 @@ const ERROR_MISSING_ID = 'E_MISSING_ID';
 const ERROR_INVALID_FAVORITE = 'E_INVALID_FAVORITE';
 const ERROR_FAILED_UPDATE_IMMICH_FAVORITE = 'E_FAILED_UPDATE_IMMICH_FAVORITE';
 const ERROR_SQLITE_WRITE_FAILED = 'E_SQLITE_WRITE_FAILED';
+const ERROR_METHOD_NOT_ALLOWED = 'E_METHOD_NOT_ALLOWED';
+const ERROR_UNAUTHORIZED_MUTATION = 'E_UNAUTHORIZED_MUTATION';
 
 const SCHEMA_MIGRATION_001_BASE_TABLES = 1;
 const SCHEMA_MIGRATION_002_CAPTURE_DATE = 2;
@@ -103,6 +105,44 @@ function jsonErrorResponse(int $statusCode, string $errorCode, string $message, 
             $extra
         )
     );
+}
+
+/**
+ * Require POST for state-changing endpoints and optionally enforce a shared token.
+ * Set MUTATION_TOKEN in environment to require X-Mutation-Token header.
+ */
+function enforceMutationRequestSecurity(): ?array
+{
+    $method = $_SERVER['REQUEST_METHOD'] ?? '';
+    if ($method !== 'POST') {
+        return [
+            'status' => 405,
+            'code' => ERROR_METHOD_NOT_ALLOWED,
+            'message' => 'method_not_allowed',
+        ];
+    }
+
+    $requiredToken = trim((string) (getenv('MUTATION_TOKEN') ?: ''));
+    if ($requiredToken === '') {
+        return null;
+    }
+
+    $providedToken = '';
+    if (isset($_SERVER['HTTP_X_MUTATION_TOKEN']) && is_string($_SERVER['HTTP_X_MUTATION_TOKEN'])) {
+        $providedToken = trim($_SERVER['HTTP_X_MUTATION_TOKEN']);
+    } elseif (isset($_POST['mutation_token']) && is_string($_POST['mutation_token'])) {
+        $providedToken = trim($_POST['mutation_token']);
+    }
+
+    if ($providedToken === '' || !hash_equals($requiredToken, $providedToken)) {
+        return [
+            'status' => 401,
+            'code' => ERROR_UNAUTHORIZED_MUTATION,
+            'message' => 'unauthorized_mutation',
+        ];
+    }
+
+    return null;
 }
 
 /**

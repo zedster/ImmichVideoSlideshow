@@ -7,10 +7,16 @@ ini_set('log_errors', '1');
 error_reporting(E_ALL);
 
 $sqlitePath = getenv('SQLITE_PATH') ?: DEFAULT_SQLITE_PATH;
-$assetId = $_GET['id'] ?? '';
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $assetId === '') {
-    $assetId = $_POST['id'] ?? '';
+$requestSecurity = enforceMutationRequestSecurity();
+if ($requestSecurity !== null) {
+    jsonErrorResponse(
+        (int) $requestSecurity['status'],
+        (string) $requestSecurity['code'],
+        (string) $requestSecurity['message']
+    );
+    exit;
 }
+$assetId = $_POST['id'] ?? ($_GET['id'] ?? '');
 
 if (!is_string($assetId) || $assetId === '') {
     jsonErrorResponse(400, ERROR_MISSING_ID, 'missing_id');
