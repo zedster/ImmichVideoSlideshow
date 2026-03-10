@@ -438,6 +438,43 @@ $settings = [
       return order === 'sequential_oldest' || order === 'sequential_newest';
     };
 
+    const updateAdminPlaybackOrderButton = () => {
+      const order = getPlaybackOrder();
+      adminPlaybackOrderBtn.textContent = `Playback Order: ${playbackOrderLabel(order)}`;
+    };
+
+    const setPlaybackOrder = (order) => {
+      const nextOrder = normalizePlaybackOrder(order);
+      const current = new URL(window.location.href);
+      current.searchParams.set('playbackOrder', nextOrder);
+      window.history.replaceState({}, '', current.toString());
+      updateAdminPlaybackOrderButton();
+      updateStatus();
+    };
+
+    const cyclePlaybackOrder = () => {
+      noteInteraction();
+      const current = getPlaybackOrder();
+      const idx = PLAYBACK_ORDER_VALUES.indexOf(current);
+      const next = PLAYBACK_ORDER_VALUES[(idx + 1) % PLAYBACK_ORDER_VALUES.length];
+      setPlaybackOrder(next);
+
+      queue = [];
+      nextPreparedId = '';
+      failedAssetMap.clear();
+      clearPlayer(hiddenPlayer());
+      fillQueue();
+      maybePrepareNext();
+
+      setFallback(`Playback order: ${playbackOrderLabel(next)}`);
+      window.setTimeout(() => {
+        const text = fallbackEl.textContent || '';
+        if (text.startsWith('Playback order:')) {
+          setFallback('');
+        }
+      }, 1400);
+    };
+
     const readMutedPreference = () => {
       try {
         const raw = localStorage.getItem(muteStorageKey);
