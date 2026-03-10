@@ -368,6 +368,8 @@ $settings = [
     let currentPlaybackWatchMarked = false;
     let controlsHideTimer = null;
     const sessionUniqueIds = new Set();
+    const failedAssetMap = new Map();
+    const FAILED_ASSET_COOLDOWN_MS = 5 * 60 * 1000;
 
     const readMutedPreference = () => {
       try {
@@ -515,6 +517,30 @@ $settings = [
       const isFavorite = Boolean(currentItem?.isFavorite);
       favoriteBtn.textContent = isFavorite ? '♥' : '♡';
       favoriteBtn.title = isFavorite ? 'Unfavorite (f)' : 'Favorite (f)';
+    };
+
+    const isAssetCoolingDown = (assetId) => {
+      const entry = failedAssetMap.get(assetId);
+      if (!entry) return false;
+      return (Date.now() - entry.lastFailedAt) < FAILED_ASSET_COOLDOWN_MS;
+    };
+
+    const markAssetFailed = (assetId) => {
+      if (!assetId) return;
+      const now = Date.now();
+      const existing = failedAssetMap.get(assetId);
+      if (existing) {
+        existing.count += 1;
+        existing.lastFailedAt = now;
+        failedAssetMap.set(assetId, existing);
+      } else {
+        failedAssetMap.set(assetId, { count: 1, lastFailedAt: now });
+      }
+    };
+
+    const markAssetRecovered = (assetId) => {
+      if (!assetId) return;
+      failedAssetMap.delete(assetId);
     };
 
     const escapeHtml = (value) => String(value)
@@ -850,6 +876,9 @@ $settings = [
             if (queue.some((q) => q.id === item.id)) {
               return;
             }
+            if (isAssetCoolingDown(item.id)) {
+              return;
+            }
             queue.push(item);
             updateStatus();
             maybePrepareNext();
@@ -938,6 +967,12 @@ $settings = [
         await prepareHiddenWith(queue[0]);
       } catch (err) {
         console.error('Prepare next failed', err);
+        const failed = queue.shift();
+        if (failed?.id) {
+          markAssetFailed(failed.id);
+        }
+        updateStatus();
+        fillQueue();
       } finally {
         preparingNext = false;
       }
@@ -970,6 +1005,7 @@ $settings = [
       currentItem = item;
       recordSessionVideo(item);
       currentPlaybackWatchMarked = false;
+      markAssetRecovered(item.id);
       updateMetaCaption(item);
       updateFavoriteButton();
       if (infoVisible) renderInfoPanel(item);
@@ -1049,6 +1085,7 @@ $settings = [
       currentItem = nextItem;
       recordSessionVideo(nextItem);
       currentPlaybackWatchMarked = false;
+      markAssetRecovered(nextItem.id);
       updateMetaCaption(nextItem);
       updateFavoriteButton();
       if (infoVisible) renderInfoPanel(nextItem);
@@ -1111,12 +1148,30 @@ $settings = [
           return;
         }
 
-        const nextItem = queue.shift();
-        updateStatus();
+        let transitioned = false;
+        let attempts = 0;
         if (currentItem) {
           historyStack.push(currentItem);
         }
-        await transitionToItem(nextItem, reason);
+        while (!transitioned && queue.length > 0 && attempts < 3) {
+          attempts += 1;
+          const nextItem = queue.shift();
+          if (!nextItem) {
+            break;
+          }
+          updateStatus();
+          try {
+            await transitionToItem(nextItem, reason);
+            transitioned = true;
+          } catch (err) {
+            console.error('Transition candidate failed', nextItem.id, err);
+            markAssetFailed(nextItem.id);
+          }
+        }
+
+        if (!transitioned) {
+          throw new Error('No playable transition candidate available');
+        }
 
         fillQueue();
         maybePrepareNext();
