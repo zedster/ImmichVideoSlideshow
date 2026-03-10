@@ -101,35 +101,28 @@ $settings = [
       backdrop-filter: blur(2px);
     }
 
-    .qr-panel {
-      position: fixed;
-      top: 12px;
-      right: 12px;
-      z-index: 25;
-      width: 192px;
-      color: #fff;
-      background: rgba(0, 0, 0, 0.7);
-      border: 1px solid rgba(255, 255, 255, 0.25);
+    .info-qr-wrap {
+      margin: 10px 0 8px 0;
+      border: 1px solid rgba(255, 255, 255, 0.2);
       border-radius: 8px;
       padding: 8px;
-      display: none;
-      backdrop-filter: blur(2px);
+      background: rgba(255, 255, 255, 0.04);
     }
 
-    .qr-title {
-      font-size: 12px;
+    .info-qr-title {
       margin: 0 0 6px 0;
+      font-size: 12px;
       opacity: 0.9;
     }
 
-    #qrCode {
+    .info-qr-code {
       width: 160px;
       height: 160px;
       margin: 0 auto;
       background: #fff;
     }
 
-    .qr-link {
+    .info-qr-link {
       display: block;
       margin-top: 8px;
       font-size: 11px;
@@ -151,9 +144,48 @@ $settings = [
       color: #fff;
       background: rgba(0, 0, 0, 0.6);
       border-radius: 6px;
-      padding: 6px 10px;
-      font-size: 12px;
+      min-width: 34px;
+      min-height: 30px;
+      padding: 4px 8px;
+      font-size: 16px;
+      line-height: 1;
       cursor: pointer;
+    }
+
+    .btn[aria-pressed="true"] {
+      border-color: rgba(120, 210, 255, 0.95);
+      background: rgba(15, 55, 75, 0.8);
+    }
+
+    .panel {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 24;
+      min-width: 260px;
+      max-width: min(40vw, 420px);
+      max-height: 62vh;
+      overflow: auto;
+      display: none;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 8px;
+      padding: 10px;
+      backdrop-filter: blur(2px);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .panel h3 {
+      margin: 0 0 8px 0;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .panel-row {
+      margin: 0 0 6px 0;
+      word-break: break-word;
     }
 
     #fallback {
@@ -182,18 +214,18 @@ $settings = [
   </div>
 
   <div id="fallback"></div>
-  <div id="qrPanel" class="qr-panel">
-    <p class="qr-title">Open in Immich</p>
-    <div id="qrCode"></div>
-    <a id="qrLink" class="qr-link" href="#" target="_blank" rel="noopener noreferrer"></a>
-  </div>
+  <div id="infoPanel" class="panel"></div>
+  <div id="statsPanel" class="panel"></div>
 
   <div class="hud">
     <div id="title" class="chip">Loading…</div>
     <div class="controls">
-      <button id="skipBtn" class="btn" type="button">Skip</button>
-      <button id="muteBtn" class="btn" type="button">Unmute</button>
-      <button id="fullscreenBtn" class="btn" type="button">Fullscreen</button>
+      <button id="skipBtn" class="btn" type="button" title="Skip">⏭</button>
+      <button id="favoriteBtn" class="btn" type="button" title="Toggle favorite (f)">♡</button>
+      <button id="muteBtn" class="btn" type="button" title="Mute or unmute">🔇</button>
+      <button id="infoBtn" class="btn" type="button" title="Video info (i)" aria-pressed="false">ℹ</button>
+      <button id="statsBtn" class="btn" type="button" title="Library stats (s)" aria-pressed="false">📊</button>
+      <button id="fullscreenBtn" class="btn" type="button" title="Toggle fullscreen">⤢</button>
       <div id="status" class="chip"></div>
     </div>
   </div>
@@ -209,11 +241,13 @@ $settings = [
     const titleEl = document.getElementById('title');
     const statusEl = document.getElementById('status');
     const fallbackEl = document.getElementById('fallback');
-    const qrPanelEl = document.getElementById('qrPanel');
-    const qrCodeEl = document.getElementById('qrCode');
-    const qrLinkEl = document.getElementById('qrLink');
+    const infoPanelEl = document.getElementById('infoPanel');
+    const statsPanelEl = document.getElementById('statsPanel');
     const skipBtn = document.getElementById('skipBtn');
+    const favoriteBtn = document.getElementById('favoriteBtn');
     const muteBtn = document.getElementById('muteBtn');
+    const infoBtn = document.getElementById('infoBtn');
+    const statsBtn = document.getElementById('statsBtn');
     const fullscreenBtn = document.getElementById('fullscreenBtn');
 
     const muteStorageKey = 'immichChannelMuted';
@@ -224,7 +258,11 @@ $settings = [
     let preparingNext = false;
     let nextPreparedId = '';
     let currentItem = null;
-    let qrInstance = null;
+    let infoVisible = false;
+    let statsVisible = false;
+    let sessionVideosStarted = 0;
+    let sessionSkips = 0;
+    const sessionUniqueIds = new Set();
 
     const readMutedPreference = () => {
       try {
@@ -250,7 +288,8 @@ $settings = [
 
     const updateMuteButton = () => {
       const muted = players[activeIndex].muted;
-      muteBtn.textContent = muted ? 'Unmute' : 'Mute';
+      muteBtn.textContent = muted ? '🔇' : '🔊';
+      muteBtn.title = muted ? 'Unmute' : 'Mute';
     };
 
     const isFullscreen = () => {
@@ -261,7 +300,8 @@ $settings = [
     };
 
     const updateFullscreenButton = () => {
-      fullscreenBtn.textContent = isFullscreen() ? 'Exit Fullscreen' : 'Fullscreen';
+      fullscreenBtn.textContent = isFullscreen() ? '⤡' : '⤢';
+      fullscreenBtn.title = isFullscreen() ? 'Exit fullscreen' : 'Enter fullscreen';
     };
 
     const toggleFullscreen = async () => {
@@ -328,49 +368,137 @@ $settings = [
         src: String(payload.video_src || ''),
         immichAssetUrl: String(payload.metadata?.immich_asset_url || ''),
         showQrCode: String(payload.metadata?.show_qr_code || '0') === '1',
+        isFavorite: String(payload.metadata?.is_favorite || '0') === '1',
+        metadata: payload.metadata || {},
+        stats: payload.stats || {},
       };
     };
 
-    const clearQrCode = () => {
-      while (qrCodeEl.firstChild) {
-        qrCodeEl.removeChild(qrCodeEl.firstChild);
+    const updateFavoriteButton = () => {
+      const isFavorite = Boolean(currentItem?.isFavorite);
+      favoriteBtn.textContent = isFavorite ? '♥' : '♡';
+      favoriteBtn.title = isFavorite ? 'Unfavorite (f)' : 'Favorite (f)';
+    };
+
+    const escapeHtml = (value) => String(value)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+
+    const panelRow = (label, value) => {
+      if (value === undefined || value === null || String(value).trim() === '') {
+        return '';
+      }
+      return `<div class="panel-row"><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</div>`;
+    };
+
+    const formatDuration = (seconds) => {
+      const value = Number(seconds);
+      if (!Number.isFinite(value) || value <= 0) return '';
+      const total = Math.floor(value);
+      const h = Math.floor(total / 3600);
+      const m = Math.floor((total % 3600) / 60);
+      const s = total % 60;
+      if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      return `${m}:${String(s).padStart(2, '0')}`;
+    };
+
+    const renderInfoPanel = (item) => {
+      const metadata = item?.metadata || {};
+      const metadataRows = Object.keys(metadata)
+        .sort((a, b) => a.localeCompare(b))
+        .map((key) => panelRow(formatMetadataLabel(key), metadataValueToString(metadata[key])))
+        .join('');
+
+      infoPanelEl.innerHTML = `
+        <h3>Video Info</h3>
+        ${panelRow('Session Playback Time', formatDuration(item.duration || metadata.duration))}
+        ${metadataRows}
+        ${item.showQrCode && item.immichAssetUrl ? `
+          <div class="info-qr-wrap">
+            <p class="info-qr-title">Open in Immich</p>
+            <div id="infoQrCode" class="info-qr-code"></div>
+            <a class="info-qr-link" href="${escapeHtml(item.immichAssetUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.immichAssetUrl)}</a>
+          </div>
+        ` : ''}
+      `;
+
+      if (item.showQrCode && item.immichAssetUrl && typeof QRCode !== 'undefined') {
+        const qrTarget = document.getElementById('infoQrCode');
+        if (qrTarget) {
+          new QRCode(qrTarget, {
+            text: item.immichAssetUrl,
+            width: 160,
+            height: 160,
+            colorDark: '#000000',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M,
+          });
+        }
       }
     };
 
-    const renderQrCode = (item) => {
-      if (!item.showQrCode || !item.immichAssetUrl) {
-        qrPanelEl.style.display = 'none';
-        clearQrCode();
-        qrLinkEl.textContent = '';
-        qrLinkEl.removeAttribute('href');
+    const renderStatsPanel = (item) => {
+      const stats = item?.stats || {};
+      statsPanelEl.innerHTML = `
+        <h3>Library Stats</h3>
+        ${panelRow('Session Videos Started', sessionVideosStarted)}
+        ${panelRow('Session Unique Videos', sessionUniqueIds.size)}
+        ${panelRow('Session Skips', sessionSkips)}
+        ${panelRow('Min Duration', stats.min_duration)}
+        ${panelRow('SQLite', stats.use_sqlite)}
+        ${panelRow('Favorites Only', stats.only_favorites)}
+        ${panelRow('Total Videos', stats.db_total_videos)}
+        ${panelRow('Videos Matching Filter', stats.db_qualifying_videos)}
+        ${panelRow('Favorite Videos', stats.db_favorite_videos)}
+        ${panelRow('Total Watched', stats.db_total_watched)}
+        ${panelRow('Last Sync', stats.last_sync_at)}
+      `;
+    };
+
+    const syncPanelVisibility = () => {
+      infoPanelEl.style.display = infoVisible ? 'block' : 'none';
+      statsPanelEl.style.display = statsVisible ? 'block' : 'none';
+      infoBtn.setAttribute('aria-pressed', infoVisible ? 'true' : 'false');
+      statsBtn.setAttribute('aria-pressed', statsVisible ? 'true' : 'false');
+    };
+
+    const toggleInfoPanel = () => {
+      infoVisible = !infoVisible;
+      if (infoVisible && currentItem) renderInfoPanel(currentItem);
+      syncPanelVisibility();
+    };
+
+    const toggleStatsPanel = () => {
+      statsVisible = !statsVisible;
+      if (statsVisible && currentItem) renderStatsPanel(currentItem);
+      syncPanelVisibility();
+    };
+
+    const metadataValueToString = (value) => {
+      if (value === undefined || value === null) return '';
+      if (typeof value === 'object') {
+        try {
+          return JSON.stringify(value);
+        } catch (e) {
+          return '[object]';
+        }
+      }
+      return String(value);
+    };
+
+    const formatMetadataLabel = (key) => key
+      .replaceAll('_', ' ')
+      .replace(/\b\w/g, (m) => m.toUpperCase());
+
+    const recordSessionVideo = (item) => {
+      if (!item || !item.id) {
         return;
       }
-
-      if (typeof QRCode === 'undefined') {
-        qrPanelEl.style.display = 'none';
-        return;
-      }
-
-      qrPanelEl.style.display = 'block';
-      qrLinkEl.href = item.immichAssetUrl;
-      qrLinkEl.textContent = item.immichAssetUrl;
-
-      if (!qrInstance) {
-        clearQrCode();
-        qrInstance = new QRCode(qrCodeEl, {
-          text: item.immichAssetUrl,
-          width: 160,
-          height: 160,
-          colorDark: '#000000',
-          colorLight: '#ffffff',
-          correctLevel: QRCode.CorrectLevel.M,
-        });
-      } else if (typeof qrInstance.makeCode === 'function') {
-        qrInstance.makeCode(item.immichAssetUrl);
-      } else {
-        clearQrCode();
-        qrInstance = new QRCode(qrCodeEl, item.immichAssetUrl);
-      }
+      sessionVideosStarted += 1;
+      sessionUniqueIds.add(item.id);
     };
 
     const fetchNextItem = async () => {
@@ -385,6 +513,49 @@ $settings = [
         throw new Error('Invalid next video payload');
       }
       return item;
+    };
+
+    const toggleFavorite = async () => {
+      if (!currentItem || !currentItem.id) {
+        return;
+      }
+
+      const nextFavorite = !currentItem.isFavorite;
+      favoriteBtn.disabled = true;
+      try {
+        const body = new URLSearchParams();
+        body.set('id', currentItem.id);
+        body.set('favorite', nextFavorite ? '1' : '0');
+
+        const resp = await fetch('/favorite.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          },
+          body: body.toString(),
+          cache: 'no-store',
+        });
+        const payload = await resp.json().catch(() => ({}));
+        if (!resp.ok || payload.ok !== true) {
+          const message = payload.error || `HTTP ${resp.status}`;
+          throw new Error(message);
+        }
+
+        currentItem.isFavorite = nextFavorite;
+        if (!currentItem.metadata) {
+          currentItem.metadata = {};
+        }
+        currentItem.metadata.is_favorite = nextFavorite ? '1' : '0';
+        updateFavoriteButton();
+        if (infoVisible) {
+          renderInfoPanel(currentItem);
+        }
+      } catch (err) {
+        console.error('Favorite toggle failed', err);
+        setFallback('Favorite update failed.');
+      } finally {
+        favoriteBtn.disabled = false;
+      }
     };
 
     const fillQueue = async () => {
@@ -510,8 +681,11 @@ $settings = [
         return active.play();
       });
       currentItem = item;
+      recordSessionVideo(item);
       titleEl.textContent = item.title;
-      renderQrCode(item);
+      updateFavoriteButton();
+      if (infoVisible) renderInfoPanel(item);
+      if (statsVisible) renderStatsPanel(item);
       updateStatus();
     };
 
@@ -524,6 +698,9 @@ $settings = [
     const transitionToNext = async (reason) => {
       if (transitionInProgress) {
         return;
+      }
+      if (reason === 'manual_skip' || reason === 'arrow_skip') {
+        sessionSkips += 1;
       }
       transitionInProgress = true;
       try {
@@ -571,8 +748,11 @@ $settings = [
 
         swapPlayers();
         currentItem = nextItem;
+        recordSessionVideo(nextItem);
         titleEl.textContent = nextItem.title;
-        renderQrCode(nextItem);
+        updateFavoriteButton();
+        if (infoVisible) renderInfoPanel(nextItem);
+        if (statsVisible) renderStatsPanel(nextItem);
         nextPreparedId = '';
         setFallback('');
 
@@ -634,12 +814,24 @@ $settings = [
       transitionToNext('manual_skip');
     });
 
+    favoriteBtn.addEventListener('click', () => {
+      toggleFavorite();
+    });
+
     muteBtn.addEventListener('click', () => {
       const nextMuted = !activePlayer().muted;
       players[0].muted = nextMuted;
       players[1].muted = nextMuted;
       saveMutedPreference(nextMuted);
       updateMuteButton();
+    });
+
+    infoBtn.addEventListener('click', () => {
+      toggleInfoPanel();
+    });
+
+    statsBtn.addEventListener('click', () => {
+      toggleStatsPanel();
     });
 
     fullscreenBtn.addEventListener('click', () => {
@@ -657,6 +849,18 @@ $settings = [
         event.preventDefault();
         transitionToNext('arrow_skip');
       }
+      if (event.key.toLowerCase() === 'f') {
+        event.preventDefault();
+        toggleFavorite();
+      }
+      if (event.key.toLowerCase() === 'i') {
+        event.preventDefault();
+        toggleInfoPanel();
+      }
+      if (event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        toggleStatsPanel();
+      }
     });
 
     const bootstrap = async () => {
@@ -664,6 +868,7 @@ $settings = [
       updateMuteButton();
       updateFullscreenButton();
       updateStatus();
+      syncPanelVisibility();
 
       document.addEventListener('fullscreenchange', updateFullscreenButton);
       document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
