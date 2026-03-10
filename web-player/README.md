@@ -24,7 +24,7 @@ docker compose up -d
 - Keep `DEBUG=false` in production.
 - Mutation endpoints are POST-only.
 - Set `MUTATION_TOKEN` and send it as `X-Mutation-Token` for `watch.php` and `favorite.php`.
-- External QR generation is disabled by default; set `ENABLE_EXTERNAL_QR=true` only if you accept third-party URL disclosure.
+- QR rendering is client-side using `qrcode.js` (no external QR image API).
 
 ## License
 

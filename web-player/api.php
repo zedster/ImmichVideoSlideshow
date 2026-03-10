@@ -16,7 +16,6 @@ $syncOnStartup = envFlag('SYNC_ON_STARTUP', true);
 $showSyncStatus = envFlag('SHOW_SYNC_STATUS', true);
 $defaultOnlyFavorites = envFlag('ONLY_FAVORITES', false);
 $showQrCode = envFlag('SHOW_QR_CODE', true);
-$enableExternalQr = envFlag('ENABLE_EXTERNAL_QR', false);
 $onlyFavorites = $defaultOnlyFavorites;
 if (isset($_GET['favOnly'])) {
     $onlyFavorites = ((string) $_GET['favOnly']) === '1';
@@ -243,10 +242,6 @@ $assetId = rawurlencode((string) ($selected['asset_id'] ?? $selected['id'] ?? ''
 $videoSrc = '/video.php?id=' . $assetId;
 $assetIdPlain = (string) ($selected['asset_id'] ?? $selected['id'] ?? '');
 $immichAssetUrl = rtrim($immichUrl, '/') . '/photos/' . rawurlencode($assetIdPlain);
-$qrImageUrl = '';
-if ($showQrCode && $enableExternalQr) {
-    $qrImageUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=' . rawurlencode($immichAssetUrl);
-}
 $captureDateValue = (string) ($selected['capture_date'] ?? '');
 $captureMonthYear = formatCaptureMonthYear($captureDateValue);
 $cityValue = trim((string) ($selected['city'] ?? ''));
@@ -281,7 +276,6 @@ $metadataPayload = [
     'faces_count' => (string) ($selected['faces_count'] ?? ''),
     'watched_count' => (string) ($selected['watched_count'] ?? ''),
     'immich_asset_url' => $immichAssetUrl,
-    'qr_image_url' => $qrImageUrl,
     'show_qr_code' => $showQrCode ? '1' : '0',
     'original_path' => (string) ($selected['original_path'] ?? ''),
 ];

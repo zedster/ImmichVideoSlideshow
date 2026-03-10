@@ -101,6 +101,45 @@ $settings = [
       backdrop-filter: blur(2px);
     }
 
+    .qr-panel {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      z-index: 25;
+      width: 192px;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 8px;
+      padding: 8px;
+      display: none;
+      backdrop-filter: blur(2px);
+    }
+
+    .qr-title {
+      font-size: 12px;
+      margin: 0 0 6px 0;
+      opacity: 0.9;
+    }
+
+    #qrCode {
+      width: 160px;
+      height: 160px;
+      margin: 0 auto;
+      background: #fff;
+    }
+
+    .qr-link {
+      display: block;
+      margin-top: 8px;
+      font-size: 11px;
+      color: #d9ecff;
+      text-decoration: none;
+      word-break: break-all;
+      max-height: 2.8em;
+      overflow: hidden;
+    }
+
     .controls {
       display: flex;
       gap: 8px;
@@ -143,6 +182,11 @@ $settings = [
   </div>
 
   <div id="fallback"></div>
+  <div id="qrPanel" class="qr-panel">
+    <p class="qr-title">Open in Immich</p>
+    <div id="qrCode"></div>
+    <a id="qrLink" class="qr-link" href="#" target="_blank" rel="noopener noreferrer"></a>
+  </div>
 
   <div class="hud">
     <div id="title" class="chip">Loading…</div>
@@ -154,6 +198,7 @@ $settings = [
     </div>
   </div>
 
+  <script src="/qrcode.min.js"></script>
   <script>
     const settings = <?= json_encode($settings, JSON_UNESCAPED_SLASHES) ?>;
 
@@ -164,6 +209,9 @@ $settings = [
     const titleEl = document.getElementById('title');
     const statusEl = document.getElementById('status');
     const fallbackEl = document.getElementById('fallback');
+    const qrPanelEl = document.getElementById('qrPanel');
+    const qrCodeEl = document.getElementById('qrCode');
+    const qrLinkEl = document.getElementById('qrLink');
     const skipBtn = document.getElementById('skipBtn');
     const muteBtn = document.getElementById('muteBtn');
     const fullscreenBtn = document.getElementById('fullscreenBtn');
@@ -176,6 +224,7 @@ $settings = [
     let preparingNext = false;
     let nextPreparedId = '';
     let currentItem = null;
+    let qrInstance = null;
 
     const readMutedPreference = () => {
       try {
@@ -277,7 +326,51 @@ $settings = [
         title: String(payload.metadata?.file_name || 'Untitled'),
         duration: Number(payload.metadata?.duration || 0),
         src: String(payload.video_src || ''),
+        immichAssetUrl: String(payload.metadata?.immich_asset_url || ''),
+        showQrCode: String(payload.metadata?.show_qr_code || '0') === '1',
       };
+    };
+
+    const clearQrCode = () => {
+      while (qrCodeEl.firstChild) {
+        qrCodeEl.removeChild(qrCodeEl.firstChild);
+      }
+    };
+
+    const renderQrCode = (item) => {
+      if (!item.showQrCode || !item.immichAssetUrl) {
+        qrPanelEl.style.display = 'none';
+        clearQrCode();
+        qrLinkEl.textContent = '';
+        qrLinkEl.removeAttribute('href');
+        return;
+      }
+
+      if (typeof QRCode === 'undefined') {
+        qrPanelEl.style.display = 'none';
+        return;
+      }
+
+      qrPanelEl.style.display = 'block';
+      qrLinkEl.href = item.immichAssetUrl;
+      qrLinkEl.textContent = item.immichAssetUrl;
+
+      if (!qrInstance) {
+        clearQrCode();
+        qrInstance = new QRCode(qrCodeEl, {
+          text: item.immichAssetUrl,
+          width: 160,
+          height: 160,
+          colorDark: '#000000',
+          colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M,
+        });
+      } else if (typeof qrInstance.makeCode === 'function') {
+        qrInstance.makeCode(item.immichAssetUrl);
+      } else {
+        clearQrCode();
+        qrInstance = new QRCode(qrCodeEl, item.immichAssetUrl);
+      }
     };
 
     const fetchNextItem = async () => {
@@ -418,6 +511,7 @@ $settings = [
       });
       currentItem = item;
       titleEl.textContent = item.title;
+      renderQrCode(item);
       updateStatus();
     };
 
@@ -478,6 +572,7 @@ $settings = [
         swapPlayers();
         currentItem = nextItem;
         titleEl.textContent = nextItem.title;
+        renderQrCode(nextItem);
         nextPreparedId = '';
         setFallback('');
 
