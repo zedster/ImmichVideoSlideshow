@@ -4,6 +4,16 @@ import SwiftUI
 import UIKit
 
 struct ChannelView: View {
+    private enum ControlsFocusTarget: Hashable {
+        case back
+        case playPause
+        case skip
+        case favorite
+        case hideForever
+        case info
+        case settings
+    }
+
     @ObservedObject private var configStore: ConfigStore
     @StateObject private var coordinator: ChannelCoordinator
     @State private var showSetup = false
@@ -14,6 +24,8 @@ struct ChannelView: View {
     @State private var hideControlsTask: Task<Void, Never>?
     @State private var showHideForeverConfirmation = false
     @FocusState private var inputAnchorFocused: Bool
+    @FocusState private var focusedControl: ControlsFocusTarget?
+    @State private var lastFocusedControl: ControlsFocusTarget = .playPause
 
     init(configStore: ConfigStore) {
         self._configStore = ObservedObject(wrappedValue: configStore)
@@ -176,6 +188,7 @@ struct ChannelView: View {
                                     Image(systemName: "backward.end.fill")
                                 }
                                 .buttonStyle(.bordered)
+                                .focused($focusedControl, equals: .back)
                                 .accessibilityLabel("Back")
                             }
 
@@ -186,6 +199,7 @@ struct ChannelView: View {
                                 Image(systemName: coordinator.playPauseButtonSystemImage())
                             }
                             .buttonStyle(.bordered)
+                            .focused($focusedControl, equals: .playPause)
                             .accessibilityLabel("Play Pause")
 
                             Button {
@@ -195,6 +209,7 @@ struct ChannelView: View {
                                 Image(systemName: "forward.end.fill")
                             }
                             .buttonStyle(.bordered)
+                            .focused($focusedControl, equals: .skip)
                             .accessibilityLabel("Skip")
 
                             Button {
@@ -205,6 +220,7 @@ struct ChannelView: View {
                             }
                             .buttonStyle(.bordered)
                             .disabled(coordinator.favoriteUpdateInProgress)
+                            .focused($focusedControl, equals: .favorite)
                             .accessibilityLabel(coordinator.favoriteButtonLabel())
 
                             Button(role: .destructive) {
@@ -215,6 +231,7 @@ struct ChannelView: View {
                             }
                             .buttonStyle(.bordered)
                             .disabled(!coordinator.canHideToAlbum || coordinator.hideUpdateInProgress)
+                            .focused($focusedControl, equals: .hideForever)
                             .accessibilityLabel("Hide Forever")
 
                             Button {
@@ -224,6 +241,7 @@ struct ChannelView: View {
                                 Image(systemName: "info.circle")
                             }
                             .buttonStyle(.bordered)
+                            .focused($focusedControl, equals: .info)
                             .accessibilityLabel("Info")
 
                             Button {
@@ -233,6 +251,7 @@ struct ChannelView: View {
                                 Image(systemName: "gearshape")
                             }
                             .buttonStyle(.borderedProminent)
+                            .focused($focusedControl, equals: .settings)
                             .accessibilityLabel("Settings")
                         }
                         .padding(.horizontal, 16)
@@ -360,6 +379,13 @@ struct ChannelView: View {
         }
         .onChange(of: controlsVisible) { _ in
             refreshInputAnchorFocus()
+            if controlsVisible {
+                restoreLastFocusedControl()
+            }
+        }
+        .onChange(of: focusedControl) { target in
+            guard let target else { return }
+            lastFocusedControl = target
         }
         .onChange(of: configStore.config.debug) { debugEnabled in
             if !debugEnabled {
@@ -496,6 +522,27 @@ struct ChannelView: View {
 
     private func refreshInputAnchorFocus() {
         inputAnchorFocused = !controlsVisible && !showInfo && !showSetup
+    }
+
+    private func restoreLastFocusedControl() {
+        guard controlsVisible, !showInfo, !showSetup else { return }
+        let target = resolvedFocusTarget(from: lastFocusedControl)
+        DispatchQueue.main.async {
+            focusedControl = target
+        }
+    }
+
+    private func resolvedFocusTarget(from target: ControlsFocusTarget) -> ControlsFocusTarget {
+        switch target {
+        case .back:
+            return coordinator.canGoBack ? .back : .playPause
+        case .favorite:
+            return coordinator.favoriteUpdateInProgress ? .playPause : .favorite
+        case .hideForever:
+            return (coordinator.canHideToAlbum && !coordinator.hideUpdateInProgress) ? .hideForever : .favorite
+        case .playPause, .skip, .info, .settings:
+            return target
+        }
     }
 
     private func qrImage(from value: String) -> UIImage? {
