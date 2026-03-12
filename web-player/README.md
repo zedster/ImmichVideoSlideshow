@@ -34,4 +34,4 @@ docker compose up -d
 
 ## License
 
-MIT License. See root `LICENSE`.
+Apache License 2.0. See root `LICENSE`.

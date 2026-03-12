@@ -16,4 +16,4 @@ Native Apple TV app for Immich Video Slideshow.
 
 ## License
 
-MIT License. See root `LICENSE`.
+Apache License 2.0. See root `LICENSE`.
