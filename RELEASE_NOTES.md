@@ -2,7 +2,7 @@
 
 ## v1.0.0
 
-Demo: https://bananasystems.co.uk/immich-video-slideshow
+Example screenshots at: https://bananasystems.co.uk/immich-video-slideshow
 
 ### Features
 
