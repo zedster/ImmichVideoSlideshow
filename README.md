@@ -2,7 +2,7 @@
 
 A lightweight slideshow player for videos stored in an Immich library.
 
-Demo: https://bananasystems.co.uk/immich-video-slideshow
+Preview/screenshots at: https://bananasystems.co.uk/immich-video-slideshow
 
 ## Platforms Supported
 
@@ -15,7 +15,7 @@ Demo: https://bananasystems.co.uk/immich-video-slideshow
 - Shuffle playback
 - Minimum duration filter (default 10 seconds)
 - Designed for large libraries
-- Tested with 26k videos
+- Tested with 26k videos in Immich
 
 ## Web vs tvOS Feature Comparison
 
@@ -67,6 +67,7 @@ Demo: https://bananasystems.co.uk/immich-video-slideshow
 ## Contributing
 
 See `CONTRIBUTING.md` for contribution workflow.
+Mainly created using Codex/GPT 5.3
 
 ## Security
 
