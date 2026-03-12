@@ -409,6 +409,7 @@ $settings = [
     let resyncInProgress = false;
     let currentPlaybackWatchMarked = false;
     let controlsHideTimer = null;
+    let autoplayBlocked = false;
     const sessionUniqueIds = new Set();
     const failedAssetMap = new Map();
     const FAILED_ASSET_COOLDOWN_MS = 5 * 60 * 1000;
@@ -1188,6 +1189,58 @@ $settings = [
       video.style.opacity = '0';
     };
 
+    const isAutoplayBlockedError = (err) => {
+      const name = String(err?.name || '');
+      const message = String(err?.message || '').toLowerCase();
+      return name === 'NotAllowedError' || message.includes('didn\'t interact') || message.includes('notallowederror');
+    };
+
+    const playWithMutedFallback = async (video, contextLabel) => {
+      try {
+        await video.play();
+        autoplayBlocked = false;
+        return;
+      } catch (err) {
+        console.warn(`${contextLabel} play failed, retrying muted`, err);
+      }
+
+      try {
+        video.muted = true;
+        players[0].muted = true;
+        players[1].muted = true;
+        saveMutedPreference(true);
+        updateMuteButton();
+        await video.play();
+        autoplayBlocked = false;
+      } catch (err) {
+        if (isAutoplayBlockedError(err)) {
+          autoplayBlocked = true;
+          setFallback('Autoplay blocked by browser. Tap/click or press a key to continue.');
+          const blocked = new Error('autoplay_blocked');
+          blocked.cause = err;
+          throw blocked;
+        }
+        throw err;
+      }
+    };
+
+    const tryResumeAfterAutoplayBlock = async () => {
+      if (!autoplayBlocked || !currentItem) {
+        return;
+      }
+      const active = activePlayer();
+      try {
+        await playWithMutedFallback(active, 'Resume');
+        autoplayBlocked = false;
+        if ((fallbackEl.textContent || '').startsWith('Autoplay blocked')) {
+          setFallback('');
+        }
+        updatePauseButton();
+      } catch (_err) {
+        // Still blocked or failed. Keep waiting for another interaction.
+      }
+    };
+
     const waitForCanPlay = (video, timeoutMs) => {
       return new Promise((resolve, reject) => {
         let done = false;
@@ -1259,20 +1312,6 @@ $settings = [
     };
 
     const playOnActivePlayer = async (item) => {
-      const playWithMutedFallback = async (video, contextLabel) => {
-        try {
-          await video.play();
-        } catch (err) {
-          console.warn(`${contextLabel} play failed, retrying muted`, err);
-          video.muted = true;
-          players[0].muted = true;
-          players[1].muted = true;
-          saveMutedPreference(true);
-          updateMuteButton();
-          await video.play();
-        }
-      };
-
       const active = activePlayer();
       active.src = item.src;
       active.dataset.assetId = item.id;
@@ -1281,7 +1320,20 @@ $settings = [
       active.style.transitionDuration = '0ms';
       active.muted = players[0].muted;
       active.load();
-      await playWithMutedFallback(active, 'Initial');
+      try {
+        await playWithMutedFallback(active, 'Initial');
+      } catch (err) {
+        if (err instanceof Error && err.message === 'autoplay_blocked') {
+          currentItem = item;
+          updateMetaCaption(item);
+          updateFavoriteButton();
+          if (infoVisible) renderInfoPanel(item);
+          if (statsVisible) renderStatsPanel(item);
+          updateStatus();
+          updateProgressUI(active);
+        }
+        throw err;
+      }
       currentItem = item;
       recordSessionVideo(item);
       currentPlaybackWatchMarked = false;
@@ -1301,45 +1353,31 @@ $settings = [
     };
 
     const transitionToItem = async (nextItem, reason) => {
-      const playWithMutedFallback = async (video, contextLabel) => {
-        try {
-          await video.play();
-        } catch (err) {
-          console.warn(`${contextLabel} play failed, retrying muted`, err);
-          video.muted = true;
-          players[0].muted = true;
-          players[1].muted = true;
-          saveMutedPreference(true);
-          updateMuteButton();
-          await video.play();
-        }
-      };
-
       const outgoing = activePlayer();
       const incoming = hiddenPlayer();
       const shouldCrossfade = settings.crossfadeEnabled;
+      let preparedForCrossfade = true;
 
       try {
         await prepareHiddenWith(nextItem);
       } catch (err) {
-        // Manual transitions should still work if hidden prebuffering times out.
-        if (shouldCrossfade) {
-          throw err;
-        }
-        console.warn('Prepare hidden timed out; falling back to direct load for manual transition', err);
+        preparedForCrossfade = false;
+        console.warn('Prepare hidden failed; falling back to direct load', err);
         incoming.src = nextItem.src;
         incoming.dataset.assetId = nextItem.id;
         incoming.preload = 'auto';
         incoming.load();
+        await waitForCanPlay(incoming, 9000);
       }
 
+      const canCrossfade = shouldCrossfade && preparedForCrossfade;
       incoming.muted = outgoing.muted;
       incoming.classList.add('active');
       incoming.style.transitionDuration = '0ms';
-      incoming.style.opacity = shouldCrossfade ? '0' : '1';
+      incoming.style.opacity = canCrossfade ? '0' : '1';
 
       // Keep single-audio behavior even when fading visuals.
-      if (shouldCrossfade) {
+      if (canCrossfade) {
         outgoing.muted = true;
       } else {
         outgoing.pause();
@@ -1347,7 +1385,7 @@ $settings = [
 
       await playWithMutedFallback(incoming, 'Transition');
 
-      if (shouldCrossfade && settings.crossfadeDurationMs > 0) {
+      if (canCrossfade && settings.crossfadeDurationMs > 0) {
         const duration = settings.crossfadeDurationMs;
         incoming.style.transitionDuration = `${duration}ms`;
         outgoing.style.transitionDuration = `${duration}ms`;
@@ -1433,7 +1471,7 @@ $settings = [
         if (currentItem) {
           historyStack.push(currentItem);
         }
-        while (!transitioned && queue.length > 0 && attempts < 3) {
+        while (!transitioned && queue.length > 0 && attempts < 6) {
           attempts += 1;
           const nextItem = queue.shift();
           if (!nextItem) {
@@ -1578,6 +1616,7 @@ $settings = [
 
     window.addEventListener('keydown', (event) => {
       noteInteraction();
+      tryResumeAfterAutoplayBlock();
       if (event.code === 'Space') {
         event.preventDefault();
         togglePause();
@@ -1615,6 +1654,11 @@ $settings = [
     ['pointerdown', 'pointermove', 'touchstart', 'touchmove', 'mousemove', 'wheel', 'click'].forEach((eventName) => {
       window.addEventListener(eventName, noteInteraction, { passive: true });
     });
+    ['pointerdown', 'touchstart', 'click'].forEach((eventName) => {
+      window.addEventListener(eventName, () => {
+        tryResumeAfterAutoplayBlock();
+      }, { passive: true });
+    });
 
     const bootstrap = async () => {
       bindPlayerEvents();
@@ -1647,6 +1691,9 @@ $settings = [
 
       // If startup failed, retry until recovered.
       window.setInterval(() => {
+        if (autoplayBlocked) {
+          return;
+        }
         if (!currentItem && !transitionInProgress) {
           fetchNextItem(currentItem?.id || '')
             .then((item) => playOnActivePlayer(item))
