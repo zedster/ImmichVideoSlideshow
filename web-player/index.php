@@ -45,6 +45,11 @@ $settings = [
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Immich Video Channel</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  <link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
+  <link rel="icon" href="/assets/favicon.ico">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+  <link rel="manifest" href="/assets/site.webmanifest">
   <style>
     html, body {
       margin: 0;
@@ -292,6 +297,23 @@ $settings = [
       max-width: 90vw;
     }
 
+    #issuePopup {
+      position: fixed;
+      top: calc(12px + env(safe-area-inset-top));
+      right: calc(12px + env(safe-area-inset-right));
+      z-index: 31;
+      color: #fff5cf;
+      background: rgba(70, 40, 0, 0.8);
+      border: 1px solid rgba(255, 200, 90, 0.72);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font: 12px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      display: none;
+      white-space: pre-wrap;
+      max-width: min(84vw, 460px);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+    }
+
     body.controls-hidden .hud,
     body.controls-hidden .progress-wrap {
       opacity: 0;
@@ -322,6 +344,7 @@ $settings = [
   </div>
 
   <div id="fallback"></div>
+  <div id="issuePopup"></div>
   <div id="metaCaption" class="meta-caption"></div>
   <div id="progressWrap" class="progress-wrap">
     <div class="progress-track">
@@ -369,6 +392,7 @@ $settings = [
     ];
     const statusEl = document.getElementById('status');
     const fallbackEl = document.getElementById('fallback');
+    const issuePopupEl = document.getElementById('issuePopup');
     const metaCaptionEl = document.getElementById('metaCaption');
     const progressWrapEl = document.getElementById('progressWrap');
     const progressFillEl = document.getElementById('progressFill');
@@ -410,10 +434,18 @@ $settings = [
     let currentPlaybackWatchMarked = false;
     let controlsHideTimer = null;
     let autoplayBlocked = false;
+    let issuePopupTimer = null;
+    let lastIssuePopupKey = '';
+    let lastIssuePopupAt = 0;
+    let lastProgressAtMs = Date.now();
+    let lastProgressTime = 0;
+    let stallRecoveryInProgress = false;
     const sessionUniqueIds = new Set();
     const failedAssetMap = new Map();
     const FAILED_ASSET_COOLDOWN_MS = 5 * 60 * 1000;
     const PLAYBACK_ORDER_VALUES = ['random', 'sequential_oldest', 'sequential_newest'];
+    const STALL_TRIGGER_MS = 12000;
+    const PROGRESS_DELTA_SECONDS = 0.12;
 
     const normalizePlaybackOrder = (value) => {
       const raw = String(value || '').trim().toLowerCase();
@@ -591,6 +623,55 @@ $settings = [
     const setFallback = (text) => {
       fallbackEl.textContent = text;
       fallbackEl.style.display = text ? 'block' : 'none';
+    };
+
+    const showIssuePopup = (title, details = '', timeoutMs = 7000) => {
+      const key = `${title}|${details}`;
+      const now = Date.now();
+      if (key === lastIssuePopupKey && (now - lastIssuePopupAt) < 2500) {
+        return;
+      }
+      lastIssuePopupKey = key;
+      lastIssuePopupAt = now;
+
+      const safeTitle = String(title || '').trim();
+      const safeDetails = String(details || '').trim();
+      issuePopupEl.textContent = safeDetails ? `${safeTitle}\n${safeDetails}` : safeTitle;
+      issuePopupEl.style.display = 'block';
+      if (issuePopupTimer !== null) {
+        window.clearTimeout(issuePopupTimer);
+      }
+      issuePopupTimer = window.setTimeout(() => {
+        issuePopupEl.style.display = 'none';
+      }, Math.max(1500, timeoutMs));
+    };
+
+    const videoErrorText = (video) => {
+      const code = Number(video?.error?.code || 0);
+      if (code === 1) return 'Playback aborted.';
+      if (code === 2) return 'Network error while streaming.';
+      if (code === 3) return 'Decoding error.';
+      if (code === 4) return 'Video format/source unsupported.';
+      return 'Unknown playback error.';
+    };
+
+    const resetProgressWatchdog = (video) => {
+      lastProgressAtMs = Date.now();
+      lastProgressTime = Number(video?.currentTime || 0);
+      stallRecoveryInProgress = false;
+    };
+
+    const markPlaybackProgress = (video) => {
+      const now = Date.now();
+      const current = Number(video?.currentTime || 0);
+      if (!Number.isFinite(current)) {
+        return;
+      }
+      if (Math.abs(current - lastProgressTime) >= PROGRESS_DELTA_SECONDS) {
+        lastProgressTime = current;
+        lastProgressAtMs = now;
+        stallRecoveryInProgress = false;
+      }
     };
 
     const apiNextUrl = (afterAssetId = '') => {
@@ -1344,6 +1425,7 @@ $settings = [
       if (statsVisible) renderStatsPanel(item);
       updateStatus();
       updateProgressUI(active);
+      resetProgressWatchdog(active);
     };
 
     const swapPlayers = () => {
@@ -1411,6 +1493,7 @@ $settings = [
       updatePauseButton();
       nextPreparedId = '';
       setFallback('');
+      resetProgressWatchdog(activePlayer());
     };
 
     const goBackToPrevious = async () => {
@@ -1527,6 +1610,7 @@ $settings = [
       if (settings.crossfadeEnabled && remaining <= Math.max(0.15, settings.crossfadeDurationMs / 1000) && queue.length > 0) {
         transitionToNext('near_end_crossfade');
       }
+      markPlaybackProgress(video);
     };
 
     const bindPlayerEvents = () => {
@@ -1544,11 +1628,25 @@ $settings = [
         video.addEventListener('error', () => {
           if (idx === activeIndex) {
             console.error('Active player error', video.error);
+            showIssuePopup('Playback error', videoErrorText(video));
             transitionToNext('active_error');
           }
         });
+        video.addEventListener('stalled', () => {
+          if (idx === activeIndex && !video.paused) {
+            showIssuePopup('Playback stalled', 'Stream interrupted. Attempting recovery...');
+          }
+        });
+        video.addEventListener('waiting', () => {
+          if (idx === activeIndex && !video.paused) {
+            showIssuePopup('Buffering', 'Playback is waiting for data...');
+          }
+        });
         video.addEventListener('play', () => {
-          if (idx === activeIndex) updatePauseButton();
+          if (idx === activeIndex) {
+            updatePauseButton();
+            resetProgressWatchdog(video);
+          }
         });
         video.addEventListener('pause', () => {
           if (idx === activeIndex) updatePauseButton();
@@ -1687,6 +1785,38 @@ $settings = [
       // Keep queue filled over long runs.
       window.setInterval(() => {
         fillQueue();
+      }, 2000);
+
+      // Detect mid-stream hangs with no time progression.
+      window.setInterval(() => {
+        if (transitionInProgress || autoplayBlocked || stallRecoveryInProgress) {
+          return;
+        }
+        if (!currentItem) {
+          return;
+        }
+        const video = activePlayer();
+        if (!video || video.paused || video.ended) {
+          return;
+        }
+        markPlaybackProgress(video);
+        const stalledForMs = Date.now() - lastProgressAtMs;
+        if (stalledForMs < STALL_TRIGGER_MS) {
+          return;
+        }
+        stallRecoveryInProgress = true;
+        showIssuePopup(
+          'Playback appears stuck',
+          `No progress for ${Math.floor(stalledForMs / 1000)}s. Skipping to next video...`,
+          5000
+        );
+        transitionToNext('stalled_watchdog')
+          .catch((err) => {
+            console.error('Stall recovery transition failed', err);
+          })
+          .finally(() => {
+            resetProgressWatchdog(activePlayer());
+          });
       }, 2000);
 
       // If startup failed, retry until recovered.
