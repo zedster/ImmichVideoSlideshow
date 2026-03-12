@@ -49,7 +49,7 @@ $settings = [
   <link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
   <link rel="icon" href="/assets/favicon.ico">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
-  <link rel="manifest" href="/assets/site.webmanifest">
+  <link rel="manifest" href="/assets/site.webmanifest" crossorigin="use-credentials">
   <style>
     html, body {
       margin: 0;
