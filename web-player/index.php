@@ -34,7 +34,8 @@ $settings = [
     'crossfadeEnabled' => envFlag('CROSSFADE_ENABLED', true),
     'crossfadeDurationMs' => max(0, envInt('CROSSFADE_DURATION', 450)),
     'preloadSecondsBeforeEnd' => max(0.25, envFloat('PRELOAD_SECONDS_BEFORE_END', 4.0)),
-    'queueTargetSize' => max(1, min(5, envInt('QUEUE_TARGET_SIZE', 2))),
+    'queueTargetSize' => max(1, min(5, envInt('QUEUE_TARGET_SIZE', 1))),
+    //'queueTargetSize' => 1,
     'debugEnabled' => envFlag('DEBUG', false),
     'playbackOrder' => (string) (getenv('PLAYBACK_ORDER') ?: 'random'),
 ];
@@ -440,12 +441,14 @@ $settings = [
     let lastProgressAtMs = Date.now();
     let lastProgressTime = 0;
     let stallRecoveryInProgress = false;
+    const stallSoftRetryCountByAsset = new Map();
     const sessionUniqueIds = new Set();
     const failedAssetMap = new Map();
     const FAILED_ASSET_COOLDOWN_MS = 5 * 60 * 1000;
     const PLAYBACK_ORDER_VALUES = ['random', 'sequential_oldest', 'sequential_newest'];
-    const STALL_TRIGGER_MS = 12000;
+    const STALL_TRIGGER_MS = 22000;
     const PROGRESS_DELTA_SECONDS = 0.12;
+    const MAX_STALL_SOFT_RETRIES_PER_ASSET = 1;
 
     const normalizePlaybackOrder = (value) => {
       const raw = String(value || '').trim().toLowerCase();
@@ -671,6 +674,45 @@ $settings = [
         lastProgressTime = current;
         lastProgressAtMs = now;
         stallRecoveryInProgress = false;
+      }
+    };
+
+    const getStallSoftRetryCount = (assetId) => {
+      if (!assetId) return 0;
+      return Number(stallSoftRetryCountByAsset.get(assetId) || 0);
+    };
+
+    const bumpStallSoftRetryCount = (assetId) => {
+      if (!assetId) return;
+      stallSoftRetryCountByAsset.set(assetId, getStallSoftRetryCount(assetId) + 1);
+    };
+
+    const clearStallSoftRetryCount = (assetId) => {
+      if (!assetId) return;
+      stallSoftRetryCountByAsset.delete(assetId);
+    };
+
+    const trySoftRecoverActiveStream = async () => {
+      const video = activePlayer();
+      if (!video) return false;
+      const resumeAt = Number(video.currentTime || 0);
+      const src = String(video.currentSrc || video.src || '');
+      if (!src) return false;
+
+      try {
+        video.pause();
+        video.load();
+        await waitForCanPlay(video, 10000);
+        if (Number.isFinite(resumeAt) && resumeAt > 1) {
+          try {
+            video.currentTime = Math.max(0, resumeAt - 0.5);
+          } catch (_e) {}
+        }
+        await playWithMutedFallback(video, 'Stall recover');
+        return true;
+      } catch (err) {
+        console.error('Soft recover failed', err);
+        return false;
       }
     };
 
@@ -1419,6 +1461,7 @@ $settings = [
       recordSessionVideo(item);
       currentPlaybackWatchMarked = false;
       markAssetRecovered(item.id);
+      clearStallSoftRetryCount(item.id);
       updateMetaCaption(item);
       updateFavoriteButton();
       if (infoVisible) renderInfoPanel(item);
@@ -1486,6 +1529,7 @@ $settings = [
       recordSessionVideo(nextItem);
       currentPlaybackWatchMarked = false;
       markAssetRecovered(nextItem.id);
+      clearStallSoftRetryCount(nextItem.id);
       updateMetaCaption(nextItem);
       updateFavoriteButton();
       if (infoVisible) renderInfoPanel(nextItem);
@@ -1799,24 +1843,47 @@ $settings = [
         if (!video || video.paused || video.ended) {
           return;
         }
+        // Avoid false positives when browser still has enough buffered data.
+        if (video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+          return;
+        }
         markPlaybackProgress(video);
         const stalledForMs = Date.now() - lastProgressAtMs;
         if (stalledForMs < STALL_TRIGGER_MS) {
           return;
         }
         stallRecoveryInProgress = true;
-        showIssuePopup(
-          'Playback appears stuck',
-          `No progress for ${Math.floor(stalledForMs / 1000)}s. Skipping to next video...`,
-          5000
-        );
-        transitionToNext('stalled_watchdog')
-          .catch((err) => {
+        (async () => {
+          try {
+            const assetId = String(currentItem?.id || '');
+            const softRetries = getStallSoftRetryCount(assetId);
+            if (softRetries < MAX_STALL_SOFT_RETRIES_PER_ASSET) {
+              showIssuePopup(
+                'Playback stalled',
+                `No progress for ${Math.floor(stalledForMs / 1000)}s. Trying to resume this video...`,
+                5000
+              );
+              bumpStallSoftRetryCount(assetId);
+              const recovered = await trySoftRecoverActiveStream();
+              if (recovered) {
+                showIssuePopup('Playback resumed', 'Stream recovered without skipping.', 2500);
+                resetProgressWatchdog(activePlayer());
+                return;
+              }
+            }
+
+            showIssuePopup(
+              'Playback appears stuck',
+              `No progress for ${Math.floor(stalledForMs / 1000)}s. Skipping to next video...`,
+              5000
+            );
+            await transitionToNext('stalled_watchdog');
+          } catch (err) {
             console.error('Stall recovery transition failed', err);
-          })
-          .finally(() => {
+          } finally {
             resetProgressWatchdog(activePlayer());
-          });
+          }
+        })();
       }, 2000);
 
       // If startup failed, retry until recovered.
