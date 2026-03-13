@@ -95,11 +95,9 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     deinit {
-        Task { @MainActor in
-            teardownObservers()
-            queueTimer?.invalidate()
-            recoveryTimer?.invalidate()
-        }
+        teardownObservers()
+        queueTimer?.invalidate()
+        recoveryTimer?.invalidate()
     }
 
     func start() {
@@ -475,10 +473,9 @@ final class ChannelCoordinator: ObservableObject {
         ) { [weak self] note in
             guard let self else { return }
             guard let item = note.object as? AVPlayerItem else { return }
-            if item === self.activePlayer().currentItem {
-                Task { @MainActor in
-                    await self.transitionToNext(reason: "ended")
-                }
+            Task { @MainActor in
+                guard item === self.activePlayer().currentItem else { return }
+                await self.transitionToNext(reason: "ended")
             }
         }
     }
@@ -500,7 +497,9 @@ final class ChannelCoordinator: ObservableObject {
         let player = activePlayer()
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             guard let self else { return }
-            self.onTick(current: CMTimeGetSeconds(time))
+            Task { @MainActor in
+                self.onTick(current: CMTimeGetSeconds(time))
+            }
         }
         timeObserverPlayer = player
         installPlaybackStateObserver()
