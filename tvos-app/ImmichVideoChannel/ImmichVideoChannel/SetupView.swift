@@ -100,7 +100,7 @@ struct SetupView: View {
                         focus: .immichURL
                     )
                     labeledField(
-                        "API Key",
+                        "Your Immich server user API Key",
                         placeholder: "API key",
                         text: $apiKey,
                         disableAutocorrect: true,

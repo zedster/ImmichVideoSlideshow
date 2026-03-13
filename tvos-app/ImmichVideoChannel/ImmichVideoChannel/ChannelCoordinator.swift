@@ -95,7 +95,17 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     deinit {
-        teardownObservers()
+        if let endObserver {
+            NotificationCenter.default.removeObserver(endObserver)
+            self.endObserver = nil
+        }
+        timeControlObservation?.invalidate()
+        timeControlObservation = nil
+        if let observer = timeObserver, let player = timeObserverPlayer {
+            player.removeTimeObserver(observer)
+            timeObserver = nil
+            timeObserverPlayer = nil
+        }
         queueTimer?.invalidate()
         recoveryTimer?.invalidate()
     }
