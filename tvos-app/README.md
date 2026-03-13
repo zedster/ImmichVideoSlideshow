@@ -1,6 +1,6 @@
 # tvOS App
 
-Native Apple TV app for Immich Video Slideshow.
+Native Apple TV app for Home Video Channel.
 
 ## Run in Xcode
 

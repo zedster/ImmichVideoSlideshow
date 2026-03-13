@@ -85,29 +85,32 @@ struct SetupView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Immich") {
+                Section("Connect to your Immich server") {
+                    Text("Enter the URL of your Immich server and your API key to begin playback.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     Text("Use your full Immich server URL, including `http://` or `https://`.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     labeledField(
-                        "Immich URL",
+                        "Server URL",
                         placeholder: "https://immich.example.com",
                         text: $immichURL,
                         disableAutocorrect: true,
                         focus: .immichURL
                     )
                     labeledField(
-                        "Immich API Key",
+                        "API Key",
                         placeholder: "API key",
                         text: $apiKey,
                         disableAutocorrect: true,
                         focus: .apiKey
                     )
-                    Text("API key is used to fetch and play your videos directly from Immich.")
+                    Text("Authenticate with your Immich server using your API key.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    actionRow(testInProgress ? "Testing..." : "Test Immich Connection", focus: .testConnection, disabled: testInProgress) {
+                    actionRow(testInProgress ? "Testing..." : "Test Server Connection", focus: .testConnection, disabled: testInProgress) {
                         testImmichConnection()
                     }
 
@@ -250,7 +253,7 @@ struct SetupView: View {
                     aboutRow("Build", value: buildNumber)
                 }
             }
-            .navigationTitle("Immich Channel Setup")
+            .navigationTitle("Connect to your Immich server")
             .onAppear {
                 loadFromConfig()
                 onRefreshStats?()
@@ -293,7 +296,7 @@ struct SetupView: View {
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !trimmedURL.isEmpty, !trimmedKey.isEmpty else {
-            validationError = "Immich URL and API key are required."
+            validationError = "Server URL and API key are required."
             return
         }
 
@@ -344,7 +347,7 @@ struct SetupView: View {
 
         guard !trimmedURL.isEmpty, !trimmedKey.isEmpty else {
             testFailed = true
-            testMessage = "Enter Immich URL and API key first."
+            testMessage = "Enter your server URL and API key first."
             return
         }
 
@@ -363,7 +366,7 @@ struct SetupView: View {
                 await MainActor.run {
                     persistImmichCredentialsFromInputs()
                     testFailed = false
-                    testMessage = "Connection successful. URL/API key saved."
+                    testMessage = "Connection successful. Server URL/API key saved."
                 }
             } catch {
                 await MainActor.run {
