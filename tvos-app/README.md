@@ -4,8 +4,8 @@ Native Apple TV app for Home Video Channel.
 
 ## Run in Xcode
 
-1. Open `tvos-app/ImmichVideoChannel/ImmichVideoChannel.xcodeproj` in Xcode.
-2. Select scheme `ImmichVideoChannel`.
+1. Open `tvos-app/HomeVideoChannel/HomeVideoChannel.xcodeproj` in Xcode.
+2. Select scheme `HomeVideoChannel`.
 3. Select an Apple TV simulator or physical device.
 4. Build and run.
 

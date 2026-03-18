@@ -44,7 +44,7 @@ Preview/screenshots at: https://bananasystems.co.uk/immich-video-slideshow
 
 ### tvOS App
 
-1. Open the tvOS project in Xcode from `tvos-app/ImmichVideoChannel/ImmichVideoChannel.xcodeproj`.
+1. Open the tvOS project in Xcode from `tvos-app/HomeVideoChannel/HomeVideoChannel.xcodeproj`.
 2. Configure your Immich server URL and API key in the app setup screen.
 
 ### Web Player

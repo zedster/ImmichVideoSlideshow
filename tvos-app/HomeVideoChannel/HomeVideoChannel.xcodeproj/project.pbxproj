@@ -1,0 +1,564 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXContainerItemProxy section */
+		96937EA82F5DF5D7001655EC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 96937E8F2F5DF5D3001655EC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 96937E962F5DF5D3001655EC;
+			remoteInfo = HomeVideoChannel;
+		};
+		96937EB22F5DF5D7001655EC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 96937E8F2F5DF5D3001655EC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 96937E962F5DF5D3001655EC;
+			remoteInfo = HomeVideoChannel;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		96937E972F5DF5D3001655EC /* HomeVideoChannel.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HomeVideoChannel.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		96937EA72F5DF5D7001655EC /* ImmichVideoChannelTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ImmichVideoChannelTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		96937EB12F5DF5D7001655EC /* ImmichVideoChannelUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ImmichVideoChannelUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		96937E992F5DF5D3001655EC /* HomeVideoChannel */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = HomeVideoChannel;
+			sourceTree = "<group>";
+		};
+		96937EAA2F5DF5D7001655EC /* HomeVideoChannelTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = HomeVideoChannelTests;
+			sourceTree = "<group>";
+		};
+		96937EB42F5DF5D7001655EC /* HomeVideoChannelUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = HomeVideoChannelUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		96937E942F5DF5D3001655EC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96937EA42F5DF5D7001655EC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96937EAE2F5DF5D7001655EC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		96937E8E2F5DF5D3001655EC = {
+			isa = PBXGroup;
+			children = (
+				96937E992F5DF5D3001655EC /* HomeVideoChannel */,
+				96937EAA2F5DF5D7001655EC /* HomeVideoChannelTests */,
+				96937EB42F5DF5D7001655EC /* HomeVideoChannelUITests */,
+				96937E982F5DF5D3001655EC /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		96937E982F5DF5D3001655EC /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				96937E972F5DF5D3001655EC /* HomeVideoChannel.app */,
+				96937EA72F5DF5D7001655EC /* ImmichVideoChannelTests.xctest */,
+				96937EB12F5DF5D7001655EC /* ImmichVideoChannelUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		96937E962F5DF5D3001655EC /* HomeVideoChannel */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 96937EBB2F5DF5D7001655EC /* Build configuration list for PBXNativeTarget "HomeVideoChannel" */;
+			buildPhases = (
+				96937E932F5DF5D3001655EC /* Sources */,
+				96937E942F5DF5D3001655EC /* Frameworks */,
+				96937E952F5DF5D3001655EC /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				96937E992F5DF5D3001655EC /* HomeVideoChannel */,
+			);
+			name = HomeVideoChannel;
+			packageProductDependencies = (
+			);
+			productName = HomeVideoChannel;
+			productReference = 96937E972F5DF5D3001655EC /* HomeVideoChannel.app */;
+			productType = "com.apple.product-type.application";
+		};
+		96937EA62F5DF5D7001655EC /* ImmichVideoChannelTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 96937EBE2F5DF5D7001655EC /* Build configuration list for PBXNativeTarget "ImmichVideoChannelTests" */;
+			buildPhases = (
+				96937EA32F5DF5D7001655EC /* Sources */,
+				96937EA42F5DF5D7001655EC /* Frameworks */,
+				96937EA52F5DF5D7001655EC /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				96937EA92F5DF5D7001655EC /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				96937EAA2F5DF5D7001655EC /* HomeVideoChannelTests */,
+			);
+			name = ImmichVideoChannelTests;
+			packageProductDependencies = (
+			);
+			productName = ImmichVideoChannelTests;
+			productReference = 96937EA72F5DF5D7001655EC /* ImmichVideoChannelTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		96937EB02F5DF5D7001655EC /* ImmichVideoChannelUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 96937EC12F5DF5D7001655EC /* Build configuration list for PBXNativeTarget "ImmichVideoChannelUITests" */;
+			buildPhases = (
+				96937EAD2F5DF5D7001655EC /* Sources */,
+				96937EAE2F5DF5D7001655EC /* Frameworks */,
+				96937EAF2F5DF5D7001655EC /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				96937EB32F5DF5D7001655EC /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				96937EB42F5DF5D7001655EC /* HomeVideoChannelUITests */,
+			);
+			name = ImmichVideoChannelUITests;
+			packageProductDependencies = (
+			);
+			productName = ImmichVideoChannelUITests;
+			productReference = 96937EB12F5DF5D7001655EC /* ImmichVideoChannelUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		96937E8F2F5DF5D3001655EC /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1620;
+				LastUpgradeCheck = 1620;
+				TargetAttributes = {
+					96937E962F5DF5D3001655EC = {
+						CreatedOnToolsVersion = 16.2;
+					};
+					96937EA62F5DF5D7001655EC = {
+						CreatedOnToolsVersion = 16.2;
+						TestTargetID = 96937E962F5DF5D3001655EC;
+					};
+					96937EB02F5DF5D7001655EC = {
+						CreatedOnToolsVersion = 16.2;
+						TestTargetID = 96937E962F5DF5D3001655EC;
+					};
+				};
+			};
+			buildConfigurationList = 96937E922F5DF5D3001655EC /* Build configuration list for PBXProject "HomeVideoChannel" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 96937E8E2F5DF5D3001655EC;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 96937E982F5DF5D3001655EC /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				96937E962F5DF5D3001655EC /* HomeVideoChannel */,
+				96937EA62F5DF5D7001655EC /* ImmichVideoChannelTests */,
+				96937EB02F5DF5D7001655EC /* ImmichVideoChannelUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		96937E952F5DF5D3001655EC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96937EA52F5DF5D7001655EC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96937EAF2F5DF5D7001655EC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		96937E932F5DF5D3001655EC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96937EA32F5DF5D7001655EC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96937EAD2F5DF5D7001655EC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		96937EA92F5DF5D7001655EC /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 96937E962F5DF5D3001655EC /* HomeVideoChannel */;
+			targetProxy = 96937EA82F5DF5D7001655EC /* PBXContainerItemProxy */;
+		};
+		96937EB32F5DF5D7001655EC /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 96937E962F5DF5D3001655EC /* HomeVideoChannel */;
+			targetProxy = 96937EB22F5DF5D7001655EC /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		96937EB92F5DF5D7001655EC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "Home Video Channel";
+				SDKROOT = appletvos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				TVOS_DEPLOYMENT_TARGET = 18.2;
+			};
+			name = Debug;
+		};
+		96937EBA2F5DF5D7001655EC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = NO;
+				PRODUCT_NAME = "Home Video Channel";
+				SDKROOT = appletvos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				TVOS_DEPLOYMENT_TARGET = 18.2;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		96937EBC2F5DF5D7001655EC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "Brand Assets";
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2.0.5;
+				DEVELOPMENT_ASSET_PATHS = "\"HomeVideoChannel/Preview Content\"";
+				DEVELOPMENT_TEAM = 274YMD9NP6;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Home Video Channel";
+				INFOPLIST_KEY_CFBundleName = "Home Video Channel";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 2;
+				PRODUCT_BUNDLE_IDENTIFIER = uk.co.bananasystems.homevideochannel;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 16.6;
+			};
+			name = Debug;
+		};
+		96937EBD2F5DF5D7001655EC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "Brand Assets";
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_ASSET_PATHS = "\"HomeVideoChannel/Preview Content\"";
+				DEVELOPMENT_TEAM = 274YMD9NP6;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Home Video Channel";
+				INFOPLIST_KEY_CFBundleName = "Home Video Channel";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 2;
+				PRODUCT_BUNDLE_IDENTIFIER = uk.co.bananasystems.homevideochannel;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 16.6;
+			};
+			name = Release;
+		};
+		96937EBF2F5DF5D7001655EC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 4;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0.5;
+				PRODUCT_BUNDLE_IDENTIFIER = uk.co.bananasystems.homevideochannel.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/HomeVideoChannel.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/HomeVideoChannel";
+				TVOS_DEPLOYMENT_TARGET = 18.2;
+			};
+			name = Debug;
+		};
+		96937EC02F5DF5D7001655EC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 4;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0.5;
+				PRODUCT_BUNDLE_IDENTIFIER = uk.co.bananasystems.homevideochannel.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/HomeVideoChannel.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/HomeVideoChannel";
+				TVOS_DEPLOYMENT_TARGET = 18.2;
+			};
+			name = Release;
+		};
+		96937EC22F5DF5D7001655EC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 4;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0.5;
+				PRODUCT_BUNDLE_IDENTIFIER = uk.co.bananasystems.homevideochannel.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TEST_TARGET_NAME = HomeVideoChannel;
+			};
+			name = Debug;
+		};
+		96937EC32F5DF5D7001655EC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 4;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0.5;
+				PRODUCT_BUNDLE_IDENTIFIER = uk.co.bananasystems.homevideochannel.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TEST_TARGET_NAME = HomeVideoChannel;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		96937E922F5DF5D3001655EC /* Build configuration list for PBXProject "HomeVideoChannel" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				96937EB92F5DF5D7001655EC /* Debug */,
+				96937EBA2F5DF5D7001655EC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		96937EBB2F5DF5D7001655EC /* Build configuration list for PBXNativeTarget "HomeVideoChannel" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				96937EBC2F5DF5D7001655EC /* Debug */,
+				96937EBD2F5DF5D7001655EC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		96937EBE2F5DF5D7001655EC /* Build configuration list for PBXNativeTarget "ImmichVideoChannelTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				96937EBF2F5DF5D7001655EC /* Debug */,
+				96937EC02F5DF5D7001655EC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		96937EC12F5DF5D7001655EC /* Build configuration list for PBXNativeTarget "ImmichVideoChannelUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				96937EC22F5DF5D7001655EC /* Debug */,
+				96937EC32F5DF5D7001655EC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 96937E8F2F5DF5D3001655EC /* Project object */;
+}
