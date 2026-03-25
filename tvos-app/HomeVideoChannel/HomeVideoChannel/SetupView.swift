@@ -1,4 +1,6 @@
+import CoreImage.CIFilterBuiltins
 import SwiftUI
+import UIKit
 
 struct SetupView: View {
     private enum SettingFocus: Hashable {
@@ -82,181 +84,339 @@ struct SetupView: View {
     @State private var testInProgress = false
     @FocusState private var focusedSetting: SettingFocus?
 
+    private let bananaSystemsGuideURL = "https://bananasystems.co.uk/home-video-channel/setupqr/"
+
+    private var isOnboarding: Bool {
+        configStore.config.immichURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Connect to your Immich server") {
-                    Text("Enter the URL of your Immich server and your API key to begin playback.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text("Use your full Immich server URL, including `http://` or `https://`.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    labeledField(
-                        "Server URL",
-                        placeholder: "https://immich.example.com",
-                        text: $immichURL,
-                        disableAutocorrect: true,
-                        focus: .immichURL
-                    )
-                    labeledField(
-                        "Your Immich server user API Key",
-                        placeholder: "API key",
-                        text: $apiKey,
-                        disableAutocorrect: true,
-                        focus: .apiKey
-                    )
-                    Text("Authenticate with your Immich server using your API key.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            ZStack {
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.05, green: 0.08, blue: 0.14),
+                        Color(red: 0.10, green: 0.18, blue: 0.22),
+                        Color(red: 0.20, green: 0.12, blue: 0.10)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
 
-                    actionRow(testInProgress ? "Testing..." : "Test Server Connection", focus: .testConnection, disabled: testInProgress) {
-                        testImmichConnection()
-                    }
+                if isOnboarding {
+                    onboardingLayout
+                } else {
+                    settingsLayout
+                }
+            }
+            .navigationTitle(isOnboarding ? "Welcome" : "Settings")
+            .onAppear {
+                loadFromConfig()
+                onRefreshStats?()
+            }
+        }
+    }
 
-                    if !testMessage.isEmpty {
-                        Text(testMessage)
-                            .foregroundStyle(testFailed ? .red : .green)
-                    }
+    private var onboardingLayout: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 30) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Set up your Immich channel")
+                        .font(.system(size: 52, weight: .bold, design: .rounded))
+                    Text("Add your Immich server URL and API key once, then press Go.")
+                        .font(.title3)
+                        .foregroundStyle(.white.opacity(0.82))
                 }
 
-                Section("Playback") {
-                    Text("Controls which videos are eligible and how many are fetched at a time.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    labeledField("Minimum Duration (seconds)", placeholder: "10", text: $minDuration, focus: .minDuration)
-                    labeledField("Random Batch Size", placeholder: "20", text: $randomBatchSize, focus: .randomBatchSize)
-                    choiceRow("Order", value: playbackOrderDisplayValue, focus: .playbackOrder) {
-                        cyclePlaybackOrder()
-                    }
-                    choiceRow("Picture Quality", value: playbackQualityDisplayValue, focus: .playbackQuality) {
-                        cyclePlaybackQuality()
-                    }
-                    booleanPicker("Show Month/Year + Location", isOn: $showDateLocationOverlay, focus: .showDateLocationOverlay)
-                    booleanPicker("Only Favorites", isOn: $onlyFavorites, focus: .onlyFavorites)
+                HStack(alignment: .top, spacing: 24) {
+                    card {
+                        VStack(alignment: .leading, spacing: 18) {
+                            Text("Connect")
+                                .font(.title2.weight(.semibold))
 
-                    if onResetPlaybackProgress != nil {
-                        actionRow("Reset Playback Progress", focus: .resetPlayback) {
-                            onResetPlaybackProgress?()
+                            labeledField(
+                                "Immich URL",
+                                placeholder: "https://immich.example.com",
+                                text: $immichURL,
+                                disableAutocorrect: true,
+                                focus: .immichURL
+                            )
+
+                            labeledField(
+                                "Immich API key",
+                                placeholder: "Paste your API key",
+                                text: $apiKey,
+                                disableAutocorrect: true,
+                                focus: .apiKey
+                            )
+                            Text("Required permissions: asset.read, asset.view, asset.update, album.read.")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.68))
+
+                            Text("Use the full server address, including https://.")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.68))
+
+                            primaryActionButton("Go", focus: .saveAndStart) {
+                                save()
+                            }
+                        }
+                    }
+
+                    card {
+                        VStack(alignment: .leading, spacing: 18) {
+                            Text("How to find your API key")
+                                .font(.title2.weight(.semibold))
+
+                            VStack(alignment: .leading, spacing: 10) {
+                                guideStep(number: "1", text: "Open Immich in your browser or phone app.")
+                                guideStep(number: "2", text: "Go to Account Settings, then API Keys.")
+                                guideStep(number: "3", text: "Create a new key and paste it here.")
+                            }
+
+                            Divider()
+                                .overlay(Color.white.opacity(0.12))
+
+                            HStack(alignment: .top, spacing: 18) {
+                                if let image = qrImage(from: bananaSystemsGuideURL) {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Image(uiImage: image)
+                                            .interpolation(.none)
+                                            .resizable()
+                                            .scaledToFit()
+                                            .frame(width: 180, height: 180)
+                                            .padding(10)
+                                            .background(Color.white)
+                                            .clipShape(RoundedRectangle(cornerRadius: 18))
+                                        Text("Scan for the Banana Systems guide")
+                                            .font(.caption)
+                                            .foregroundStyle(.white.opacity(0.68))
+                                    }
+                                }
+
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Need help?")
+                                        .font(.headline)
+                                    Text("Scan the QR code for the Banana Systems site and follow the Immich setup guide.")
+                                        .foregroundStyle(.white.opacity(0.82))
+                                    Text(bananaSystemsGuideURL)
+                                        .font(.caption.monospaced())
+                                        .foregroundStyle(.white.opacity(0.64))
+                                }
+                            }
                         }
                     }
                 }
 
-                Section("Smooth Channel") {
-                    Text("Crossfade and preload settings control how smooth transitions feel between videos.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    booleanPicker("Crossfade Enabled", isOn: $crossfadeEnabled, focus: .crossfadeEnabled)
-                    labeledField("Crossfade Duration (ms)", placeholder: "450", text: $crossfadeDuration, focus: .crossfadeDuration)
-                    labeledField("Preload Seconds Before End", placeholder: "4", text: $preloadSeconds, focus: .preloadSeconds)
-                    labeledField("Queue Target Size", placeholder: "2", text: $queueTarget, focus: .queueTarget)
-                }
+                errorSection
+            }
+            .padding(.horizontal, 58)
+            .padding(.vertical, 40)
+        }
+    }
 
-                Section("Local Cache") {
-                    Text("Keeps metadata in local SQLite for faster random selection and better reliability.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    booleanPicker("Use SQLite Cache", isOn: $useSQLiteCache, focus: .useSQLiteCache)
-                    booleanPicker("Sync On Startup", isOn: $syncOnStartup, focus: .syncOnStartup)
-                    labeledField("Sync Page Size", placeholder: "200", text: $syncPageSize, focus: .syncPageSize)
-                    labeledField("Sync Max Pages", placeholder: "200", text: $syncMaxPages, focus: .syncMaxPages)
-
-                    if syncIsSyncing != nil || syncLastSyncAt != nil {
-                        Divider()
-                        Text("Sync Status")
-                            .font(.headline)
-                        Text("In Progress: \(syncIsSyncing?.wrappedValue == true ? "yes" : "no")")
-                        Text("Pages Fetched: \(syncPagesFetched?.wrappedValue ?? 0)")
-                        Text("Rows Upserted: \(syncRowsUpserted?.wrappedValue ?? 0)")
-                        Text("Last Sync At: \(syncLastSyncAt?.wrappedValue ?? "-")")
-                        if let err = syncLastError?.wrappedValue, !err.isEmpty {
-                            Text("Last Error: \(err)")
-                                .foregroundStyle(.red)
-                        }
+    private var settingsLayout: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                HStack(alignment: .top, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Channel settings")
+                            .font(.system(size: 46, weight: .bold, design: .rounded))
+                        Text("Keep playback simple up front. Advanced controls are grouped below.")
+                            .font(.title3)
+                            .foregroundStyle(.white.opacity(0.78))
                     }
 
-                    if onForceSync != nil {
-                        actionRow("Force Sync Now", focus: .forceSync, disabled: syncIsSyncing?.wrappedValue == true) {
-                            onForceSync?()
+                    Spacer()
+
+                    if let image = qrImage(from: bananaSystemsGuideURL) {
+                        VStack(alignment: .center, spacing: 8) {
+                            Image(uiImage: image)
+                                .interpolation(.none)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 132, height: 132)
+                                .padding(8)
+                                .background(Color.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                            Text("Setup help")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.72))
                         }
                     }
                 }
 
-                Section("Library Stats") {
-                    NavigationLink {
-                        LibraryStatsView(
-                            onRefreshStats: onRefreshStats,
-                            statsTotalVideos: statsTotalVideos,
-                            statsTotalWatchedPlays: statsTotalWatchedPlays,
-                            statsWatchedPlays7Days: statsWatchedPlays7Days,
-                            statsWatchedPlays30Days: statsWatchedPlays30Days,
-                            statsVideosWatchedAtLeastOnce: statsVideosWatchedAtLeastOnce,
-                            statsFavoritesCount: statsFavoritesCount,
-                            statsHiddenCount: statsHiddenCount,
-                            sessionVideosWatchedCount: sessionVideosWatchedCount,
-                            statsMostPopularCamera: statsMostPopularCamera,
-                            statsMostPopularCodec: statsMostPopularCodec,
-                            statsMostPopularFileType: statsMostPopularFileType,
-                            statsMostPopularPlace: statsMostPopularPlace,
-                            statsMostPopularYear: statsMostPopularYear,
-                            statsTopCamerasSummary: statsTopCamerasSummary,
-                            statsTopCodecsSummary: statsTopCodecsSummary,
-                            statsTopFileTypesSummary: statsTopFileTypesSummary,
-                            statsTopPlacesSummary: statsTopPlacesSummary,
-                            statsTopYearsSummary: statsTopYearsSummary,
-                            statsLastError: statsLastError
+                card {
+                    VStack(alignment: .leading, spacing: 16) {
+                        sectionHeading("Connection")
+                        labeledField(
+                            "Immich URL",
+                            placeholder: "https://immich.example.com",
+                            text: $immichURL,
+                            disableAutocorrect: true,
+                            focus: .immichURL
                         )
-                    } label: {
-                        settingRowLabel("Open Library Stats", value: "View", isFocused: focusedSetting == .openLibraryStats)
+                        labeledField(
+                            "Immich API key",
+                            placeholder: "API key",
+                            text: $apiKey,
+                            disableAutocorrect: true,
+                            focus: .apiKey
+                        )
+                        Text("Required permissions: asset.read, asset.view, asset.update, album.read.")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.68))
+                        HStack(spacing: 14) {
+                            actionButton(
+                                testInProgress ? "Testing..." : "Test Connection",
+                                focus: .testConnection,
+                                disabled: testInProgress
+                            ) {
+                                testImmichConnection()
+                            }
+                            primaryActionButton("Save And Start", focus: .saveAndStart) {
+                                save()
+                            }
+                        }
+                        if !testMessage.isEmpty {
+                            Text(testMessage)
+                                .foregroundStyle(testFailed ? .red : Color(red: 0.64, green: 0.95, blue: 0.73))
+                        }
                     }
-                    .focused($focusedSetting, equals: .openLibraryStats)
                 }
 
-                Section("Advanced") {
-                    Text("Debug logging adds technical status info on screen and in console output.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    booleanPicker("Debug Logging", isOn: $debugEnabled, focus: .debugLogging)
+                HStack(alignment: .top, spacing: 24) {
+                    card {
+                        VStack(alignment: .leading, spacing: 14) {
+                            sectionHeading("Playback")
+                            labeledField("Minimum Duration (seconds)", placeholder: "10", text: $minDuration, focus: .minDuration)
+                            labeledField("Random Batch Size", placeholder: "20", text: $randomBatchSize, focus: .randomBatchSize)
+                            choiceRow("Order", value: playbackOrderDisplayValue, focus: .playbackOrder) {
+                                cyclePlaybackOrder()
+                            }
+                            choiceRow("Picture Quality", value: playbackQualityDisplayValue, focus: .playbackQuality) {
+                                cyclePlaybackQuality()
+                            }
+                            booleanPicker("Show Month/Year + Location", isOn: $showDateLocationOverlay, focus: .showDateLocationOverlay)
+                            booleanPicker("Only Favorites", isOn: $onlyFavorites, focus: .onlyFavorites)
+                            if onResetPlaybackProgress != nil {
+                                actionButton("Reset Playback Progress", focus: .resetPlayback) {
+                                    onResetPlaybackProgress?()
+                                }
+                            }
+                        }
+                    }
+
+                    card {
+                        VStack(alignment: .leading, spacing: 14) {
+                            sectionHeading("Smooth Channel")
+                            booleanPicker("Crossfade Enabled", isOn: $crossfadeEnabled, focus: .crossfadeEnabled)
+                            labeledField("Crossfade Duration (ms)", placeholder: "450", text: $crossfadeDuration, focus: .crossfadeDuration)
+                            labeledField("Preload Seconds Before End", placeholder: "4", text: $preloadSeconds, focus: .preloadSeconds)
+                            labeledField("Queue Target Size", placeholder: "2", text: $queueTarget, focus: .queueTarget)
+                        }
+                    }
                 }
 
-                if !validationError.isEmpty {
-                    Section {
+                HStack(alignment: .top, spacing: 24) {
+                    card {
+                        VStack(alignment: .leading, spacing: 14) {
+                            sectionHeading("Local Cache")
+                            booleanPicker("Use SQLite Cache", isOn: $useSQLiteCache, focus: .useSQLiteCache)
+                            booleanPicker("Sync On Startup", isOn: $syncOnStartup, focus: .syncOnStartup)
+                            labeledField("Sync Page Size", placeholder: "200", text: $syncPageSize, focus: .syncPageSize)
+                            labeledField("Sync Max Pages", placeholder: "200", text: $syncMaxPages, focus: .syncMaxPages)
+
+                            if syncIsSyncing != nil || syncLastSyncAt != nil {
+                                infoPillGroup(values: [
+                                    "Syncing: \(syncIsSyncing?.wrappedValue == true ? "yes" : "no")",
+                                    "Pages: \(syncPagesFetched?.wrappedValue ?? 0)",
+                                    "Rows: \(syncRowsUpserted?.wrappedValue ?? 0)",
+                                    "Last Sync: \(syncLastSyncAt?.wrappedValue ?? "-")"
+                                ])
+                                if let err = syncLastError?.wrappedValue, !err.isEmpty {
+                                    Text(err)
+                                        .foregroundStyle(.red)
+                                }
+                            }
+
+                            if onForceSync != nil {
+                                actionButton("Force Sync Now", focus: .forceSync, disabled: syncIsSyncing?.wrappedValue == true) {
+                                    onForceSync?()
+                                }
+                            }
+                        }
+                    }
+
+                    card {
+                        VStack(alignment: .leading, spacing: 14) {
+                            sectionHeading("Tools")
+                            NavigationLink {
+                                LibraryStatsView(
+                                    onRefreshStats: onRefreshStats,
+                                    statsTotalVideos: statsTotalVideos,
+                                    statsTotalWatchedPlays: statsTotalWatchedPlays,
+                                    statsWatchedPlays7Days: statsWatchedPlays7Days,
+                                    statsWatchedPlays30Days: statsWatchedPlays30Days,
+                                    statsVideosWatchedAtLeastOnce: statsVideosWatchedAtLeastOnce,
+                                    statsFavoritesCount: statsFavoritesCount,
+                                    statsHiddenCount: statsHiddenCount,
+                                    sessionVideosWatchedCount: sessionVideosWatchedCount,
+                                    statsMostPopularCamera: statsMostPopularCamera,
+                                    statsMostPopularCodec: statsMostPopularCodec,
+                                    statsMostPopularFileType: statsMostPopularFileType,
+                                    statsMostPopularPlace: statsMostPopularPlace,
+                                    statsMostPopularYear: statsMostPopularYear,
+                                    statsTopCamerasSummary: statsTopCamerasSummary,
+                                    statsTopCodecsSummary: statsTopCodecsSummary,
+                                    statsTopFileTypesSummary: statsTopFileTypesSummary,
+                                    statsTopPlacesSummary: statsTopPlacesSummary,
+                                    statsTopYearsSummary: statsTopYearsSummary,
+                                    statsLastError: statsLastError
+                                )
+                            } label: {
+                                settingRowLabel("Open Library Stats", value: "View", isFocused: focusedSetting == .openLibraryStats)
+                            }
+                            .buttonStyle(.plain)
+                            .focused($focusedSetting, equals: .openLibraryStats)
+
+                            booleanPicker("Debug Logging", isOn: $debugEnabled, focus: .debugLogging)
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("About")
+                                    .font(.headline)
+                                aboutRow("Maintained By", value: "bananasystems.co.uk")
+                                Link("zedster/ImmichVideoSlideshow", destination: URL(string: "https://github.com/zedster/ImmichVideoSlideshow")!)
+                                    .font(.caption)
+                                aboutRow("Build", value: buildNumber)
+                            }
+                            .padding(.top, 8)
+                        }
+                    }
+                }
+
+                errorSection
+            }
+            .padding(.horizontal, 58)
+            .padding(.vertical, 34)
+        }
+    }
+
+    @ViewBuilder
+    private var errorSection: some View {
+        if !validationError.isEmpty || (playbackError?.wrappedValue.isEmpty == false) {
+            card {
+                VStack(alignment: .leading, spacing: 10) {
+                    if !validationError.isEmpty {
                         Text(validationError)
                             .foregroundStyle(.red)
                     }
-                }
-
-                if let playbackError, !playbackError.wrappedValue.isEmpty {
-                    Section("Playback Error") {
+                    if let playbackError, !playbackError.wrappedValue.isEmpty {
                         Text(playbackError.wrappedValue)
                             .foregroundStyle(.red)
                     }
                 }
-
-                Section {
-                    actionRow("Save And Start", focus: .saveAndStart) {
-                        save()
-                    }
-                }
-
-                Section("About") {
-                    aboutRow("Maintained By", value: "bananasystems.co.uk")
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("GitHub")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Link(
-                            "zedster/ImmichVideoSlideshow",
-                            destination: URL(string: "https://github.com/zedster/ImmichVideoSlideshow")!
-                        )
-                    }
-                    aboutRow("Build", value: buildNumber)
-                }
-            }
-            .navigationTitle("Connect to your Immich server")
-            .onAppear {
-                loadFromConfig()
-                onRefreshStats?()
             }
         }
     }
@@ -289,6 +449,7 @@ struct SetupView: View {
         syncOnStartup = cfg.syncOnStartup
         testMessage = ""
         testFailed = false
+        validationError = ""
     }
 
     private func save() {
@@ -296,7 +457,7 @@ struct SetupView: View {
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !trimmedURL.isEmpty, !trimmedKey.isEmpty else {
-            validationError = "Server URL and API key are required."
+            validationError = "Immich URL and API key are required."
             return
         }
 
@@ -366,7 +527,7 @@ struct SetupView: View {
                 await MainActor.run {
                     persistImmichCredentialsFromInputs()
                     testFailed = false
-                    testMessage = "Connection successful. Server URL/API key saved."
+                    testMessage = "Connection successful. Server URL and API key saved."
                 }
             } catch {
                 await MainActor.run {
@@ -393,6 +554,56 @@ struct SetupView: View {
     }
 
     @ViewBuilder
+    private func card<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(Color.white.opacity(0.09))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                    )
+            )
+    }
+
+    @ViewBuilder
+    private func sectionHeading(_ title: String) -> some View {
+        Text(title)
+            .font(.title3.weight(.semibold))
+            .foregroundStyle(.white)
+    }
+
+    @ViewBuilder
+    private func guideStep(number: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(number)
+                .font(.headline.weight(.bold))
+                .frame(width: 30, height: 30)
+                .background(Color.white.opacity(0.14))
+                .clipShape(Circle())
+            Text(text)
+                .foregroundStyle(.white.opacity(0.86))
+        }
+    }
+
+    @ViewBuilder
+    private func infoPillGroup(values: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(values, id: \.self) { value in
+                Text(value)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.84))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.white.opacity(0.08))
+                    .clipShape(Capsule())
+            }
+        }
+    }
+
+    @ViewBuilder
     private func labeledField(
         _ label: String,
         placeholder: String,
@@ -401,19 +612,21 @@ struct SetupView: View {
         focus: SettingFocus
     ) -> some View {
         let isFocused = focusedSetting == focus
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(label)
                 .font(.caption)
-                .foregroundStyle(isFocused ? .black : .white)
+                .foregroundStyle(.white.opacity(0.74))
             TextField(placeholder, text: text)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled(disableAutocorrect)
                 .foregroundStyle(isFocused ? .black : .white)
                 .focused($focusedSetting, equals: focus)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(isFocused ? Color.white : Color.white.opacity(0.12))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(isFocused ? Color.white : Color.white.opacity(0.12))
+                )
         }
     }
 
@@ -440,7 +653,29 @@ struct SetupView: View {
     }
 
     @ViewBuilder
-    private func actionRow(_ title: String, focus: SettingFocus, disabled: Bool = false, action: @escaping () -> Void) -> some View {
+    private func primaryActionButton(_ title: String, focus: SettingFocus, action: @escaping () -> Void) -> some View {
+        let isFocused = focusedSetting == focus
+        Button(action: action) {
+            HStack {
+                Spacer()
+                Text(title)
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(isFocused ? Color(red: 0.64, green: 0.18, blue: 0.14) : .white)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(isFocused ? Color.white : Color(red: 0.84, green: 0.28, blue: 0.20))
+            )
+        }
+        .buttonStyle(.plain)
+        .focused($focusedSetting, equals: focus)
+    }
+
+    @ViewBuilder
+    private func actionButton(_ title: String, focus: SettingFocus, disabled: Bool = false, action: @escaping () -> Void) -> some View {
         let isFocused = focusedSetting == focus
         Button(action: action) {
             HStack {
@@ -448,10 +683,12 @@ struct SetupView: View {
                     .foregroundStyle(isFocused ? .black : .white)
                 Spacer()
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(isFocused ? Color.white : Color.white.opacity(0.12))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(isFocused ? Color.white : Color.white.opacity(0.10))
+            )
             .opacity(disabled ? 0.45 : 1.0)
         }
         .buttonStyle(.plain)
@@ -466,12 +703,14 @@ struct SetupView: View {
                 .foregroundStyle(isFocused ? .black : .white)
             Spacer()
             Text(value)
-                .foregroundStyle(isFocused ? .black : .white)
+                .foregroundStyle(isFocused ? .black : .white.opacity(0.78))
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(isFocused ? Color.white : Color.white.opacity(0.12))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(isFocused ? Color.white : Color.white.opacity(0.10))
+        )
     }
 
     @ViewBuilder
@@ -479,7 +718,7 @@ struct SetupView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.62))
             Text(value)
         }
     }
@@ -536,6 +775,19 @@ struct SetupView: View {
         default:
             playbackQuality = "auto"
         }
+    }
+
+    private func qrImage(from value: String) -> UIImage? {
+        guard !value.isEmpty else { return nil }
+        let context = CIContext()
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(value.utf8)
+        filter.correctionLevel = "M"
+
+        guard let output = filter.outputImage else { return nil }
+        let transformed = output.transformed(by: CGAffineTransform(scaleX: 10, y: 10))
+        guard let cgImage = context.createCGImage(transformed, from: transformed.extent) else { return nil }
+        return UIImage(cgImage: cgImage)
     }
 }
 
