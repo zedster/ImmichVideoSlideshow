@@ -39,7 +39,9 @@ struct SetupView: View {
     var syncLastSyncAt: Binding<String>? = nil
     var syncLastError: Binding<String>? = nil
     var statsTotalVideos: Binding<Int>? = nil
+    var statsTotalVideoDuration: Binding<Double>? = nil
     var statsTotalWatchedPlays: Binding<Int>? = nil
+    var statsTotalWatchedDuration: Binding<Double>? = nil
     var statsWatchedPlays7Days: Binding<Int>? = nil
     var statsWatchedPlays30Days: Binding<Int>? = nil
     var statsVideosWatchedAtLeastOnce: Binding<Int>? = nil
@@ -356,7 +358,9 @@ struct SetupView: View {
                                 LibraryStatsView(
                                     onRefreshStats: onRefreshStats,
                                     statsTotalVideos: statsTotalVideos,
+                                    statsTotalVideoDuration: statsTotalVideoDuration,
                                     statsTotalWatchedPlays: statsTotalWatchedPlays,
+                                    statsTotalWatchedDuration: statsTotalWatchedDuration,
                                     statsWatchedPlays7Days: statsWatchedPlays7Days,
                                     statsWatchedPlays30Days: statsWatchedPlays30Days,
                                     statsVideosWatchedAtLeastOnce: statsVideosWatchedAtLeastOnce,
@@ -792,9 +796,24 @@ struct SetupView: View {
 }
 
 private struct LibraryStatsView: View {
+    private enum SectionID: Hashable {
+        case totals
+        case activity
+        case libraryState
+        case popular
+        case topCameras
+        case topCodecs
+        case topFileTypes
+        case topPlaces
+        case topYears
+        case error
+    }
+
     var onRefreshStats: (() -> Void)? = nil
     var statsTotalVideos: Binding<Int>? = nil
+    var statsTotalVideoDuration: Binding<Double>? = nil
     var statsTotalWatchedPlays: Binding<Int>? = nil
+    var statsTotalWatchedDuration: Binding<Double>? = nil
     var statsWatchedPlays7Days: Binding<Int>? = nil
     var statsWatchedPlays30Days: Binding<Int>? = nil
     var statsVideosWatchedAtLeastOnce: Binding<Int>? = nil
@@ -812,65 +831,225 @@ private struct LibraryStatsView: View {
     var statsTopPlacesSummary: Binding<String>? = nil
     var statsTopYearsSummary: Binding<String>? = nil
     var statsLastError: Binding<String>? = nil
+    @FocusState private var focusedSection: SectionID?
 
     var body: some View {
-        Form {
-            Section("Summary") {
-                Text("Stats are calculated from the local SQLite cache.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                statRow("Total Videos", value: "\(statsTotalVideos?.wrappedValue ?? 0)")
-                statRow("Total Watched Plays", value: "\(statsTotalWatchedPlays?.wrappedValue ?? 0)")
-                statRow("Watched Plays (7 Days)", value: "\(statsWatchedPlays7Days?.wrappedValue ?? 0)")
-                statRow("Watched Plays (30 Days)", value: "\(statsWatchedPlays30Days?.wrappedValue ?? 0)")
-                statRow("Videos Watched At Least Once", value: "\(statsVideosWatchedAtLeastOnce?.wrappedValue ?? 0)")
-                statRow("Current Session Watched", value: "\(sessionVideosWatchedCount?.wrappedValue ?? 0)")
-                statRow("Favorites", value: "\(statsFavoritesCount?.wrappedValue ?? 0)")
-                statRow("Hidden", value: "\(statsHiddenCount?.wrappedValue ?? 0)")
-                statRow("Most Popular Camera", value: statsMostPopularCamera?.wrappedValue ?? "-")
-                statRow("Most Popular Codec", value: statsMostPopularCodec?.wrappedValue ?? "-")
-                statRow("Most Popular File Type", value: statsMostPopularFileType?.wrappedValue ?? "-")
-                statRow("Most Popular Place", value: statsMostPopularPlace?.wrappedValue ?? "-")
-                statRow("Most Popular Year", value: statsMostPopularYear?.wrappedValue ?? "-")
-                statRow("Top Cameras", value: statsTopCamerasSummary?.wrappedValue ?? "-")
-                statRow("Top Codecs", value: statsTopCodecsSummary?.wrappedValue ?? "-")
-                statRow("Top File Types", value: statsTopFileTypesSummary?.wrappedValue ?? "-")
-                statRow("Top Places", value: statsTopPlacesSummary?.wrappedValue ?? "-")
-                statRow("Top Years", value: statsTopYearsSummary?.wrappedValue ?? "-")
-            }
-
-            if let err = statsLastError?.wrappedValue, !err.isEmpty {
-                Section("Error") {
-                    Text("Stats Error: \(err)")
-                        .foregroundStyle(.red)
-                }
-            }
-
-            if onRefreshStats != nil {
-                Section {
-                    Button("Refresh Stats") {
-                        onRefreshStats?()
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 30) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Library Stats")
+                            .font(.system(size: 42, weight: .bold, design: .rounded))
+                        Text("Stats are calculated from the local SQLite cache.")
+                            .font(.title3)
+                            .foregroundStyle(.white.opacity(0.72))
                     }
-                    .buttonStyle(.bordered)
+                    .padding(.top, 10)
+
+                    focusSection(.totals, title: "Totals") {
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 18) {
+                            summaryTile(
+                                "Total Videos",
+                                value: "\(statsTotalVideos?.wrappedValue ?? 0)",
+                                detail: formattedDuration(statsTotalVideoDuration?.wrappedValue ?? 0)
+                            )
+                            summaryTile(
+                                "Total Watched Plays",
+                                value: "\(statsTotalWatchedPlays?.wrappedValue ?? 0)",
+                                detail: formattedDuration(statsTotalWatchedDuration?.wrappedValue ?? 0)
+                            )
+                        }
+                    }
+
+                    focusSection(.activity, title: "Viewing Activity") {
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 18) {
+                            summaryTile("Watched In 7 Days", value: "\(statsWatchedPlays7Days?.wrappedValue ?? 0)")
+                            summaryTile("Watched In 30 Days", value: "\(statsWatchedPlays30Days?.wrappedValue ?? 0)")
+                            summaryTile("Watched At Least Once", value: "\(statsVideosWatchedAtLeastOnce?.wrappedValue ?? 0)")
+                            summaryTile("Current Session", value: "\(sessionVideosWatchedCount?.wrappedValue ?? 0)")
+                        }
+                    }
+
+                    focusSection(.libraryState, title: "Library State") {
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 18) {
+                            summaryTile("Favorites", value: "\(statsFavoritesCount?.wrappedValue ?? 0)")
+                            summaryTile("Hidden", value: "\(statsHiddenCount?.wrappedValue ?? 0)")
+                        }
+                    }
+
+                    focusSection(.popular, title: "Most Popular") {
+                        detailRow("Camera", value: statsMostPopularCamera?.wrappedValue ?? "-")
+                        detailRow("Codec", value: statsMostPopularCodec?.wrappedValue ?? "-")
+                        detailRow("File Type", value: statsMostPopularFileType?.wrappedValue ?? "-")
+                        detailRow("Place", value: statsMostPopularPlace?.wrappedValue ?? "-")
+                        detailRow("Year", value: statsMostPopularYear?.wrappedValue ?? "-")
+                    }
+
+                    focusSection(.topCameras, title: "Top Cameras") {
+                        rankedList(value: statsTopCamerasSummary?.wrappedValue ?? "-")
+                    }
+
+                    focusSection(.topCodecs, title: "Top Codecs") {
+                        rankedList(value: statsTopCodecsSummary?.wrappedValue ?? "-")
+                    }
+
+                    focusSection(.topFileTypes, title: "Top File Types") {
+                        rankedList(value: statsTopFileTypesSummary?.wrappedValue ?? "-")
+                    }
+
+                    focusSection(.topPlaces, title: "Top Places") {
+                        rankedList(value: statsTopPlacesSummary?.wrappedValue ?? "-")
+                    }
+
+                    focusSection(.topYears, title: "Top Years") {
+                        rankedList(value: statsTopYearsSummary?.wrappedValue ?? "-")
+                    }
+
+                    if let err = statsLastError?.wrappedValue, !err.isEmpty {
+                        focusSection(.error, title: "Error", tint: Color.red.opacity(0.14)) {
+                            Text("Stats Error: \(err)")
+                                .font(.title3)
+                                .foregroundStyle(.red)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .padding(.horizontal, 56)
+                .padding(.vertical, 36)
+            }
+            .onAppear {
+                onRefreshStats?()
+                focusedSection = .totals
+            }
+            .onChange(of: focusedSection) { target in
+                guard let target else { return }
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    proxy.scrollTo(target, anchor: .center)
                 }
             }
         }
         .navigationTitle("Library Stats")
-        .onAppear {
-            onRefreshStats?()
+    }
+
+    @ViewBuilder
+    private func summaryTile(_ label: String, value: String, detail: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(label.uppercased())
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.58))
+            Text(value)
+                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            if let detail, !detail.isEmpty {
+                Text(detail)
+                    .font(.headline.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.72))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 22)
+        .background(Color.white.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func focusSection<Content: View>(_ id: SectionID, title: String, tint: Color = Color.white.opacity(0.08), @ViewBuilder content: () -> Content) -> some View {
+        let isFocused = focusedSection == id
+
+        VStack(alignment: .leading, spacing: 20) {
+            Text(title)
+                .font(.system(size: 28, weight: .bold, design: .rounded))
+            content()
+        }
+        .padding(28)
+        .background(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(isFocused ? Color.white.opacity(0.16) : tint)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(isFocused ? Color.white.opacity(0.9) : Color.white.opacity(0.08), lineWidth: isFocused ? 4 : 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .scaleEffect(isFocused ? 1.02 : 1.0)
+        .shadow(color: Color.black.opacity(isFocused ? 0.28 : 0.12), radius: isFocused ? 18 : 8, y: 10)
+        .animation(.easeInOut(duration: 0.18), value: isFocused)
+        .focusable(true)
+        .focused($focusedSection, equals: id)
+        .id(id)
+    }
+
+    @ViewBuilder
+    private func detailRow(_ label: String, value: String) -> some View {
+        HStack(alignment: .top) {
+            Text(label)
+                .font(.title3.weight(.medium))
+                .foregroundStyle(.white.opacity(0.72))
+            Spacer(minLength: 20)
+            Text(value)
+                .font(.title3.weight(.semibold))
+                .multilineTextAlignment(.trailing)
         }
     }
 
     @ViewBuilder
-    private func statRow(_ label: String, value: String) -> some View {
-        HStack(alignment: .top) {
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Spacer(minLength: 12)
-            Text(value)
-                .multilineTextAlignment(.trailing)
+    private func rankedList(value: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            let rows = expandedRows(from: value)
+            ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+                HStack(alignment: .top, spacing: 14) {
+                    Text("\(index + 1).")
+                        .font(.headline.monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.6))
+                    Text(row)
+                        .font(.title3)
+                        .foregroundStyle(.white.opacity(0.92))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+            }
         }
+    }
+
+    private func expandedRows(from value: String) -> [String] {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != "-" else { return ["No data"] }
+
+        let pattern = #".+? \(\d+\)(?:,|$)"#
+        if let regex = try? NSRegularExpression(pattern: pattern) {
+            let nsRange = NSRange(trimmed.startIndex..., in: trimmed)
+            let matches = regex.matches(in: trimmed, range: nsRange)
+            let rows = matches.compactMap { match -> String? in
+                guard let range = Range(match.range, in: trimmed) else { return nil }
+                return trimmed[range]
+                    .trimmingCharacters(in: CharacterSet(charactersIn: ", "))
+            }
+            if !rows.isEmpty {
+                return rows
+            }
+        }
+
+        return trimmed
+            .components(separatedBy: ", ")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private func formattedDuration(_ totalSeconds: Double) -> String {
+        let seconds = max(0, Int(totalSeconds.rounded()))
+        let days = seconds / 86_400
+        let hours = (seconds % 86_400) / 3_600
+        let minutes = (seconds % 3_600) / 60
+
+        if days > 0 {
+            return "\(days)d \(hours)h \(minutes)m"
+        }
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        }
+        return "\(minutes)m"
     }
 }

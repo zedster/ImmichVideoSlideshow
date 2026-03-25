@@ -39,7 +39,9 @@ final class ChannelCoordinator: ObservableObject {
     @Published var syncLastSyncAt: String = "-"
     @Published var syncLastError: String = ""
     @Published var statsTotalVideos: Int = 0
+    @Published var statsTotalVideoDuration: Double = 0
     @Published var statsTotalWatchedPlays: Int = 0
+    @Published var statsTotalWatchedDuration: Double = 0
     @Published var statsWatchedPlays7Days: Int = 0
     @Published var statsWatchedPlays30Days: Int = 0
     @Published var statsVideosWatchedAtLeastOnce: Int = 0
@@ -178,7 +180,9 @@ final class ChannelCoordinator: ObservableObject {
         hiddenAssetIds = []
         consecutivePlaybackFailures = 0
         statsTotalVideos = 0
+        statsTotalVideoDuration = 0
         statsTotalWatchedPlays = 0
+        statsTotalWatchedDuration = 0
         statsWatchedPlays7Days = 0
         statsWatchedPlays30Days = 0
         statsVideosWatchedAtLeastOnce = 0
@@ -1138,7 +1142,9 @@ final class ChannelCoordinator: ObservableObject {
             try await store.initializeSchema()
             let stats = try await store.getLibraryStats()
             statsTotalVideos = stats.totalVideos
+            statsTotalVideoDuration = stats.totalVideoDuration
             statsTotalWatchedPlays = stats.totalWatchedPlays
+            statsTotalWatchedDuration = stats.totalWatchedDuration
             statsWatchedPlays7Days = stats.watchedPlays7Days
             statsWatchedPlays30Days = stats.watchedPlays30Days
             statsVideosWatchedAtLeastOnce = stats.videosWatchedAtLeastOnce

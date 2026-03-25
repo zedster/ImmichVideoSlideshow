@@ -14,7 +14,9 @@ actor SQLiteVideoStore {
 
     struct LibraryStats {
         let totalVideos: Int
+        let totalVideoDuration: Double
         let totalWatchedPlays: Int
+        let totalWatchedDuration: Double
         let watchedPlays7Days: Int
         let watchedPlays30Days: Int
         let videosWatchedAtLeastOnce: Int
@@ -278,7 +280,9 @@ actor SQLiteVideoStore {
             let totalsSQL = """
             SELECT
                 COUNT(*) AS total_videos,
+                COALESCE(SUM(COALESCE(duration, 0)), 0) AS total_video_duration,
                 COALESCE(SUM(COALESCE(times_watched, 0)), 0) AS total_watched_plays,
+                COALESCE(SUM(COALESCE(duration, 0) * COALESCE(times_watched, 0)), 0) AS total_watched_duration,
                 COALESCE(SUM(CASE WHEN COALESCE(times_watched, 0) > 0 THEN 1 ELSE 0 END), 0) AS watched_once_count,
                 COALESCE(SUM(CASE WHEN is_favorite = 1 THEN 1 ELSE 0 END), 0) AS favorites_count,
                 COALESCE(SUM(CASE WHEN COALESCE(is_hidden, 0) = 1 THEN 1 ELSE 0 END), 0) AS hidden_count
@@ -294,10 +298,12 @@ actor SQLiteVideoStore {
                 throw storeError(db, fallback: "library totals step failed")
             }
             let totalVideos = Int(sqlite3_column_int64(totalsStmt, 0))
-            let totalWatchedPlays = Int(sqlite3_column_int64(totalsStmt, 1))
-            let videosWatchedAtLeastOnce = Int(sqlite3_column_int64(totalsStmt, 2))
-            let favoritesCount = Int(sqlite3_column_int64(totalsStmt, 3))
-            let hiddenCount = Int(sqlite3_column_int64(totalsStmt, 4))
+            let totalVideoDuration = sqlite3_column_double(totalsStmt, 1)
+            let totalWatchedPlays = Int(sqlite3_column_int64(totalsStmt, 2))
+            let totalWatchedDuration = sqlite3_column_double(totalsStmt, 3)
+            let videosWatchedAtLeastOnce = Int(sqlite3_column_int64(totalsStmt, 4))
+            let favoritesCount = Int(sqlite3_column_int64(totalsStmt, 5))
+            let hiddenCount = Int(sqlite3_column_int64(totalsStmt, 6))
 
             let watchedPlays7Days = try scalarInt(
                 db: db,
@@ -503,7 +509,9 @@ actor SQLiteVideoStore {
 
             return LibraryStats(
                 totalVideos: totalVideos,
+                totalVideoDuration: totalVideoDuration,
                 totalWatchedPlays: totalWatchedPlays,
+                totalWatchedDuration: totalWatchedDuration,
                 watchedPlays7Days: watchedPlays7Days,
                 watchedPlays30Days: watchedPlays30Days,
                 videosWatchedAtLeastOnce: videosWatchedAtLeastOnce,
