@@ -1,11 +1,12 @@
 {
   "images" : [
     {
-      "filename" : "3 foreground icon.png",
+      "filename" : "3 foreground icon small.png",
       "idiom" : "tv",
       "scale" : "1x"
     },
     {
+      "filename" : "3 foreground icon 800x480.png",
       "idiom" : "tv",
       "scale" : "2x"
     }
