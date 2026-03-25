@@ -2,8 +2,7 @@
 
 A lightweight slideshow player for videos stored in an Immich library.
 
-Preview/screenshots at: https://bananasystems.co.uk/immich-video-slideshow
-
+Preview/screenshots at: https://bananasystems.co.uk/home-video-channel
 ## Platforms Supported
 
 - Apple TV (tvOS)
