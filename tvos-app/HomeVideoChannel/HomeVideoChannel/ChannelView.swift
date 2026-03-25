@@ -172,12 +172,20 @@ struct ChannelView: View {
                             Spacer()
 
                             if configStore.config.debug {
-                                Text(coordinator.statusText)
-                                    .font(.caption2.monospaced())
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(Color.black.opacity(0.6))
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                VStack(alignment: .trailing, spacing: 6) {
+                                    Text(coordinator.statusText)
+                                        .font(.caption2.monospaced())
+
+                                    if !coordinator.debugTelemetryText.isEmpty {
+                                        Text(coordinator.debugTelemetryText)
+                                            .font(.caption2.monospaced())
+                                            .multilineTextAlignment(.trailing)
+                                    }
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color.black.opacity(0.6))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
                             }
 
                             if coordinator.canGoBack {

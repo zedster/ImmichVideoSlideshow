@@ -19,6 +19,7 @@ final class ChannelCoordinator: ObservableObject {
     @Published var dateLocationText: String = ""
     @Published var fallbackMessage: String = ""
     @Published var statusText: String = ""
+    @Published var debugTelemetryText: String = ""
     @Published var recentDebugMessages: [String] = []
     @Published var playbackProgress: Double = 0
     @Published var secondsLeftText: String = "--:--"
@@ -89,6 +90,9 @@ final class ChannelCoordinator: ObservableObject {
 
     private var queueTimer: Timer?
     private var recoveryTimer: Timer?
+    private var debugHistorySamples: [String] = []
+    private var lastDebugHistorySampleTime: Double = 0
+    private var currentFormatDebugText: String = "-"
 
     init(configStore: ConfigStore, client: ImmichAPIClient = ImmichAPIClient(), store: SQLiteVideoStore = SQLiteVideoStore()) {
         self.configStore = configStore
@@ -165,6 +169,7 @@ final class ChannelCoordinator: ObservableObject {
         teardownObservers()
         playerA.pause()
         playerB.pause()
+        debugTelemetryText = ""
     }
 
     func restart() {
@@ -571,6 +576,11 @@ final class ChannelCoordinator: ObservableObject {
                 await transitionToNext(reason: "near_end_crossfade")
             }
         }
+
+        if configStore.config.debug {
+            updateStatus()
+            updateDebugTelemetry(current: clampedCurrent, item: activeItem)
+        }
     }
 
     private func fetchNextCandidate() async throws -> VideoCandidate {
@@ -729,6 +739,7 @@ final class ChannelCoordinator: ObservableObject {
         secondsLeftText = "-\(formatDuration(candidate.duration))"
         currentImmichAssetURL = buildImmichAssetURL(for: candidate)
         currentInfoFields = buildInfoFields(for: candidate)
+        resetDebugPlaybackTelemetry(for: item)
         let overlay = overlayTexts(for: candidate)
         dateLocationText = overlayDateLocationText(for: candidate)
         title = overlay.title
@@ -974,7 +985,8 @@ final class ChannelCoordinator: ObservableObject {
         }
         let syncText = isSyncing ? " · syncing p\(syncPagesFetched) r\(syncRowsUpserted)" : ""
         let debugQuality = configStore.config.debug ? " · q \(configStore.config.playbackQualityLabel)" : ""
-        statusText = "Queue \(queue.count)/\(configStore.config.queueTargetSize) · \(orderLabel) · \(mode)\(syncText)\(debugQuality)"
+        let bitrateText = configStore.config.debug ? " · \(currentBitrateStatus())" : ""
+        statusText = "Queue \(queue.count)/\(configStore.config.queueTargetSize) · \(orderLabel) · \(mode)\(syncText)\(debugQuality)\(bitrateText)"
     }
 
     private func applyMuteState(_ muted: Bool) {
@@ -1418,6 +1430,157 @@ final class ChannelCoordinator: ObservableObject {
 
     private func bufferingStateText(_ buffering: Bool) -> String {
         buffering ? "Buffering..." : "Buffering ended"
+    }
+
+    private func currentBitrateStatus() -> String {
+        guard let event = activePlayer().currentItem?.accessLog()?.events.last else {
+            return "br -"
+        }
+
+        let observed = event.observedBitrate
+        let indicated = event.indicatedBitrate
+        let observedText = observed > 0 ? formatBitrate(observed) : "-"
+        let indicatedText = indicated > 0 ? formatBitrate(indicated) : "-"
+        return "br \(observedText)/\(indicatedText)"
+    }
+
+    private func formatBitrate(_ bitsPerSecond: Double) -> String {
+        let megabitsPerSecond = bitsPerSecond / 1_000_000
+        if megabitsPerSecond >= 100 {
+            return String(format: "%.0fMbps", megabitsPerSecond)
+        }
+        if megabitsPerSecond >= 10 {
+            return String(format: "%.1fMbps", megabitsPerSecond)
+        }
+        return String(format: "%.2fMbps", megabitsPerSecond)
+    }
+
+    private func updateDebugTelemetry(current: Double, item: AVPlayerItem) {
+        let bufferAheadSeconds = currentBufferAheadSeconds(current: current, item: item)
+        let bitrateText = currentBitrateStatus()
+        let modeText = currentPlaybackModeStatus(item: item)
+        let historyText = historyStatus(current: current, bufferAheadSeconds: bufferAheadSeconds, item: item)
+
+        debugTelemetryText = [
+            "buf \(String(format: "%.1fs", bufferAheadSeconds))",
+            "fmt \(currentFormatDebugText)",
+            "src \(modeText)",
+            historyText
+        ].joined(separator: "\n")
+    }
+
+    private func currentBufferAheadSeconds(current: Double, item: AVPlayerItem) -> Double {
+        for rangeValue in item.loadedTimeRanges {
+            let range = rangeValue.timeRangeValue
+            let start = CMTimeGetSeconds(range.start)
+            let end = start + CMTimeGetSeconds(range.duration)
+            if current >= start && current <= end {
+                return max(0, end - current)
+            }
+        }
+        return 0
+    }
+
+    private func historyStatus(current: Double, bufferAheadSeconds: Double, item: AVPlayerItem) -> String {
+        if current - lastDebugHistorySampleTime >= 5 || debugHistorySamples.isEmpty {
+            lastDebugHistorySampleTime = current
+            debugHistorySamples.append("\(formatDuration(current)) \(shortBitrateStatus()) \(String(format: "%.1fs", bufferAheadSeconds))")
+            if debugHistorySamples.count > 5 {
+                debugHistorySamples.removeFirst(debugHistorySamples.count - 5)
+            }
+        }
+        return "hist " + debugHistorySamples.joined(separator: " | ")
+    }
+
+    private func shortBitrateStatus() -> String {
+        guard let event = activePlayer().currentItem?.accessLog()?.events.last else {
+            return "-/-"
+        }
+        let observed = event.observedBitrate > 0 ? formatBitrate(event.observedBitrate) : "-"
+        let indicated = event.indicatedBitrate > 0 ? formatBitrate(event.indicatedBitrate) : "-"
+        return "\(observed)/\(indicated)"
+    }
+
+    private func currentPlaybackModeStatus(item: AVPlayerItem) -> String {
+        if let eventURI = item.accessLog()?.events.last?.uri, let url = URL(string: eventURI) {
+            return compactPlaybackPath(url)
+        }
+        if let urlAsset = item.asset as? AVURLAsset {
+            return compactPlaybackPath(urlAsset.url)
+        }
+        return "-"
+    }
+
+    private func compactPlaybackPath(_ url: URL) -> String {
+        let path = url.path
+        if path.contains("/video/playback") {
+            return "playback"
+        }
+        if path.contains("/original") {
+            return "original"
+        }
+        return path.isEmpty ? url.host ?? "-" : path
+    }
+
+    private func resetDebugPlaybackTelemetry(for item: AVPlayerItem) {
+        debugHistorySamples = []
+        lastDebugHistorySampleTime = 0
+        currentFormatDebugText = debugFormatText(for: item)
+        if configStore.config.debug {
+            updateStatus()
+        }
+    }
+
+    private func debugFormatText(for item: AVPlayerItem) -> String {
+        guard let track = item.asset.tracks(withMediaType: .video).first else {
+            return "-"
+        }
+
+        let transformedSize = track.naturalSize.applying(track.preferredTransform)
+        let width = Int(abs(transformedSize.width))
+        let height = Int(abs(transformedSize.height))
+        let fps = track.nominalFrameRate
+        let codec = codecName(for: track)
+
+        if fps > 0 {
+            return "\(width)x\(height) \(codec) \(Int(fps.rounded()))fps"
+        }
+        return "\(width)x\(height) \(codec)"
+    }
+
+    private func codecName(for track: AVAssetTrack) -> String {
+        guard
+            let description = track.formatDescriptions.first,
+            CFGetTypeID(description) == CMFormatDescriptionGetTypeID()
+        else {
+            return "-"
+        }
+
+        let subtype = CMFormatDescriptionGetMediaSubType(description as! CMFormatDescription)
+        switch subtype {
+        case kCMVideoCodecType_H264:
+            return "H.264"
+        case kCMVideoCodecType_HEVC:
+            return "HEVC"
+        case kCMVideoCodecType_AppleProRes422,
+             kCMVideoCodecType_AppleProRes422HQ,
+             kCMVideoCodecType_AppleProRes422LT,
+             kCMVideoCodecType_AppleProRes422Proxy:
+            return "ProRes"
+        default:
+            return fourCCString(subtype)
+        }
+    }
+
+    private func fourCCString(_ code: FourCharCode) -> String {
+        let bytes: [CChar] = [
+            CChar((code >> 24) & 0xff),
+            CChar((code >> 16) & 0xff),
+            CChar((code >> 8) & 0xff),
+            CChar(code & 0xff),
+            0
+        ]
+        return String(cString: bytes)
     }
 
     private func nonEmptyOrDash(_ value: String) -> String {
