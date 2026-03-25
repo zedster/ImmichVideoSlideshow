@@ -1549,10 +1549,7 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func codecName(for track: AVAssetTrack) -> String {
-        guard
-            let description = track.formatDescriptions.first,
-            CFGetTypeID(description) == CMFormatDescriptionGetTypeID()
-        else {
+        guard let description = track.formatDescriptions.first else {
             return "-"
         }
 

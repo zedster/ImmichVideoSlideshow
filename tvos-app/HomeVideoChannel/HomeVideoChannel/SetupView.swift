@@ -84,6 +84,7 @@ struct SetupView: View {
     @State private var testMessage = ""
     @State private var testFailed = false
     @State private var testInProgress = false
+    @State private var hasLoadedConfig = false
     @FocusState private var focusedSetting: SettingFocus?
 
     private let bananaSystemsGuideURL = "https://bananasystems.co.uk/home-video-channel/setupqr/"
@@ -116,7 +117,28 @@ struct SetupView: View {
             .onAppear {
                 loadFromConfig()
                 onRefreshStats?()
+                hasLoadedConfig = true
             }
+            .onDisappear {
+                persistSettingsIfValid()
+            }
+            .onChange(of: immichURL) { _ in autoSaveSettingsIfNeeded() }
+            .onChange(of: apiKey) { _ in autoSaveSettingsIfNeeded() }
+            .onChange(of: minDuration) { _ in autoSaveSettingsIfNeeded() }
+            .onChange(of: randomBatchSize) { _ in autoSaveSettingsIfNeeded() }
+            .onChange(of: playbackOrder) { _ in autoSaveSettingsIfNeeded() }
+            .onChange(of: playbackQuality) { _ in autoSaveSettingsIfNeeded() }
+            .onChange(of: showDateLocationOverlay) { _ in autoSaveSettingsIfNeeded() }
+            .onChange(of: preloadSeconds) { _ in autoSaveSettingsIfNeeded() }
+            .onChange(of: crossfadeDuration) { _ in autoSaveSettingsIfNeeded() }
+            .onChange(of: queueTarget) { _ in autoSaveSettingsIfNeeded() }
+            .onChange(of: syncPageSize) { _ in autoSaveSettingsIfNeeded() }
+            .onChange(of: syncMaxPages) { _ in autoSaveSettingsIfNeeded() }
+            .onChange(of: onlyFavorites) { _ in autoSaveSettingsIfNeeded() }
+            .onChange(of: debugEnabled) { _ in autoSaveSettingsIfNeeded() }
+            .onChange(of: crossfadeEnabled) { _ in autoSaveSettingsIfNeeded() }
+            .onChange(of: useSQLiteCache) { _ in autoSaveSettingsIfNeeded() }
+            .onChange(of: syncOnStartup) { _ in autoSaveSettingsIfNeeded() }
         }
     }
 
@@ -277,10 +299,10 @@ struct SetupView: View {
                             ) {
                                 testImmichConnection()
                             }
-                            primaryActionButton("Save And Start", focus: .saveAndStart) {
-                                save()
-                            }
                         }
+                        Text("Changes save automatically when values are valid.")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.68))
                         if !testMessage.isEmpty {
                             Text(testMessage)
                                 .foregroundStyle(testFailed ? .red : Color(red: 0.64, green: 0.95, blue: 0.73))
@@ -457,12 +479,22 @@ struct SetupView: View {
     }
 
     private func save() {
+        guard let next = buildConfig(requireCredentials: true, preserveExistingOnMissingCredentials: false) else {
+            return
+        }
+        validationError = ""
+        playbackError?.wrappedValue = ""
+        configStore.save(next)
+        dismiss()
+    }
+
+    private func buildConfig(requireCredentials: Bool, preserveExistingOnMissingCredentials: Bool) -> AppConfig? {
         let trimmedURL = immichURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard !trimmedURL.isEmpty, !trimmedKey.isEmpty else {
+        if requireCredentials && (trimmedURL.isEmpty || trimmedKey.isEmpty) {
             validationError = "Immich URL and API key are required."
-            return
+            return nil
         }
 
         guard let minDurationValue = Double(minDuration), minDurationValue >= 0,
@@ -473,12 +505,20 @@ struct SetupView: View {
               let syncPageValue = Int(syncPageSize), syncPageValue > 0,
               let syncMaxValue = Int(syncMaxPages), syncMaxValue > 0 else {
             validationError = "Please enter valid numeric values."
-            return
+            return nil
         }
 
-        var next = AppConfig()
-        next.immichURL = trimmedURL
-        next.apiKey = trimmedKey
+        var next = configStore.config
+        if !trimmedURL.isEmpty {
+            next.immichURL = trimmedURL
+        } else if !preserveExistingOnMissingCredentials {
+            next.immichURL = trimmedURL
+        }
+        if !trimmedKey.isEmpty {
+            next.apiKey = trimmedKey
+        } else if !preserveExistingOnMissingCredentials {
+            next.apiKey = trimmedKey
+        }
         next.minDuration = minDurationValue
         next.randomBatchSize = randomBatchValue
         switch playbackOrder {
@@ -500,10 +540,22 @@ struct SetupView: View {
         next.syncPageSize = min(syncPageValue, 1000)
         next.syncMaxPages = syncMaxValue
 
+        return next
+    }
+
+    private func persistSettingsIfValid() {
+        guard !isOnboarding else { return }
+        guard let next = buildConfig(requireCredentials: false, preserveExistingOnMissingCredentials: true) else {
+            return
+        }
         validationError = ""
         playbackError?.wrappedValue = ""
         configStore.save(next)
-        dismiss()
+    }
+
+    private func autoSaveSettingsIfNeeded() {
+        guard hasLoadedConfig, !isOnboarding else { return }
+        persistSettingsIfValid()
     }
 
     private func testImmichConnection() {
