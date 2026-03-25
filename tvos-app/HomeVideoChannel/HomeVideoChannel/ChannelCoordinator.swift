@@ -739,7 +739,7 @@ final class ChannelCoordinator: ObservableObject {
         secondsLeftText = "-\(formatDuration(candidate.duration))"
         currentImmichAssetURL = buildImmichAssetURL(for: candidate)
         currentInfoFields = buildInfoFields(for: candidate)
-        resetDebugPlaybackTelemetry(for: item)
+        await resetDebugPlaybackTelemetry(for: item)
         let overlay = overlayTexts(for: candidate)
         dateLocationText = overlayDateLocationText(for: candidate)
         title = overlay.title
@@ -1463,6 +1463,7 @@ final class ChannelCoordinator: ObservableObject {
 
         debugTelemetryText = [
             "buf \(String(format: "%.1fs", bufferAheadSeconds))",
+            bitrateText,
             "fmt \(currentFormatDebugText)",
             "src \(modeText)",
             historyText
@@ -1522,38 +1523,47 @@ final class ChannelCoordinator: ObservableObject {
         return path.isEmpty ? url.host ?? "-" : path
     }
 
-    private func resetDebugPlaybackTelemetry(for item: AVPlayerItem) {
+    private func resetDebugPlaybackTelemetry(for item: AVPlayerItem) async {
         debugHistorySamples = []
         lastDebugHistorySampleTime = 0
-        currentFormatDebugText = debugFormatText(for: item)
+        currentFormatDebugText = await debugFormatText(for: item)
         if configStore.config.debug {
             updateStatus()
         }
     }
 
-    private func debugFormatText(for item: AVPlayerItem) -> String {
-        guard let track = item.asset.tracks(withMediaType: .video).first else {
+    private func debugFormatText(for item: AVPlayerItem) async -> String {
+        do {
+            let tracks = try await item.asset.loadTracks(withMediaType: .video)
+            guard let track = tracks.first else {
+                return "-"
+            }
+
+            let naturalSize = try await track.load(.naturalSize)
+            let preferredTransform = try await track.load(.preferredTransform)
+            let transformedSize = naturalSize.applying(preferredTransform)
+            let width = Int(abs(transformedSize.width))
+            let height = Int(abs(transformedSize.height))
+            let fps = try await track.load(.nominalFrameRate)
+            let codec = await codecName(for: track)
+
+            if fps > 0 {
+                return "\(width)x\(height) \(codec) \(Int(fps.rounded()))fps"
+            }
+            return "\(width)x\(height) \(codec)"
+        } catch {
             return "-"
         }
-
-        let transformedSize = track.naturalSize.applying(track.preferredTransform)
-        let width = Int(abs(transformedSize.width))
-        let height = Int(abs(transformedSize.height))
-        let fps = track.nominalFrameRate
-        let codec = codecName(for: track)
-
-        if fps > 0 {
-            return "\(width)x\(height) \(codec) \(Int(fps.rounded()))fps"
-        }
-        return "\(width)x\(height) \(codec)"
     }
 
-    private func codecName(for track: AVAssetTrack) -> String {
-        guard let description = track.formatDescriptions.first else {
+    private func codecName(for track: AVAssetTrack) async -> String {
+        guard
+            let description = try? await track.load(.formatDescriptions).first as? CMFormatDescription
+        else {
             return "-"
         }
 
-        let subtype = CMFormatDescriptionGetMediaSubType(description as! CMFormatDescription)
+        let subtype = CMFormatDescriptionGetMediaSubType(description)
         switch subtype {
         case kCMVideoCodecType_H264:
             return "H.264"
