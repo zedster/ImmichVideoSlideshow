@@ -569,42 +569,36 @@ private struct ScrubProgressBar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Button {
-                // Keep focusable/selectable; scrubbing is handled with left/right.
-            } label: {
-                GeometryReader { proxy in
-                    let clamped = max(0, min(1, progress))
-                    let knobX = proxy.size.width * clamped
-                    let knobSize: CGFloat = isFocused ? 22 : 14
+            GeometryReader { proxy in
+                let clamped = max(0, min(1, progress))
+                let knobX = proxy.size.width * clamped
+                let knobSize: CGFloat = isFocused ? 22 : 14
 
-                    ZStack(alignment: .topLeading) {
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(Color.white.opacity(0.22))
-                                .frame(height: 8)
-                            Capsule()
-                                .fill(isFocused ? focusedTint : Color.white)
-                                .frame(width: knobX, height: 8)
+                ZStack(alignment: .topLeading) {
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.white.opacity(0.22))
+                            .frame(height: 8)
+                        Capsule()
+                            .fill(isFocused ? focusedTint : Color.white)
+                            .frame(width: knobX, height: 8)
 
-                            Circle()
-                                .fill(Color.white)
-                                .frame(width: knobSize, height: knobSize)
-                                .shadow(color: Color.white.opacity(isFocused ? 0.85 : 0), radius: 8)
-                                .overlay {
-                                    Circle()
-                                        .stroke(Color.white.opacity(isFocused ? 1.0 : 0), lineWidth: 2)
-                                }
-                                .offset(x: max(0, min(proxy.size.width - knobSize, knobX - (knobSize / 2))))
-                        }
-                        .offset(y: 24)
-
+                        Circle()
+                            .fill(Color.white)
+                            .frame(width: knobSize, height: knobSize)
+                            .shadow(color: Color.white.opacity(isFocused ? 0.85 : 0), radius: 8)
+                            .overlay {
+                                Circle()
+                                    .stroke(Color.white.opacity(isFocused ? 1.0 : 0), lineWidth: 2)
+                            }
+                            .offset(x: max(0, min(proxy.size.width - knobSize, knobX - (knobSize / 2))))
                     }
+                    .offset(y: 24)
                 }
-                .frame(height: 52)
-                .padding(.vertical, 2)
             }
+            .frame(height: 52)
+            .padding(.vertical, 2)
         }
-        .buttonStyle(.plain)
         .focusable(true)
         .focused($isFocused)
         .onMoveCommand { direction in

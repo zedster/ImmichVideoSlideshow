@@ -122,7 +122,7 @@ struct SetupView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Set up your Immich channel")
+                    Text("Set up your channel")
                         .font(.system(size: 52, weight: .bold, design: .rounded))
                     Text("Add your Immich server URL and API key once, then press Go.")
                         .font(.title3)
@@ -198,7 +198,7 @@ struct SetupView: View {
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text("Need help?")
                                         .font(.headline)
-                                    Text("Scan the QR code for the Banana Systems site and follow the Immich setup guide.")
+                                    Text("Scan the QR code for the Banana Systems site and follow the setup guide.")
                                         .foregroundStyle(.white.opacity(0.82))
                                     Text(bananaSystemsGuideURL)
                                         .font(.caption.monospaced())
