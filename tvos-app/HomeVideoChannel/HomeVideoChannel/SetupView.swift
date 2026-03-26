@@ -530,6 +530,9 @@ struct SetupView: View {
         next.playbackQuality = playbackQuality
         next.showDateLocationOverlay = showDateLocationOverlay
         next.onlyFavorites = onlyFavorites
+        if onlyFavorites {
+            next.onlyThisMonth = false
+        }
         next.debug = debugEnabled
         next.crossfadeEnabled = crossfadeEnabled
         next.crossfadeDurationMs = fadeValue

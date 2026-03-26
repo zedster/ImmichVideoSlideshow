@@ -6,6 +6,7 @@ struct AppConfig: Codable, Equatable {
     var minDuration: Double = 10
     var randomBatchSize: Int = 20
     var onlyFavorites: Bool = false
+    var onlyThisMonth: Bool = false
     var debug: Bool = false
     var crossfadeEnabled: Bool = true
     var crossfadeDurationMs: Int = 450
@@ -25,6 +26,7 @@ struct AppConfig: Codable, Equatable {
         case minDuration
         case randomBatchSize
         case onlyFavorites
+        case onlyThisMonth
         case debug
         case crossfadeEnabled
         case crossfadeDurationMs
@@ -48,6 +50,7 @@ struct AppConfig: Codable, Equatable {
         minDuration = try c.decodeIfPresent(Double.self, forKey: .minDuration) ?? 10
         randomBatchSize = try c.decodeIfPresent(Int.self, forKey: .randomBatchSize) ?? 20
         onlyFavorites = try c.decodeIfPresent(Bool.self, forKey: .onlyFavorites) ?? false
+        onlyThisMonth = try c.decodeIfPresent(Bool.self, forKey: .onlyThisMonth) ?? false
         debug = try c.decodeIfPresent(Bool.self, forKey: .debug) ?? false
         crossfadeEnabled = try c.decodeIfPresent(Bool.self, forKey: .crossfadeEnabled) ?? true
         crossfadeDurationMs = try c.decodeIfPresent(Int.self, forKey: .crossfadeDurationMs) ?? 450

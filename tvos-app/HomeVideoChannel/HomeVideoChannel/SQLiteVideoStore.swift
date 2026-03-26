@@ -251,11 +251,16 @@ actor SQLiteVideoStore {
         try setSyncState(key: sequentialLastAssetIdKey, value: "")
     }
 
-    func countQualifying(minDuration: Double, onlyFavorites: Bool) throws -> Int {
+    func countQualifying(minDuration: Double, onlyFavorites: Bool, onlyThisMonth: Bool) throws -> Int {
         try withDatabase { db in
-            let sql = onlyFavorites
-                ? "SELECT COUNT(*) FROM videos WHERE duration >= ? AND is_favorite = 1 AND COALESCE(is_hidden, 0) = 0"
-                : "SELECT COUNT(*) FROM videos WHERE duration >= ? AND COALESCE(is_hidden, 0) = 0"
+            let sql = """
+            SELECT COUNT(*)
+            FROM videos
+            WHERE duration >= ?
+              AND (\(onlyFavorites ? "is_favorite = 1" : "1 = 1"))
+              AND (\(onlyThisMonth ? currentMonthSQLCondition(column: "capture_date") : "1 = 1"))
+              AND COALESCE(is_hidden, 0) = 0
+            """
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
                 throw storeError(db, fallback: "prepare countQualifying failed")
@@ -532,11 +537,18 @@ actor SQLiteVideoStore {
         }
     }
 
-    func selectRandom(minDuration: Double, onlyFavorites: Bool) throws -> VideoCandidate? {
+    func selectRandom(minDuration: Double, onlyFavorites: Bool, onlyThisMonth: Bool) throws -> VideoCandidate? {
         try withDatabase { db in
-            let sql = onlyFavorites
-                ? "SELECT asset_id, title, duration, is_favorite, is_hidden, times_watched, capture_date, city, country, camera_make, camera_model, lens_model, f_number, focal_length, iso, exposure_time, latitude, longitude FROM videos WHERE duration >= ? AND is_favorite = 1 AND COALESCE(is_hidden, 0) = 0 ORDER BY CASE WHEN COALESCE(times_watched, 0) = 0 THEN 0 ELSE 1 END ASC, RANDOM() LIMIT 1"
-                : "SELECT asset_id, title, duration, is_favorite, is_hidden, times_watched, capture_date, city, country, camera_make, camera_model, lens_model, f_number, focal_length, iso, exposure_time, latitude, longitude FROM videos WHERE duration >= ? AND COALESCE(is_hidden, 0) = 0 ORDER BY CASE WHEN COALESCE(times_watched, 0) = 0 THEN 0 ELSE 1 END ASC, RANDOM() LIMIT 1"
+            let sql = """
+            SELECT asset_id, title, duration, is_favorite, is_hidden, times_watched, capture_date, city, country, camera_make, camera_model, lens_model, f_number, focal_length, iso, exposure_time, latitude, longitude
+            FROM videos
+            WHERE duration >= ?
+              AND (\(onlyFavorites ? "is_favorite = 1" : "1 = 1"))
+              AND (\(onlyThisMonth ? currentMonthSQLCondition(column: "capture_date") : "1 = 1"))
+              AND COALESCE(is_hidden, 0) = 0
+            ORDER BY CASE WHEN COALESCE(times_watched, 0) = 0 THEN 0 ELSE 1 END ASC, RANDOM()
+            LIMIT 1
+            """
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
                 throw storeError(db, fallback: "prepare selectRandom failed")
@@ -551,11 +563,14 @@ actor SQLiteVideoStore {
         }
     }
 
-    func selectSequential(afterAssetId: String?, newestFirst: Bool, minDuration: Double, onlyFavorites: Bool) throws -> VideoCandidate? {
+    func selectSequential(afterAssetId: String?, newestFirst: Bool, minDuration: Double, onlyFavorites: Bool, onlyThisMonth: Bool) throws -> VideoCandidate? {
         try withDatabase { db in
-            let baseWhere = onlyFavorites
-                ? "duration >= ? AND is_favorite = 1 AND COALESCE(is_hidden, 0) = 0"
-                : "duration >= ? AND COALESCE(is_hidden, 0) = 0"
+            let baseWhere = """
+            duration >= ?
+            AND (\(onlyFavorites ? "is_favorite = 1" : "1 = 1"))
+            AND (\(onlyThisMonth ? currentMonthSQLCondition(column: "capture_date") : "1 = 1"))
+            AND COALESCE(is_hidden, 0) = 0
+            """
             let sortExpr = "CASE WHEN COALESCE(capture_date, '') = '' THEN 1 ELSE 0 END"
             let compareDate = newestFirst ? "<" : ">"
             let compareBucket = newestFirst ? "<" : ">"
@@ -763,6 +778,10 @@ actor SQLiteVideoStore {
         let resolvedAssetId = sqlite3_column_text(stmt, 1).map { String(cString: $0) } ?? assetId
         let emptyDateBucket = captureDate.isEmpty ? 1 : 0
         return (emptyDateBucket, captureDate, resolvedAssetId)
+    }
+
+    private func currentMonthSQLCondition(column: String) -> String {
+        "SUBSTR(COALESCE(\(column), ''), 6, 2) = STRFTIME('%m', 'now', 'localtime')"
     }
 
     private func decodeCandidate(stmt: OpaquePointer?) -> VideoCandidate? {

@@ -160,6 +160,9 @@ final class ImmichAPIClient {
                 if config.onlyFavorites && !item.isFavorite {
                     continue
                 }
+                if config.onlyThisMonth && !captureDateMatchesCurrentMonth(item.captureDate) {
+                    continue
+                }
 
                 return VideoCandidate(
                     id: item.id,
@@ -184,6 +187,13 @@ final class ImmichAPIClient {
             }
         }
         throw ImmichAPIError.noEligibleVideo
+    }
+
+    private func captureDateMatchesCurrentMonth(_ captureDate: String) -> Bool {
+        guard captureDate.count >= 7 else { return false }
+        let assetMonth = String(captureDate.dropFirst(5).prefix(2))
+        let currentMonth = DateFormatter.cachedChannelMonthFormatter.string(from: Date())
+        return assetMonth == currentMonth
     }
 
     func resolveHiddenAlbumAccess(config: AppConfig, albumName: String = "Hidden") async -> HiddenAlbumAccess {
@@ -488,6 +498,15 @@ final class ImmichAPIClient {
 
         throw ImmichAPIError.httpStatus(lastStatus)
     }
+}
+
+private extension DateFormatter {
+    static let cachedChannelMonthFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "MM"
+        return formatter
+    }()
 }
 
 private struct ImmichMetadataSearchRequest: Encodable {

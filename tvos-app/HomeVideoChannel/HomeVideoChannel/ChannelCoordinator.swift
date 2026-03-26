@@ -395,7 +395,11 @@ final class ChannelCoordinator: ObservableObject {
                 try await store.initializeSchema()
                 syncLastSyncAt = (try await store.getSyncState(key: "last_sync_at")) ?? "-"
                 if configStore.config.syncOnStartup {
-                    let count = try await store.countQualifying(minDuration: configStore.config.minDuration, onlyFavorites: configStore.config.onlyFavorites)
+                    let count = try await store.countQualifying(
+                        minDuration: configStore.config.minDuration,
+                        onlyFavorites: configStore.config.onlyFavorites,
+                        onlyThisMonth: configStore.config.onlyThisMonth
+                    )
                     if count == 0 {
                         await runForceSync(silent: true)
                     }
@@ -592,7 +596,8 @@ final class ChannelCoordinator: ObservableObject {
                 afterAssetId: sequentialLastAssetId,
                 newestFirst: newestFirst,
                 minDuration: configStore.config.minDuration,
-                onlyFavorites: configStore.config.onlyFavorites
+                onlyFavorites: configStore.config.onlyFavorites,
+                onlyThisMonth: configStore.config.onlyThisMonth
             ) {
                 return fromDB
             }
@@ -601,16 +606,25 @@ final class ChannelCoordinator: ObservableObject {
                 afterAssetId: sequentialLastAssetId,
                 newestFirst: newestFirst,
                 minDuration: configStore.config.minDuration,
-                onlyFavorites: configStore.config.onlyFavorites
+                onlyFavorites: configStore.config.onlyFavorites,
+                onlyThisMonth: configStore.config.onlyThisMonth
             ) {
                 return fromDB
             }
         } else if configStore.config.useSQLiteCache {
-            if let fromDB = try await store.selectRandom(minDuration: configStore.config.minDuration, onlyFavorites: configStore.config.onlyFavorites) {
+            if let fromDB = try await store.selectRandom(
+                minDuration: configStore.config.minDuration,
+                onlyFavorites: configStore.config.onlyFavorites,
+                onlyThisMonth: configStore.config.onlyThisMonth
+            ) {
                 return fromDB
             }
             await runForceSync(silent: true)
-            if let fromDB = try await store.selectRandom(minDuration: configStore.config.minDuration, onlyFavorites: configStore.config.onlyFavorites) {
+            if let fromDB = try await store.selectRandom(
+                minDuration: configStore.config.minDuration,
+                onlyFavorites: configStore.config.onlyFavorites,
+                onlyThisMonth: configStore.config.onlyThisMonth
+            ) {
                 return fromDB
             }
         }
@@ -1557,9 +1571,8 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func codecName(for track: AVAssetTrack) async -> String {
-        guard
-            let description = try? await track.load(.formatDescriptions).first as? CMFormatDescription
-        else {
+        guard let descriptions = try? await track.load(.formatDescriptions),
+              let description = descriptions.first else {
             return "-"
         }
 

@@ -3,6 +3,12 @@ import CoreImage.CIFilterBuiltins
 import SwiftUI
 import UIKit
 
+fileprivate struct ChannelOption: Identifiable, Equatable {
+    let id: String
+    let title: String
+    let subtitle: String
+}
+
 struct ChannelView: View {
     private enum ControlsFocusTarget: Hashable {
         case back
@@ -18,13 +24,16 @@ struct ChannelView: View {
     @StateObject private var coordinator: ChannelCoordinator
     @State private var showSetup = false
     @State private var showInfo = false
+    @State private var showChannelList = false
     @State private var shouldResumeAfterSettings = false
     @State private var infoScrollIndex = 0
     @State private var controlsVisible = true
+    @State private var scrubBarFocused = false
     @State private var hideControlsTask: Task<Void, Never>?
     @State private var showHideForeverConfirmation = false
     @FocusState private var inputAnchorFocused: Bool
     @FocusState private var focusedControl: ControlsFocusTarget?
+    @FocusState private var focusedChannelID: String?
     @State private var lastFocusedControl: ControlsFocusTarget = .playPause
 
     init(configStore: ConfigStore) {
@@ -149,9 +158,25 @@ struct ChannelView: View {
                         }
                         .padding(.bottom, 0)
 
+                        if scrubBarFocused && !showChannelList {
+                            Text("Press Up for Channels")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.84))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.black.opacity(0.6))
+                                .clipShape(Capsule())
+                                .padding(.bottom, 8)
+                        }
+
                         ScrubProgressBar(progress: coordinator.playbackProgress) { deltaSeconds in
                             recordInteraction()
                             coordinator.seek(bySeconds: deltaSeconds)
+                        } onOpenChannels: {
+                            recordInteraction()
+                            openChannelList()
+                        } onFocusChange: { isFocused in
+                            scrubBarFocused = isFocused
                         }
                         .padding(.horizontal, 16)
                         .padding(.bottom, 8)
@@ -269,6 +294,71 @@ struct ChannelView: View {
                     .transition(.opacity)
                 }
 
+                if showChannelList {
+                    HStack(spacing: 0) {
+                        LinearGradient(
+                            colors: [
+                                Color.black.opacity(0.72),
+                                Color.black.opacity(0.38),
+                                Color.clear
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .ignoresSafeArea()
+
+                        VStack(alignment: .leading, spacing: 20) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Channels")
+                                    .font(.system(size: 38, weight: .bold, design: .rounded))
+                            }
+
+                            VStack(alignment: .leading, spacing: 14) {
+                                ForEach(channelOptions) { option in
+                                    Button {
+                                        selectChannel(option.id)
+                                    } label: {
+                                        ChannelOptionRow(
+                                            option: option,
+                                            isSelected: option.id == selectedChannelID
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                    .focused($focusedChannelID, equals: option.id)
+                                }
+                            }
+
+                            Text("Press Back to close")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.58))
+
+                            Spacer()
+                        }
+                        .padding(.horizontal, 32)
+                        .padding(.vertical, 28)
+                        .frame(width: min(520, geo.size.width * 0.42), height: geo.size.height, alignment: .topLeading)
+                        .background(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.09, green: 0.10, blue: 0.13).opacity(0.96),
+                                    Color(red: 0.13, green: 0.12, blue: 0.17).opacity(0.92)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .overlay(alignment: .trailing) {
+                            Rectangle()
+                                .fill(Color.white.opacity(0.08))
+                                .frame(width: 1)
+                        }
+
+                        Spacer()
+                    }
+                    .ignoresSafeArea()
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+                }
+
                 if showInfo {
                     HStack(spacing: 0) {
                         Spacer(minLength: 0)
@@ -363,6 +453,7 @@ struct ChannelView: View {
         .onChange(of: showInfo) { isVisible in
             if isVisible {
                 infoScrollIndex = 0
+                showChannelList = false
             }
             recordInteraction()
             refreshInputAnchorFocus()
@@ -382,12 +473,25 @@ struct ChannelView: View {
             if !isPresented {
                 coordinator.clearDebugMessages()
             }
+            if isPresented {
+                showChannelList = false
+            }
+            recordInteraction()
+            refreshInputAnchorFocus()
+        }
+        .onChange(of: showChannelList) { isVisible in
+            if isVisible {
+                controlsVisible = true
+                focusedChannelID = selectedChannelID
+            } else {
+                focusedChannelID = nil
+            }
             recordInteraction()
             refreshInputAnchorFocus()
         }
         .onChange(of: controlsVisible) { _ in
             refreshInputAnchorFocus()
-            if controlsVisible {
+            if controlsVisible && !showChannelList {
                 restoreLastFocusedControl()
             }
         }
@@ -402,13 +506,15 @@ struct ChannelView: View {
         }
         .onExitCommand {
             recordInteraction()
-            if showInfo {
+            if showChannelList {
+                showChannelList = false
+            } else if showInfo {
                 showInfo = false
             }
         }
         .onPlayPauseCommand {
             recordInteraction()
-            if !showSetup {
+            if !showSetup && !showChannelList {
                 coordinator.togglePlayPause()
             }
         }
@@ -509,11 +615,11 @@ struct ChannelView: View {
     private func recordInteraction() {
         showControls()
         hideControlsTask?.cancel()
-        guard !showInfo, !showSetup else { return }
+        guard !showInfo, !showSetup, !showChannelList else { return }
 
         hideControlsTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 10_000_000_000)
-            guard !Task.isCancelled, !showInfo, !showSetup else { return }
+            guard !Task.isCancelled, !showInfo, !showSetup, !showChannelList else { return }
             hideControls()
         }
     }
@@ -531,15 +637,67 @@ struct ChannelView: View {
     }
 
     private func refreshInputAnchorFocus() {
-        inputAnchorFocused = !controlsVisible && !showInfo && !showSetup
+        inputAnchorFocused = !controlsVisible && !showInfo && !showSetup && !showChannelList
     }
 
     private func restoreLastFocusedControl() {
-        guard controlsVisible, !showInfo, !showSetup else { return }
+        guard controlsVisible, !showInfo, !showSetup, !showChannelList else { return }
         let target = resolvedFocusTarget(from: lastFocusedControl)
         DispatchQueue.main.async {
             focusedControl = target
         }
+    }
+
+    private var channelOptions: [ChannelOption] {
+        [
+            ChannelOption(
+                id: "all",
+                title: "All Videos",
+                subtitle: "Play everything that matches your normal playback settings."
+            ),
+            ChannelOption(
+                id: "favorites",
+                title: "Favorites",
+                subtitle: "Only play videos marked as favorite in Immich."
+            ),
+            ChannelOption(
+                id: "this_month",
+                title: "In This Month (\(currentMonthShortName))",
+                subtitle: "Play videos filmed in this calendar month across all years."
+            )
+        ]
+    }
+
+    private var selectedChannelID: String {
+        if configStore.config.onlyThisMonth {
+            return "this_month"
+        }
+        if configStore.config.onlyFavorites {
+            return "favorites"
+        }
+        return "all"
+    }
+
+    private var currentMonthShortName: String {
+        DateFormatter.channelMonthDisplayFormatter.string(from: Date())
+    }
+
+    private func openChannelList() {
+        showInfo = false
+        showChannelList = true
+    }
+
+    private func selectChannel(_ channelID: String) {
+        guard channelID != selectedChannelID else {
+            showChannelList = false
+            return
+        }
+
+        var nextConfig = configStore.config
+        nextConfig.onlyFavorites = (channelID == "favorites")
+        nextConfig.onlyThisMonth = (channelID == "this_month")
+        configStore.save(nextConfig)
+        showChannelList = false
     }
 
     private func resolvedFocusTarget(from target: ControlsFocusTarget) -> ControlsFocusTarget {
@@ -570,11 +728,132 @@ struct ChannelView: View {
 
 }
 
+private extension DateFormatter {
+    static let channelMonthDisplayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "MMM"
+        return formatter
+    }()
+}
+
+private struct ChannelOptionRow: View {
+    let option: ChannelOption
+    let isSelected: Bool
+
+    @Environment(\.isFocused) private var isFocused
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 16) {
+            RoundedRectangle(cornerRadius: 12)
+                .fill(iconBackground)
+                .frame(width: 52, height: 52)
+                .overlay {
+                    Image(systemName: isSelected ? "play.fill" : "tv.fill")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(iconForeground)
+                }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(option.title)
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundStyle(titleColor)
+                    .lineLimit(2)
+
+                Text(option.subtitle)
+                    .font(.system(size: 18, weight: .medium, design: .rounded))
+                    .foregroundStyle(isFocused ? Color.black.opacity(0.72) : Color.white.opacity(0.68))
+                    .lineLimit(3)
+            }
+
+            Spacer(minLength: 12)
+
+            if isSelected {
+                Text("Live")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(isFocused ? Color.black : Color.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(isFocused ? Color.white : Color.white.opacity(0.14))
+                    .clipShape(Capsule())
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 18)
+        .background(cardBackground)
+        .overlay {
+            RoundedRectangle(cornerRadius: 22)
+                .stroke(borderColor, lineWidth: isFocused ? 2 : 1)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 22))
+        .scaleEffect(isFocused ? 1.035 : 1.0)
+        .shadow(color: Color.black.opacity(isFocused ? 0.45 : 0.18), radius: isFocused ? 24 : 10, y: isFocused ? 10 : 4)
+        .animation(.easeInOut(duration: 0.16), value: isFocused)
+    }
+
+    private var cardBackground: some ShapeStyle {
+        if isFocused {
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.94),
+                        Color.white.opacity(0.86)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+        }
+
+        if isSelected {
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.14),
+                        Color.white.opacity(0.09)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+        }
+
+        return AnyShapeStyle(Color.white.opacity(0.07))
+    }
+
+    private var borderColor: Color {
+        if isFocused {
+            return Color.white.opacity(0.95)
+        }
+        if isSelected {
+            return Color.white.opacity(0.22)
+        }
+        return Color.white.opacity(0.08)
+    }
+
+    private var titleColor: Color {
+        isFocused ? .black : .white
+    }
+
+    private var iconBackground: Color {
+        if isFocused {
+            return Color.black.opacity(0.10)
+        }
+        return isSelected ? Color.white.opacity(0.16) : Color.white.opacity(0.10)
+    }
+
+    private var iconForeground: Color {
+        isFocused ? .black : .white
+    }
+}
+
 private struct ScrubProgressBar: View {
     private let focusedTint = Color(red: 0.78, green: 0.12, blue: 0.34)
 
     let progress: Double
     let onStep: (Double) -> Void
+    let onOpenChannels: () -> Void
+    let onFocusChange: (Bool) -> Void
     @FocusState private var isFocused: Bool
 
     var body: some View {
@@ -618,10 +897,15 @@ private struct ScrubProgressBar: View {
                     onStep(-10)
                 case .right:
                     onStep(10)
+                case .up:
+                    onOpenChannels()
                 default:
                     break
                 }
             }
+        }
+        .onChange(of: isFocused) { focused in
+            onFocusChange(focused)
         }
         .accessibilityLabel("Scrub Position")
     }
