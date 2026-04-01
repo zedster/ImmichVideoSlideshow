@@ -12,6 +12,10 @@ struct AppConfig: Codable, Equatable {
     var referenceCaptureDate: String = ""
     var placeFilterCity: String = ""
     var placeFilterCountry: String = ""
+    var albumFilterID: String = ""
+    var albumFilterName: String = ""
+    var personFilterID: String = ""
+    var personFilterName: String = ""
     var debug: Bool = false
     var crossfadeEnabled: Bool = true
     var crossfadeDurationMs: Int = 450
@@ -20,6 +24,7 @@ struct AppConfig: Codable, Equatable {
     var playbackOrder: String = "random"
     var playbackQuality: String = "auto"
     var showDateLocationOverlay: Bool = true
+    var showPeopleOverlay: Bool = true
     var includeDiagnosticsInFeedback: Bool = true
     var useSQLiteCache: Bool = true
     var syncOnStartup: Bool = true
@@ -38,6 +43,10 @@ struct AppConfig: Codable, Equatable {
         case referenceCaptureDate
         case placeFilterCity
         case placeFilterCountry
+        case albumFilterID
+        case albumFilterName
+        case personFilterID
+        case personFilterName
         case debug
         case crossfadeEnabled
         case crossfadeDurationMs
@@ -46,6 +55,7 @@ struct AppConfig: Codable, Equatable {
         case playbackOrder
         case playbackQuality
         case showDateLocationOverlay
+        case showPeopleOverlay
         case includeDiagnosticsInFeedback
         case useSQLiteCache
         case syncOnStartup
@@ -68,6 +78,10 @@ struct AppConfig: Codable, Equatable {
         referenceCaptureDate = try c.decodeIfPresent(String.self, forKey: .referenceCaptureDate) ?? ""
         placeFilterCity = try c.decodeIfPresent(String.self, forKey: .placeFilterCity) ?? ""
         placeFilterCountry = try c.decodeIfPresent(String.self, forKey: .placeFilterCountry) ?? ""
+        albumFilterID = try c.decodeIfPresent(String.self, forKey: .albumFilterID) ?? ""
+        albumFilterName = try c.decodeIfPresent(String.self, forKey: .albumFilterName) ?? ""
+        personFilterID = try c.decodeIfPresent(String.self, forKey: .personFilterID) ?? ""
+        personFilterName = try c.decodeIfPresent(String.self, forKey: .personFilterName) ?? ""
         debug = try c.decodeIfPresent(Bool.self, forKey: .debug) ?? false
         crossfadeEnabled = try c.decodeIfPresent(Bool.self, forKey: .crossfadeEnabled) ?? true
         crossfadeDurationMs = try c.decodeIfPresent(Int.self, forKey: .crossfadeDurationMs) ?? 450
@@ -84,6 +98,7 @@ struct AppConfig: Codable, Equatable {
         }
         playbackQuality = try c.decodeIfPresent(String.self, forKey: .playbackQuality) ?? "auto"
         showDateLocationOverlay = try c.decodeIfPresent(Bool.self, forKey: .showDateLocationOverlay) ?? true
+        showPeopleOverlay = try c.decodeIfPresent(Bool.self, forKey: .showPeopleOverlay) ?? true
         includeDiagnosticsInFeedback = try c.decodeIfPresent(Bool.self, forKey: .includeDiagnosticsInFeedback) ?? true
         useSQLiteCache = try c.decodeIfPresent(Bool.self, forKey: .useSQLiteCache) ?? true
         syncOnStartup = try c.decodeIfPresent(Bool.self, forKey: .syncOnStartup) ?? true
@@ -94,6 +109,11 @@ struct AppConfig: Codable, Equatable {
     var isConfigured: Bool {
         !immichURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var hasCollectionFilter: Bool {
+        !albumFilterID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+        !personFilterID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var normalizedImmichBaseURL: String {

@@ -10,6 +10,7 @@ struct SetupView: View {
         case playbackOrder
         case playbackQuality
         case showDateLocationOverlay
+        case showPeopleOverlay
         case includeDiagnosticsInFeedback
         case onlyFavorites
         case resetPlayback
@@ -68,6 +69,7 @@ struct SetupView: View {
     @State private var playbackOrder = "random"
     @State private var playbackQuality = "auto"
     @State private var showDateLocationOverlay = true
+    @State private var showPeopleOverlay = true
     @State private var includeDiagnosticsInFeedback = true
     @State private var preloadSeconds = "4"
     @State private var crossfadeDuration = "450"
@@ -130,6 +132,7 @@ struct SetupView: View {
             .onChange(of: playbackOrder) { _ in autoSaveSettingsIfNeeded() }
             .onChange(of: playbackQuality) { _ in autoSaveSettingsIfNeeded() }
             .onChange(of: showDateLocationOverlay) { _ in autoSaveSettingsIfNeeded() }
+            .onChange(of: showPeopleOverlay) { _ in autoSaveSettingsIfNeeded() }
             .onChange(of: includeDiagnosticsInFeedback) { _ in autoSaveSettingsIfNeeded() }
             .onChange(of: preloadSeconds) { _ in autoSaveSettingsIfNeeded() }
             .onChange(of: crossfadeDuration) { _ in autoSaveSettingsIfNeeded() }
@@ -307,6 +310,7 @@ struct SetupView: View {
                                 cyclePlaybackQuality()
                             }
                             booleanPicker("Show Month/Year + Location", isOn: $showDateLocationOverlay, focus: .showDateLocationOverlay)
+                            booleanPicker("Show People In Overlay", isOn: $showPeopleOverlay, focus: .showPeopleOverlay)
                             booleanPicker("Only Favorites", isOn: $onlyFavorites, focus: .onlyFavorites)
                             if onResetPlaybackProgress != nil {
                                 actionButton("Reset Playback Progress", focus: .resetPlayback) {
@@ -473,6 +477,7 @@ struct SetupView: View {
         }
         playbackQuality = cfg.playbackQuality
         showDateLocationOverlay = cfg.showDateLocationOverlay
+        showPeopleOverlay = cfg.showPeopleOverlay
         includeDiagnosticsInFeedback = cfg.includeDiagnosticsInFeedback
         preloadSeconds = String(cfg.preloadSecondsBeforeEnd)
         crossfadeDuration = String(cfg.crossfadeDurationMs)
@@ -540,6 +545,7 @@ struct SetupView: View {
         }
         next.playbackQuality = playbackQuality
         next.showDateLocationOverlay = showDateLocationOverlay
+        next.showPeopleOverlay = showPeopleOverlay
         next.includeDiagnosticsInFeedback = includeDiagnosticsInFeedback
         next.onlyFavorites = onlyFavorites
         if onlyFavorites {

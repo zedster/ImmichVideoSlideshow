@@ -8,6 +8,27 @@ fileprivate struct ChannelOption: Identifiable, Equatable {
     let title: String
     let subtitle: String
     let count: Int
+    let artworkURL: URL?
+    let fallbackSymbol: String
+}
+
+fileprivate enum ChannelSelectorTab: String, CaseIterable, Hashable, Identifiable {
+    case timePlace
+    case albums
+    case people
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .timePlace:
+            return "Time & Place"
+        case .albums:
+            return "Albums"
+        case .people:
+            return "People"
+        }
+    }
 }
 
 struct ChannelView: View {
@@ -31,12 +52,16 @@ struct ChannelView: View {
     @State private var controlsVisible = true
     @State private var scrubBarFocused = false
     @State private var channelCounts: [String: Int] = [:]
-    @State private var channelCountsTask: Task<Void, Never>?
+    @State private var albumChannelOptions: [ChannelOption] = []
+    @State private var peopleChannelOptions: [ChannelOption] = []
+    @State private var selectedChannelTab: ChannelSelectorTab = .timePlace
+    @State private var channelDataTask: Task<Void, Never>?
     @State private var hideControlsTask: Task<Void, Never>?
     @State private var showHideForeverConfirmation = false
     @FocusState private var inputAnchorFocused: Bool
     @FocusState private var focusedControl: ControlsFocusTarget?
     @FocusState private var focusedChannelID: String?
+    @FocusState private var focusedChannelTab: ChannelSelectorTab?
     @State private var lastFocusedControl: ControlsFocusTarget = .playPause
     private let channelStore = SQLiteVideoStore()
 
@@ -167,7 +192,7 @@ struct ChannelView: View {
         .onDisappear {
             coordinator.stop()
             hideControlsTask?.cancel()
-            channelCountsTask?.cancel()
+            channelDataTask?.cancel()
         }
         .onChange(of: configStore.config) { _ in
             coordinator.restart()
@@ -211,26 +236,33 @@ struct ChannelView: View {
                 controlsVisible = true
                 focusedControl = nil
                 scrubBarFocused = false
-                focusedChannelID = selectedChannelID
-                refreshChannelCounts()
+                selectedChannelTab = resolvedSelectedChannelTab
+                focusedChannelTab = resolvedSelectedChannelTab
+                focusSelectedChannel()
+                refreshChannelData()
             } else {
                 focusedChannelID = nil
-                channelCountsTask?.cancel()
+                focusedChannelTab = nil
+                channelDataTask?.cancel()
             }
             recordInteraction()
             refreshInputAnchorFocus()
         }
         .onChange(of: coordinator.currentCaptureDateRaw) { _ in
             guard showChannelList else { return }
-            refreshChannelCounts()
+            refreshChannelData()
         }
         .onChange(of: coordinator.currentPlaceCity) { _ in
             guard showChannelList else { return }
-            refreshChannelCounts()
+            refreshChannelData()
         }
         .onChange(of: coordinator.currentPlaceCountry) { _ in
             guard showChannelList else { return }
-            refreshChannelCounts()
+            refreshChannelData()
+        }
+        .onChange(of: selectedChannelTab) { _ in
+            guard showChannelList else { return }
+            focusFirstOptionInSelectedTab()
         }
         .onChange(of: controlsVisible) { _ in
             refreshInputAnchorFocus()
@@ -509,20 +541,68 @@ struct ChannelView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Channels")
                             .font(.system(size: 38, weight: .bold, design: .rounded))
+                        Text("Swipe left and right to switch tabs, then up and down to pick a channel.")
+                            .font(.system(size: 18, weight: .medium, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.66))
                     }
 
-                    VStack(alignment: .leading, spacing: 14) {
-                        ForEach(channelOptions) { option in
+                    HStack(spacing: 12) {
+                        ForEach(ChannelSelectorTab.allCases) { tab in
                             Button {
-                                selectChannel(option.id)
+                                selectedChannelTab = tab
+                                focusedChannelTab = tab
                             } label: {
-                                ChannelOptionRow(
-                                    option: option,
-                                    isSelected: option.id == selectedChannelID
+                                ChannelTabButton(
+                                    title: tab.title,
+                                    isSelected: tab == selectedChannelTab
                                 )
                             }
                             .buttonStyle(.plain)
-                            .focused($focusedChannelID, equals: option.id)
+                            .focused($focusedChannelTab, equals: tab)
+                        }
+                    }
+
+                    ScrollView {
+                        if channelOptionsForSelectedTab.isEmpty {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text(emptyStateTitle)
+                                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                                Text(emptyStateSubtitle)
+                                    .font(.system(size: 18, weight: .medium, design: .rounded))
+                                    .foregroundStyle(.white.opacity(0.68))
+                            }
+                            .padding(.top, 14)
+                            .padding(.horizontal, 6)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        } else {
+                            VStack(alignment: .leading, spacing: 14) {
+                                ForEach(channelOptionsForSelectedTab) { option in
+                                    Button {
+                                        selectChannel(option.id)
+                                    } label: {
+                                        ChannelOptionRow(
+                                            option: option,
+                                            isSelected: option.id == selectedChannelID,
+                                            apiKey: configStore.config.apiKey
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                    .focused($focusedChannelID, equals: option.id)
+                                }
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 10)
+                        }
+                    }
+                    .scrollIndicators(.hidden)
+                    .onMoveCommand { direction in
+                        switch direction {
+                        case .left:
+                            moveSelectedChannelTab(-1)
+                        case .right:
+                            moveSelectedChannelTab(1)
+                        default:
+                            break
                         }
                     }
 
@@ -695,25 +775,31 @@ struct ChannelView: View {
         }
     }
 
-    private var channelOptions: [ChannelOption] {
+    private var timePlaceChannelOptions: [ChannelOption] {
         var options: [ChannelOption] = [
             ChannelOption(
                 id: "all",
                 title: "All Videos",
                 subtitle: "Play everything that matches your normal playback settings.",
-                count: channelCount(for: "all")
+                count: channelCount(for: "all"),
+                artworkURL: nil,
+                fallbackSymbol: "tv.fill"
             ),
             ChannelOption(
                 id: "favorites",
                 title: "Favorites",
                 subtitle: "Only play videos marked as favorite in Immich.",
-                count: channelCount(for: "favorites")
+                count: channelCount(for: "favorites"),
+                artworkURL: nil,
+                fallbackSymbol: "heart.fill"
             ),
             ChannelOption(
                 id: "this_month",
                 title: "In This Month (\(currentMonthShortName))",
                 subtitle: "Play videos filmed in this calendar month across all years.",
-                count: channelCount(for: "this_month")
+                count: channelCount(for: "this_month"),
+                artworkURL: nil,
+                fallbackSymbol: "calendar"
             )
         ]
 
@@ -723,7 +809,9 @@ struct ChannelView: View {
                     id: "this_day",
                     title: "More On This Day",
                     subtitle: "Play videos filmed on this calendar day across all years.",
-                    count: channelCount(for: "this_day")
+                    count: channelCount(for: "this_day"),
+                    artworkURL: nil,
+                    fallbackSymbol: "calendar.badge.clock"
                 )
             )
             options.append(
@@ -731,7 +819,9 @@ struct ChannelView: View {
                     id: "this_week",
                     title: "More On This Week",
                     subtitle: "Play videos filmed in this week of the year across all years.",
-                    count: channelCount(for: "this_week")
+                    count: channelCount(for: "this_week"),
+                    artworkURL: nil,
+                    fallbackSymbol: "calendar.badge.exclamationmark"
                 )
             )
         }
@@ -742,7 +832,9 @@ struct ChannelView: View {
                     id: "place_city",
                     title: "Place (\(shortBracketLabel(coordinator.currentPlaceCity)))",
                     subtitle: "Play more videos from this place.",
-                    count: channelCount(for: "place_city")
+                    count: channelCount(for: "place_city"),
+                    artworkURL: nil,
+                    fallbackSymbol: "mappin.and.ellipse"
                 )
             )
         }
@@ -753,7 +845,9 @@ struct ChannelView: View {
                     id: "place_country",
                     title: "Country (\(shortBracketLabel(coordinator.currentPlaceCountry)))",
                     subtitle: "Play more videos from this country.",
-                    count: channelCount(for: "place_country")
+                    count: channelCount(for: "place_country"),
+                    artworkURL: nil,
+                    fallbackSymbol: "globe.europe.africa"
                 )
             )
         }
@@ -761,7 +855,24 @@ struct ChannelView: View {
         return options
     }
 
+    private var channelOptionsForSelectedTab: [ChannelOption] {
+        switch selectedChannelTab {
+        case .timePlace:
+            return timePlaceChannelOptions
+        case .albums:
+            return albumChannelOptions
+        case .people:
+            return peopleChannelOptions
+        }
+    }
+
     private var selectedChannelID: String {
+        if !configStore.config.albumFilterID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "album:\(configStore.config.albumFilterID)"
+        }
+        if !configStore.config.personFilterID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "person:\(configStore.config.personFilterID)"
+        }
         if !configStore.config.placeFilterCity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return "place_city"
         }
@@ -781,6 +892,16 @@ struct ChannelView: View {
             return "favorites"
         }
         return "all"
+    }
+
+    private var resolvedSelectedChannelTab: ChannelSelectorTab {
+        if !configStore.config.albumFilterID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return .albums
+        }
+        if !configStore.config.personFilterID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return .people
+        }
+        return .timePlace
     }
 
     private var currentMonthShortName: String {
@@ -810,6 +931,10 @@ struct ChannelView: View {
         nextConfig.referenceCaptureDate = ""
         nextConfig.placeFilterCity = ""
         nextConfig.placeFilterCountry = ""
+        nextConfig.albumFilterID = ""
+        nextConfig.albumFilterName = ""
+        nextConfig.personFilterID = ""
+        nextConfig.personFilterName = ""
 
         switch channelID {
         case "favorites":
@@ -826,6 +951,18 @@ struct ChannelView: View {
             nextConfig.placeFilterCity = coordinator.currentPlaceCity.trimmingCharacters(in: .whitespacesAndNewlines)
         case "place_country":
             nextConfig.placeFilterCountry = coordinator.currentPlaceCountry.trimmingCharacters(in: .whitespacesAndNewlines)
+        case let value where value.hasPrefix("album:"):
+            let albumID = String(value.dropFirst("album:".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            if let option = albumChannelOptions.first(where: { $0.id == channelID }), !albumID.isEmpty {
+                nextConfig.albumFilterID = albumID
+                nextConfig.albumFilterName = option.title
+            }
+        case let value where value.hasPrefix("person:"):
+            let personID = String(value.dropFirst("person:".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            if let option = peopleChannelOptions.first(where: { $0.id == channelID }), !personID.isEmpty {
+                nextConfig.personFilterID = personID
+                nextConfig.personFilterName = option.title
+            }
         default:
             break
         }
@@ -843,9 +980,69 @@ struct ChannelView: View {
         return String(firstPart.prefix(14))
     }
 
-    private func refreshChannelCounts() {
-        channelCountsTask?.cancel()
-        channelCountsTask = Task { @MainActor in
+    private func albumArtworkURL(for assetID: String) -> URL? {
+        let trimmed = assetID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? trimmed
+        return URL(string: "\(configStore.config.normalizedImmichBaseURL)/api/assets/\(encoded)/thumbnail")
+    }
+
+    private func personArtworkURL(for personID: String) -> URL? {
+        let trimmed = personID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? trimmed
+        return URL(string: "\(configStore.config.normalizedImmichBaseURL)/api/people/\(encoded)/thumbnail")
+    }
+
+    private func focusSelectedChannel() {
+        DispatchQueue.main.async {
+            focusedChannelID = selectedChannelID
+        }
+    }
+
+    private func focusFirstOptionInSelectedTab() {
+        let options = channelOptionsForSelectedTab
+        let targetID = options.first(where: { $0.id == selectedChannelID })?.id ?? options.first?.id
+        DispatchQueue.main.async {
+            focusedChannelID = targetID
+        }
+    }
+
+    private var emptyStateTitle: String {
+        switch selectedChannelTab {
+        case .timePlace:
+            return "No channel options"
+        case .albums:
+            return "No album channels yet"
+        case .people:
+            return "No people channels yet"
+        }
+    }
+
+    private var emptyStateSubtitle: String {
+        switch selectedChannelTab {
+        case .timePlace:
+            return "Play a video first to unlock time and place shortcuts."
+        case .albums:
+            return "Run a sync to load Immich albums that contain videos."
+        case .people:
+            return "Run a sync to load named people from your synced videos."
+        }
+    }
+
+    private func moveSelectedChannelTab(_ offset: Int) {
+        let tabs = ChannelSelectorTab.allCases
+        guard let currentIndex = tabs.firstIndex(of: selectedChannelTab) else { return }
+        let nextIndex = max(0, min(tabs.count - 1, currentIndex + offset))
+        guard nextIndex != currentIndex else { return }
+        let nextTab = tabs[nextIndex]
+        selectedChannelTab = nextTab
+        focusedChannelTab = nextTab
+    }
+
+    private func refreshChannelData() {
+        channelDataTask?.cancel()
+        channelDataTask = Task { @MainActor in
             var nextCounts: [String: Int] = [:]
             try? await channelStore.initializeSchema()
 
@@ -857,7 +1054,9 @@ struct ChannelView: View {
                 onlyThisWeek: false,
                 referenceCaptureDate: "",
                 placeCity: "",
-                placeCountry: ""
+                placeCountry: "",
+                albumID: "",
+                personID: ""
             )) ?? 0
 
             nextCounts["favorites"] = (try? await channelStore.countQualifying(
@@ -868,7 +1067,9 @@ struct ChannelView: View {
                 onlyThisWeek: false,
                 referenceCaptureDate: "",
                 placeCity: "",
-                placeCountry: ""
+                placeCountry: "",
+                albumID: "",
+                personID: ""
             )) ?? 0
 
             nextCounts["this_month"] = (try? await channelStore.countQualifying(
@@ -879,7 +1080,9 @@ struct ChannelView: View {
                 onlyThisWeek: false,
                 referenceCaptureDate: "",
                 placeCity: "",
-                placeCountry: ""
+                placeCountry: "",
+                albumID: "",
+                personID: ""
             )) ?? 0
 
             if hasCurrentCaptureDate {
@@ -891,7 +1094,9 @@ struct ChannelView: View {
                     onlyThisWeek: false,
                     referenceCaptureDate: coordinator.currentCaptureDateRaw,
                     placeCity: "",
-                    placeCountry: ""
+                    placeCountry: "",
+                    albumID: "",
+                    personID: ""
                 )) ?? 0
 
                 nextCounts["this_week"] = (try? await channelStore.countQualifying(
@@ -902,7 +1107,9 @@ struct ChannelView: View {
                     onlyThisWeek: true,
                     referenceCaptureDate: coordinator.currentCaptureDateRaw,
                     placeCity: "",
-                    placeCountry: ""
+                    placeCountry: "",
+                    albumID: "",
+                    personID: ""
                 )) ?? 0
             }
 
@@ -915,7 +1122,9 @@ struct ChannelView: View {
                     onlyThisWeek: false,
                     referenceCaptureDate: "",
                     placeCity: coordinator.currentPlaceCity,
-                    placeCountry: ""
+                    placeCountry: "",
+                    albumID: "",
+                    personID: ""
                 )) ?? 0
             }
 
@@ -928,12 +1137,39 @@ struct ChannelView: View {
                     onlyThisWeek: false,
                     referenceCaptureDate: "",
                     placeCity: "",
-                    placeCountry: coordinator.currentPlaceCountry
+                    placeCountry: coordinator.currentPlaceCountry,
+                    albumID: "",
+                    personID: ""
                 )) ?? 0
+            }
+
+            let nextAlbumOptions = ((try? await channelStore.listAlbumChannels(minDuration: configStore.config.minDuration)) ?? []).map {
+                ChannelOption(
+                    id: "album:\($0.id)",
+                    title: $0.title,
+                    subtitle: "Play videos from this album.",
+                    count: $0.count,
+                    artworkURL: albumArtworkURL(for: $0.artworkID),
+                    fallbackSymbol: "photo.on.rectangle.angled"
+                )
+            }
+
+            let nextPeopleOptions = ((try? await channelStore.listPeopleChannels(minDuration: configStore.config.minDuration)) ?? []).map {
+                ChannelOption(
+                    id: "person:\($0.id)",
+                    title: $0.title,
+                    subtitle: "Play videos featuring this person.",
+                    count: $0.count,
+                    artworkURL: personArtworkURL(for: $0.artworkID),
+                    fallbackSymbol: "person.crop.circle.fill"
+                )
             }
 
             guard !Task.isCancelled else { return }
             channelCounts = nextCounts
+            albumChannelOptions = nextAlbumOptions
+            peopleChannelOptions = nextPeopleOptions
+            focusFirstOptionInSelectedTab()
         }
     }
 
@@ -974,22 +1210,145 @@ private extension DateFormatter {
     }()
 }
 
-private struct ChannelOptionRow: View {
-    let option: ChannelOption
+private struct ChannelTabButton: View {
+    let title: String
     let isSelected: Bool
 
     @Environment(\.isFocused) private var isFocused
 
     var body: some View {
-        HStack(alignment: .center, spacing: 16) {
+        Text(title)
+            .font(.system(size: 22, weight: .bold, design: .rounded))
+            .foregroundStyle(isFocused ? Color.black : Color.white)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .background(background)
+            .overlay {
+                Capsule()
+                    .stroke(borderColor, lineWidth: isFocused ? 2 : 1)
+            }
+            .clipShape(Capsule())
+            .scaleEffect(isFocused ? 1.04 : 1.0)
+            .animation(.easeInOut(duration: 0.16), value: isFocused)
+    }
+
+    private var background: some ShapeStyle {
+        if isFocused {
+            return AnyShapeStyle(Color.white)
+        }
+        if isSelected {
+            return AnyShapeStyle(Color.white.opacity(0.14))
+        }
+        return AnyShapeStyle(Color.white.opacity(0.07))
+    }
+
+    private var borderColor: Color {
+        if isFocused {
+            return Color.white.opacity(0.95)
+        }
+        if isSelected {
+            return Color.white.opacity(0.28)
+        }
+        return Color.white.opacity(0.08)
+    }
+}
+
+@MainActor
+private final class AuthenticatedRemoteImageLoader: ObservableObject {
+    @Published var image: UIImage?
+
+    private var task: Task<Void, Never>?
+    private var loadedSignature: String = ""
+
+    func load(url: URL?, apiKey: String) {
+        let signature = "\(url?.absoluteString ?? "")|\(apiKey)"
+        guard signature != loadedSignature else { return }
+        loadedSignature = signature
+        task?.cancel()
+        image = nil
+
+        guard let url, !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+
+        task = Task {
+            var request = URLRequest(url: url)
+            request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+            request.setValue("image/*", forHTTPHeaderField: "Accept")
+            request.timeoutInterval = 20
+
+            do {
+                let (data, _) = try await URLSession.shared.data(for: request)
+                guard !Task.isCancelled, let image = UIImage(data: data) else { return }
+                self.image = image
+            } catch {
+                if Task.isCancelled { return }
+            }
+        }
+    }
+
+    deinit {
+        task?.cancel()
+    }
+}
+
+private struct ChannelOptionArtwork: View {
+    let imageURL: URL?
+    let apiKey: String
+    let fallbackSymbol: String
+    let backgroundColor: Color
+    let foregroundColor: Color
+
+    @StateObject private var loader = AuthenticatedRemoteImageLoader()
+
+    var body: some View {
+        ZStack {
             RoundedRectangle(cornerRadius: 12)
-                .fill(iconBackground)
+                .fill(backgroundColor)
                 .frame(width: 52, height: 52)
-                .overlay {
-                    Image(systemName: isSelected ? "play.fill" : "tv.fill")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(iconForeground)
-                }
+
+            if let image = loader.image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 52, height: 52)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            } else {
+                Image(systemName: fallbackSymbol)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(foregroundColor)
+            }
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        }
+        .onAppear {
+            loader.load(url: imageURL, apiKey: apiKey)
+        }
+        .onChange(of: imageURL) { next in
+            loader.load(url: next, apiKey: apiKey)
+        }
+        .onChange(of: apiKey) { next in
+            loader.load(url: imageURL, apiKey: next)
+        }
+    }
+}
+
+private struct ChannelOptionRow: View {
+    let option: ChannelOption
+    let isSelected: Bool
+    let apiKey: String
+
+    @Environment(\.isFocused) private var isFocused
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 16) {
+            ChannelOptionArtwork(
+                imageURL: option.artworkURL,
+                apiKey: apiKey,
+                fallbackSymbol: isSelected ? "play.fill" : option.fallbackSymbol,
+                backgroundColor: iconBackground,
+                foregroundColor: iconForeground
+            )
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -1043,8 +1402,8 @@ private struct ChannelOptionRow: View {
             return AnyShapeStyle(
                 LinearGradient(
                     colors: [
-                        Color.white.opacity(0.94),
-                        Color.white.opacity(0.86)
+                        Color.white.opacity(0.96),
+                        Color.white.opacity(0.88)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -1056,8 +1415,8 @@ private struct ChannelOptionRow: View {
             return AnyShapeStyle(
                 LinearGradient(
                     colors: [
-                        Color.white.opacity(0.14),
-                        Color.white.opacity(0.09)
+                        Color(red: 0.96, green: 0.34, blue: 0.48).opacity(0.78),
+                        Color(red: 0.74, green: 0.12, blue: 0.28).opacity(0.68)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -1073,7 +1432,7 @@ private struct ChannelOptionRow: View {
             return Color.white.opacity(0.95)
         }
         if isSelected {
-            return Color.white.opacity(0.22)
+            return Color(red: 1.0, green: 0.72, blue: 0.78).opacity(0.95)
         }
         return Color.white.opacity(0.08)
     }
@@ -1086,7 +1445,7 @@ private struct ChannelOptionRow: View {
         if isFocused {
             return Color.black.opacity(0.10)
         }
-        return isSelected ? Color.white.opacity(0.16) : Color.white.opacity(0.10)
+        return isSelected ? Color.white.opacity(0.22) : Color.white.opacity(0.10)
     }
 
     private var iconForeground: Color {
@@ -1094,11 +1453,14 @@ private struct ChannelOptionRow: View {
     }
 
     private var countBackground: Color {
-        isFocused ? Color.black.opacity(0.12) : Color.white.opacity(0.10)
+        if isFocused {
+            return Color.black.opacity(0.12)
+        }
+        return isSelected ? Color.white.opacity(0.24) : Color.white.opacity(0.10)
     }
 
     private var countTextColor: Color {
-        isFocused ? Color.black.opacity(0.78) : Color.white.opacity(0.82)
+        isFocused ? Color.black.opacity(0.78) : Color.white.opacity(0.92)
     }
 }
 

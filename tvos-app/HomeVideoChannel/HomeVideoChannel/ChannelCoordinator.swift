@@ -32,6 +32,7 @@ final class ChannelCoordinator: ObservableObject {
     @Published var currentPlaceCity: String = ""
     @Published var currentPlaceCountry: String = ""
     @Published var currentPlaceLabel: String = ""
+    @Published var currentPeopleText: String = ""
     @Published var canGoBack: Bool = false
     @Published var currentIsFavorite: Bool = false
     @Published var canHideToAlbum: Bool = false
@@ -226,6 +227,7 @@ final class ChannelCoordinator: ObservableObject {
         currentPlaceCity = ""
         currentPlaceCountry = ""
         currentPlaceLabel = ""
+        currentPeopleText = ""
         canGoBack = false
         currentIsFavorite = false
         canHideToAlbum = false
@@ -411,7 +413,9 @@ final class ChannelCoordinator: ObservableObject {
                         onlyThisWeek: configStore.config.onlyThisWeek,
                         referenceCaptureDate: configStore.config.referenceCaptureDate,
                         placeCity: configStore.config.placeFilterCity,
-                        placeCountry: configStore.config.placeFilterCountry
+                        placeCountry: configStore.config.placeFilterCountry,
+                        albumID: configStore.config.albumFilterID,
+                        personID: configStore.config.personFilterID
                     )
                     if count == 0 {
                         await runForceSync(silent: true)
@@ -615,7 +619,9 @@ final class ChannelCoordinator: ObservableObject {
                 onlyThisWeek: configStore.config.onlyThisWeek,
                 referenceCaptureDate: configStore.config.referenceCaptureDate,
                 placeCity: configStore.config.placeFilterCity,
-                placeCountry: configStore.config.placeFilterCountry
+                placeCountry: configStore.config.placeFilterCountry,
+                albumID: configStore.config.albumFilterID,
+                personID: configStore.config.personFilterID
             ) {
                 return fromDB
             }
@@ -630,7 +636,9 @@ final class ChannelCoordinator: ObservableObject {
                 onlyThisWeek: configStore.config.onlyThisWeek,
                 referenceCaptureDate: configStore.config.referenceCaptureDate,
                 placeCity: configStore.config.placeFilterCity,
-                placeCountry: configStore.config.placeFilterCountry
+                placeCountry: configStore.config.placeFilterCountry,
+                albumID: configStore.config.albumFilterID,
+                personID: configStore.config.personFilterID
             ) {
                 return fromDB
             }
@@ -643,7 +651,9 @@ final class ChannelCoordinator: ObservableObject {
                 onlyThisWeek: configStore.config.onlyThisWeek,
                 referenceCaptureDate: configStore.config.referenceCaptureDate,
                 placeCity: configStore.config.placeFilterCity,
-                placeCountry: configStore.config.placeFilterCountry
+                placeCountry: configStore.config.placeFilterCountry,
+                albumID: configStore.config.albumFilterID,
+                personID: configStore.config.personFilterID
             ) {
                 return fromDB
             }
@@ -656,7 +666,9 @@ final class ChannelCoordinator: ObservableObject {
                 onlyThisWeek: configStore.config.onlyThisWeek,
                 referenceCaptureDate: configStore.config.referenceCaptureDate,
                 placeCity: configStore.config.placeFilterCity,
-                placeCountry: configStore.config.placeFilterCountry
+                placeCountry: configStore.config.placeFilterCountry,
+                albumID: configStore.config.albumFilterID,
+                personID: configStore.config.personFilterID
             ) {
                 return fromDB
             }
@@ -785,8 +797,8 @@ final class ChannelCoordinator: ObservableObject {
         totalDurationText = formatDuration(candidate.duration)
         secondsLeftText = "-\(formatDuration(candidate.duration))"
         currentImmichAssetURL = buildImmichAssetURL(for: candidate)
-        currentInfoFields = buildInfoFields(for: candidate)
         updateCurrentChannelContext(for: candidate)
+        await refreshCurrentMetadata(for: candidate)
         await resetDebugPlaybackTelemetry(for: item)
         let overlay = overlayTexts(for: candidate)
         dateLocationText = overlayDateLocationText(for: candidate)
@@ -889,8 +901,8 @@ final class ChannelCoordinator: ObservableObject {
             totalDurationText = formatDuration(next.duration)
             secondsLeftText = "-\(formatDuration(next.duration))"
             currentImmichAssetURL = buildImmichAssetURL(for: next)
-            currentInfoFields = buildInfoFields(for: next)
             updateCurrentChannelContext(for: next)
+            await refreshCurrentMetadata(for: next)
             let overlay = overlayTexts(for: next)
             dateLocationText = overlayDateLocationText(for: next)
             title = overlay.title
@@ -976,8 +988,8 @@ final class ChannelCoordinator: ObservableObject {
             totalDurationText = formatDuration(previous.duration)
             secondsLeftText = "-\(formatDuration(previous.duration))"
             currentImmichAssetURL = buildImmichAssetURL(for: previous)
-            currentInfoFields = buildInfoFields(for: previous)
             updateCurrentChannelContext(for: previous)
+            await refreshCurrentMetadata(for: previous)
             let overlay = overlayTexts(for: previous)
             dateLocationText = overlayDateLocationText(for: previous)
             title = overlay.title
@@ -1019,7 +1031,9 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func shouldUseSQLiteSelection() -> Bool {
-        configStore.config.useSQLiteCache || isSequentialOrder(configStore.config.playbackOrder)
+        configStore.config.useSQLiteCache ||
+        isSequentialOrder(configStore.config.playbackOrder) ||
+        configStore.config.hasCollectionFilter
     }
 
     private func updateStatus() {
@@ -1086,7 +1100,7 @@ final class ChannelCoordinator: ObservableObject {
         if let item = currentItem, item.id == assetId {
             currentItem = item.withFavorite(isFavorite)
             currentIsFavorite = isFavorite
-            currentInfoFields = buildInfoFields(for: item.withFavorite(isFavorite))
+            currentInfoFields = buildInfoFields(for: item.withFavorite(isFavorite), peopleText: currentPeopleText)
         }
 
         if let index = queue.firstIndex(where: { $0.id == assetId }) {
@@ -1107,7 +1121,7 @@ final class ChannelCoordinator: ObservableObject {
         if let item = currentItem, item.id == assetId {
             let updated = item.withHidden(isHidden)
             currentItem = updated
-            currentInfoFields = buildInfoFields(for: updated)
+            currentInfoFields = buildInfoFields(for: updated, peopleText: currentPeopleText)
         }
 
         queue.removeAll(where: { $0.id == assetId })
@@ -1120,7 +1134,7 @@ final class ChannelCoordinator: ObservableObject {
         if let item = currentItem, item.id == assetId {
             let updated = item.withTimesWatched(timesWatched)
             currentItem = updated
-            currentInfoFields = buildInfoFields(for: updated)
+            currentInfoFields = buildInfoFields(for: updated, peopleText: currentPeopleText)
         }
         if let index = queue.firstIndex(where: { $0.id == assetId }) {
             queue[index] = queue[index].withTimesWatched(timesWatched)
@@ -1137,7 +1151,7 @@ final class ChannelCoordinator: ObservableObject {
             sessionVideosWatchedCount += 1
             applyWatchCountLocally(assetId: candidate.id, timesWatched: count)
             if currentItem?.id == candidate.id {
-                currentInfoFields = buildInfoFields(for: candidate.withTimesWatched(count))
+                currentInfoFields = buildInfoFields(for: candidate.withTimesWatched(count), peopleText: currentPeopleText)
             }
             addDebugMessage("Watch count \(count): \(candidate.title)")
         } catch {
@@ -1225,7 +1239,7 @@ final class ChannelCoordinator: ObservableObject {
             statsTopYearsSummary = formatTop(stats.topYears)
             statsLastError = ""
             if let currentItem {
-                currentInfoFields = buildInfoFields(for: currentItem)
+                currentInfoFields = buildInfoFields(for: currentItem, peopleText: currentPeopleText)
             }
         } catch {
             statsLastError = error.localizedDescription
@@ -1264,17 +1278,10 @@ final class ChannelCoordinator: ObservableObject {
     private func formatCaption(for candidate: VideoCandidate) -> String {
         let monthYear = formatMonthYear(candidate.captureDate)
         let location = formatLocation(city: candidate.city, country: candidate.country)
+        let people = configStore.config.showPeopleOverlay ? currentPeopleText : ""
+        let parts = [monthYear, location, people].filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
-        if monthYear.isEmpty && location.isEmpty {
-            return ""
-        }
-        if monthYear.isEmpty {
-            return location
-        }
-        if location.isEmpty {
-            return monthYear
-        }
-        return "\(monthYear)\n\(location)"
+        return parts.joined(separator: "\n")
     }
 
     private func overlayDateLocationText(for candidate: VideoCandidate) -> String {
@@ -1377,7 +1384,29 @@ final class ChannelCoordinator: ObservableObject {
         currentPlaceLabel = formatLocation(city: candidate.city, country: candidate.country)
     }
 
-    private func buildInfoFields(for candidate: VideoCandidate) -> [VideoInfoField] {
+    private func refreshCurrentMetadata(for candidate: VideoCandidate) async {
+        let peopleText = await resolvePeopleText(for: candidate)
+        currentPeopleText = peopleText
+        currentInfoFields = buildInfoFields(for: candidate, peopleText: peopleText)
+    }
+
+    private func resolvePeopleText(for candidate: VideoCandidate) async -> String {
+        let directNames = sanitizedPeopleNames(candidate.peopleNames)
+        if !directNames.isEmpty {
+            return directNames.joined(separator: ", ")
+        }
+
+        guard shouldUseSQLiteSelection() else { return "" }
+        let cachedNames = (try? await store.peopleNames(for: candidate.id)) ?? []
+        return sanitizedPeopleNames(cachedNames).joined(separator: ", ")
+    }
+
+    private func sanitizedPeopleNames(_ names: [String]) -> [String] {
+        Array(Set(names.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }))
+            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    private func buildInfoFields(for candidate: VideoCandidate, peopleText: String) -> [VideoInfoField] {
         let monthYear = formatMonthYear(candidate.captureDate)
         let location = formatLocation(city: candidate.city, country: candidate.country)
         let camera = [candidate.cameraMake, candidate.cameraModel]
@@ -1401,6 +1430,9 @@ final class ChannelCoordinator: ObservableObject {
         }
         if !location.isEmpty {
             fields.append(VideoInfoField(id: "current_location", label: "Current Location", value: location))
+        }
+        if !peopleText.isEmpty {
+            fields.append(VideoInfoField(id: "people", label: "People", value: peopleText))
         }
 
         fields.append(contentsOf: [

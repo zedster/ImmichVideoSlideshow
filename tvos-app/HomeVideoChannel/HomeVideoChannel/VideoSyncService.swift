@@ -26,6 +26,8 @@ final class VideoSyncService {
 
         let pageSize = max(1, min(config.syncPageSize, 1000))
         let maxPages = max(1, config.syncMaxPages)
+        var syncedAssetIDs: [String] = []
+        var peopleByID: [String: SyncedPersonRecord] = [:]
 
         for page in 1...maxPages {
             let pageItems = try await client.fetchMetadataPage(config: config, page: page, size: pageSize)
@@ -34,8 +36,26 @@ final class VideoSyncService {
             }
 
             pagesFetched += 1
-            rowsUpserted += try await store.upsert(records: pageItems)
+            rowsUpserted += try await store.upsert(records: pageItems.map(\.record))
+            syncedAssetIDs.append(contentsOf: pageItems.map(\.record.id))
+
+            for item in pageItems {
+                for person in item.people {
+                    let existing = peopleByID[person.id] ?? SyncedPersonRecord(id: person.id, name: person.name, assetIDs: [])
+                    peopleByID[person.id] = SyncedPersonRecord(
+                        id: existing.id,
+                        name: existing.name,
+                        assetIDs: existing.assetIDs + [item.record.id]
+                    )
+                }
+            }
             onProgress?(pagesFetched, rowsUpserted)
+        }
+
+        try await store.refreshPeople(Array(peopleByID.values), replacingAssetIDs: syncedAssetIDs)
+
+        if let albums = try? await client.fetchAlbumsWithVideoAssets(config: config) {
+            try await store.replaceAlbums(albums)
         }
 
         let now = ISO8601DateFormatter().string(from: Date())

@@ -20,6 +20,7 @@ struct VideoCandidate: Equatable {
     let exposureTime: String
     let latitude: String
     let longitude: String
+    let peopleNames: [String]
 }
 
 extension VideoCandidate {
@@ -42,7 +43,8 @@ extension VideoCandidate {
             iso: iso,
             exposureTime: exposureTime,
             latitude: latitude,
-            longitude: longitude
+            longitude: longitude,
+            peopleNames: peopleNames
         )
     }
 
@@ -65,7 +67,8 @@ extension VideoCandidate {
             iso: iso,
             exposureTime: exposureTime,
             latitude: latitude,
-            longitude: longitude
+            longitude: longitude,
+            peopleNames: peopleNames
         )
     }
 
@@ -88,7 +91,8 @@ extension VideoCandidate {
             iso: iso,
             exposureTime: exposureTime,
             latitude: latitude,
-            longitude: longitude
+            longitude: longitude,
+            peopleNames: peopleNames
         )
     }
 }
@@ -112,6 +116,17 @@ struct ImmichAssetRecord: Equatable {
     let exposureTime: String
     let latitude: String
     let longitude: String
+    let peopleNames: [String]
+}
+
+struct ImmichPersonReference: Equatable, Hashable {
+    let id: String
+    let name: String
+}
+
+struct ImmichSyncAssetRecord: Equatable {
+    let record: ImmichAssetRecord
+    let people: [ImmichPersonReference]
 }
 
 enum ImmichAPIError: LocalizedError {
@@ -196,7 +211,8 @@ final class ImmichAPIClient {
                     iso: item.iso,
                     exposureTime: item.exposureTime,
                     latitude: item.latitude,
-                    longitude: item.longitude
+                    longitude: item.longitude,
+                    peopleNames: item.peopleNames
                 )
             }
         }
@@ -366,7 +382,7 @@ final class ImmichAPIClient {
         return items.map(\.record)
     }
 
-    func fetchMetadataPage(config: AppConfig, page: Int, size: Int) async throws -> [ImmichAssetRecord] {
+    func fetchMetadataPage(config: AppConfig, page: Int, size: Int) async throws -> [ImmichSyncAssetRecord] {
         let items = try await searchMetadata(
             config: config,
             request: ImmichMetadataSearchRequest(
@@ -378,7 +394,28 @@ final class ImmichAPIClient {
                 withPeople: true
             )
         )
-        return items.map(\.record)
+        return items.map(\.syncRecord)
+    }
+
+    func fetchAlbumsWithVideoAssets(config: AppConfig) async throws -> [SyncedAlbumRecord] {
+        let albums = try await fetchAlbums(config: config)
+        var results: [SyncedAlbumRecord] = []
+        results.reserveCapacity(albums.count)
+
+        for album in albums {
+            let assetIDs = try await fetchAlbumAssetIDs(albumID: album.id, config: config)
+            guard !assetIDs.isEmpty else { continue }
+            results.append(
+                SyncedAlbumRecord(
+                    id: album.id,
+                    name: album.name,
+                    assetIDs: assetIDs,
+                    thumbnailAssetID: album.thumbnailAssetID
+                )
+            )
+        }
+
+        return results
     }
 
     func makePlaybackItem(candidate: VideoCandidate, config: AppConfig) throws -> AVPlayerItem {
@@ -453,6 +490,91 @@ final class ImmichAPIClient {
 
         let decoded = try JSONDecoder().decode(ImmichMetadataSearchResponse.self, from: data)
         return decoded.assets.items
+    }
+
+    private func fetchAlbums(config: AppConfig) async throws -> [ImmichAlbumListEntry] {
+        guard let url = URL(string: "\(config.normalizedImmichBaseURL)/api/albums") else {
+            throw ImmichAPIError.invalidBaseURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(config.apiKey, forHTTPHeaderField: "x-api-key")
+        request.timeoutInterval = 30
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw ImmichAPIError.invalidResponse
+        }
+        guard 200..<300 ~= http.statusCode else {
+            throw ImmichAPIError.httpStatus(http.statusCode)
+        }
+
+        guard let raw = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            return []
+        }
+
+        return raw.compactMap { item in
+            let id = normalizedString(item["id"])
+            let name = normalizedString(item["albumName"]) ?? normalizedString(item["name"])
+            let thumbnailAssetID = normalizedString(item["albumThumbnailAssetId"]) ?? ""
+            guard let id, let name else { return nil }
+            return ImmichAlbumListEntry(id: id, name: name, thumbnailAssetID: thumbnailAssetID)
+        }
+    }
+
+    private func fetchAlbumAssetIDs(albumID: String, config: AppConfig) async throws -> [String] {
+        let encodedAlbumID = albumID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? albumID
+        guard let url = URL(string: "\(config.normalizedImmichBaseURL)/api/albums/\(encodedAlbumID)") else {
+            throw ImmichAPIError.invalidBaseURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(config.apiKey, forHTTPHeaderField: "x-api-key")
+        request.timeoutInterval = 30
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw ImmichAPIError.invalidResponse
+        }
+        guard 200..<300 ~= http.statusCode else {
+            throw ImmichAPIError.httpStatus(http.statusCode)
+        }
+
+        guard let raw = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return []
+        }
+
+        let assets = (raw["assets"] as? [[String: Any]]) ?? []
+        return assets.compactMap { asset in
+            let id = normalizedString(asset["id"])
+            guard let id else { return nil }
+
+            let type = normalizedString(asset["type"])?.uppercased() ?? ""
+            let mime = normalizedString(asset["originalMimeType"])?.lowercased() ?? ""
+            let duration = normalizedString(asset["duration"])
+            let isLikelyVideo = type == "VIDEO" || mime.hasPrefix("video/") || duration != nil
+            return isLikelyVideo ? id : nil
+        }
+    }
+
+    private func normalizedString(_ value: Any?) -> String? {
+        let text: String?
+        switch value {
+        case let string as String:
+            text = string
+        case let number as NSNumber:
+            text = number.stringValue
+        default:
+            text = nil
+        }
+
+        guard let text else { return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private func getOrCreateAlbumId(config: AppConfig, albumName: String) async throws -> String {
@@ -572,6 +694,12 @@ private struct ImmichAssetsPage: Decodable {
     let items: [ImmichAssetItem]
 }
 
+private struct ImmichAlbumListEntry: Equatable {
+    let id: String
+    let name: String
+    let thumbnailAssetID: String
+}
+
 private struct ImmichAssetItem: Decodable {
     let id: String
     let durationRaw: DurationValue
@@ -583,6 +711,7 @@ private struct ImmichAssetItem: Decodable {
     let fileCreatedAt: String?
     let localDateTime: String?
     let createdAt: String?
+    let people: [ImmichAssetPerson]
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -595,6 +724,27 @@ private struct ImmichAssetItem: Decodable {
         case fileCreatedAt
         case localDateTime
         case createdAt
+        case people
+        case person
+        case faces
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        durationRaw = try container.decodeIfPresent(DurationValue.self, forKey: .durationRaw) ?? DurationValue(seconds: 0)
+        isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite)
+        originalFileName = try container.decodeIfPresent(String.self, forKey: .originalFileName)
+        originalMimeType = try container.decodeIfPresent(String.self, forKey: .originalMimeType)
+        encodedVideoCodec = try container.decodeIfPresent(String.self, forKey: .encodedVideoCodec)
+        exifInfo = try container.decodeIfPresent(ImmichExifInfo.self, forKey: .exifInfo)
+        fileCreatedAt = try container.decodeIfPresent(String.self, forKey: .fileCreatedAt)
+        localDateTime = try container.decodeIfPresent(String.self, forKey: .localDateTime)
+        createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
+        let decodedPeople = try container.decodeIfPresent([ImmichAssetPerson].self, forKey: .people)
+        let decodedPerson = try container.decodeIfPresent([ImmichAssetPerson].self, forKey: .person)
+        let decodedFaces = try container.decodeIfPresent([ImmichAssetPerson].self, forKey: .faces)
+        people = decodedPeople ?? decodedPerson ?? decodedFaces ?? []
     }
 
     var durationSeconds: Double { durationRaw.seconds }
@@ -701,8 +851,44 @@ private struct ImmichAssetItem: Decodable {
             iso: isoValue,
             exposureTime: exposureTimeValue,
             latitude: latitudeValue,
-            longitude: longitudeValue
+            longitude: longitudeValue,
+            peopleNames: people.compactMap(\.reference?.name)
         )
+    }
+
+    var syncRecord: ImmichSyncAssetRecord {
+        ImmichSyncAssetRecord(
+            record: record,
+            people: Array(Set(people.compactMap(\.reference))).sorted { lhs, rhs in
+                lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            }
+        )
+    }
+}
+
+private struct ImmichAssetPerson: Decodable, Hashable {
+    let id: String?
+    let name: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case personName
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id)
+        let decodedName = try container.decodeIfPresent(String.self, forKey: .name)
+        let decodedPersonName = try container.decodeIfPresent(String.self, forKey: .personName)
+        name = decodedName ?? decodedPersonName
+    }
+
+    var reference: ImmichPersonReference? {
+        let trimmedID = (id ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedName = (name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedID.isEmpty, !trimmedName.isEmpty else { return nil }
+        return ImmichPersonReference(id: trimmedID, name: trimmedName)
     }
 }
 
@@ -753,6 +939,10 @@ private struct FlexibleValue: Decodable {
 
 private struct DurationValue: Decodable {
     let seconds: Double
+
+    init(seconds: Double) {
+        self.seconds = seconds
+    }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()

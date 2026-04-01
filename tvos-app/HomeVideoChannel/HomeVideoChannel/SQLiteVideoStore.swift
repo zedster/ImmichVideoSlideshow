@@ -1,6 +1,26 @@
 import Foundation
 import SQLite3
 
+struct StoredNamedChannel: Identifiable, Equatable {
+    let id: String
+    let title: String
+    let count: Int
+    let artworkID: String
+}
+
+struct SyncedAlbumRecord: Equatable {
+    let id: String
+    let name: String
+    let assetIDs: [String]
+    let thumbnailAssetID: String
+}
+
+struct SyncedPersonRecord: Equatable {
+    let id: String
+    let name: String
+    let assetIDs: [String]
+}
+
 actor SQLiteVideoStore {
     struct SyncSummary {
         let pagesFetched: Int
@@ -109,6 +129,40 @@ actor SQLiteVideoStore {
             """)
 
             try exec(db, sql: """
+            CREATE TABLE IF NOT EXISTS albums (
+                album_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                thumbnail_asset_id TEXT,
+                updated_at TEXT NOT NULL
+            )
+            """)
+            try ensureColumn(db, table: "albums", column: "thumbnail_asset_id", type: "TEXT")
+            try exec(db, sql: """
+            CREATE TABLE IF NOT EXISTS album_assets (
+                album_id TEXT NOT NULL,
+                asset_id TEXT NOT NULL,
+                PRIMARY KEY (album_id, asset_id)
+            )
+            """)
+            try exec(db, sql: "CREATE INDEX IF NOT EXISTS idx_album_assets_asset_id ON album_assets(asset_id)")
+
+            try exec(db, sql: """
+            CREATE TABLE IF NOT EXISTS people (
+                person_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """)
+            try exec(db, sql: """
+            CREATE TABLE IF NOT EXISTS person_assets (
+                person_id TEXT NOT NULL,
+                asset_id TEXT NOT NULL,
+                PRIMARY KEY (person_id, asset_id)
+            )
+            """)
+            try exec(db, sql: "CREATE INDEX IF NOT EXISTS idx_person_assets_asset_id ON person_assets(asset_id)")
+
+            try exec(db, sql: """
             CREATE TABLE IF NOT EXISTS watch_events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 asset_id TEXT NOT NULL,
@@ -117,6 +171,156 @@ actor SQLiteVideoStore {
             """)
             try exec(db, sql: "CREATE INDEX IF NOT EXISTS idx_watch_events_started_at ON watch_events(started_at)")
             try exec(db, sql: "CREATE INDEX IF NOT EXISTS idx_watch_events_asset_id ON watch_events(asset_id)")
+        }
+    }
+
+    func replaceAlbums(_ albums: [SyncedAlbumRecord]) throws {
+        try withDatabase { db in
+            try exec(db, sql: "BEGIN TRANSACTION")
+            defer {
+                _ = sqlite3_exec(db, "COMMIT", nil, nil, nil)
+            }
+
+            try exec(db, sql: "DELETE FROM album_assets")
+            try exec(db, sql: "DELETE FROM albums")
+
+            let now = ISO8601DateFormatter().string(from: Date())
+            var albumStmt: OpaquePointer?
+            guard sqlite3_prepare_v2(
+                db,
+                "INSERT INTO albums (album_id, name, thumbnail_asset_id, updated_at) VALUES (?, ?, ?, ?)",
+                -1,
+                &albumStmt,
+                nil
+            ) == SQLITE_OK else {
+                throw storeError(db, fallback: "prepare replace albums failed")
+            }
+            defer { sqlite3_finalize(albumStmt) }
+
+            var mappingStmt: OpaquePointer?
+            guard sqlite3_prepare_v2(
+                db,
+                "INSERT OR IGNORE INTO album_assets (album_id, asset_id) VALUES (?, ?)",
+                -1,
+                &mappingStmt,
+                nil
+            ) == SQLITE_OK else {
+                throw storeError(db, fallback: "prepare replace album assets failed")
+            }
+            defer { sqlite3_finalize(mappingStmt) }
+
+            for album in albums {
+                let trimmedID = album.id.trimmingCharacters(in: .whitespacesAndNewlines)
+                let trimmedName = album.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmedID.isEmpty, !trimmedName.isEmpty else { continue }
+
+                sqlite3_reset(albumStmt)
+                sqlite3_clear_bindings(albumStmt)
+                sqlite3_bind_text(albumStmt, 1, (trimmedID as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(albumStmt, 2, (trimmedName as NSString).utf8String, -1, nil)
+                let thumbnailAssetID = album.thumbnailAssetID.trimmingCharacters(in: .whitespacesAndNewlines)
+                if thumbnailAssetID.isEmpty {
+                    sqlite3_bind_null(albumStmt, 3)
+                } else {
+                    sqlite3_bind_text(albumStmt, 3, (thumbnailAssetID as NSString).utf8String, -1, nil)
+                }
+                sqlite3_bind_text(albumStmt, 4, (now as NSString).utf8String, -1, nil)
+                guard sqlite3_step(albumStmt) == SQLITE_DONE else {
+                    throw storeError(db, fallback: "replace album insert failed")
+                }
+
+                for assetID in Set(album.assetIDs.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }).filter({ !$0.isEmpty }) {
+                    sqlite3_reset(mappingStmt)
+                    sqlite3_clear_bindings(mappingStmt)
+                    sqlite3_bind_text(mappingStmt, 1, (trimmedID as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(mappingStmt, 2, (assetID as NSString).utf8String, -1, nil)
+                    guard sqlite3_step(mappingStmt) == SQLITE_DONE else {
+                        throw storeError(db, fallback: "replace album asset insert failed")
+                    }
+                }
+            }
+        }
+    }
+
+    func refreshPeople(_ people: [SyncedPersonRecord], replacingAssetIDs assetIDs: [String]) throws {
+        try withDatabase { db in
+            try exec(db, sql: "BEGIN TRANSACTION")
+            defer {
+                _ = sqlite3_exec(db, "COMMIT", nil, nil, nil)
+            }
+
+            let uniqueAssetIDs = Array(Set(assetIDs.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }).filter { !$0.isEmpty })
+
+            if !uniqueAssetIDs.isEmpty {
+                let placeholders = Array(repeating: "?", count: uniqueAssetIDs.count).joined(separator: ",")
+                let deleteSQL = "DELETE FROM person_assets WHERE asset_id IN (\(placeholders))"
+                var deleteStmt: OpaquePointer?
+                guard sqlite3_prepare_v2(db, deleteSQL, -1, &deleteStmt, nil) == SQLITE_OK else {
+                    throw storeError(db, fallback: "prepare clear person asset mappings failed")
+                }
+                defer { sqlite3_finalize(deleteStmt) }
+                for (index, assetID) in uniqueAssetIDs.enumerated() {
+                    sqlite3_bind_text(deleteStmt, Int32(index + 1), (assetID as NSString).utf8String, -1, nil)
+                }
+                guard sqlite3_step(deleteStmt) == SQLITE_DONE else {
+                    throw storeError(db, fallback: "clear person asset mappings failed")
+                }
+            }
+
+            let now = ISO8601DateFormatter().string(from: Date())
+            var personStmt: OpaquePointer?
+            guard sqlite3_prepare_v2(
+                db,
+                """
+                INSERT INTO people (person_id, name, updated_at) VALUES (?, ?, ?)
+                ON CONFLICT(person_id) DO UPDATE SET
+                    name=excluded.name,
+                    updated_at=excluded.updated_at
+                """,
+                -1,
+                &personStmt,
+                nil
+            ) == SQLITE_OK else {
+                throw storeError(db, fallback: "prepare upsert people failed")
+            }
+            defer { sqlite3_finalize(personStmt) }
+
+            var mappingStmt: OpaquePointer?
+            guard sqlite3_prepare_v2(
+                db,
+                "INSERT OR IGNORE INTO person_assets (person_id, asset_id) VALUES (?, ?)",
+                -1,
+                &mappingStmt,
+                nil
+            ) == SQLITE_OK else {
+                throw storeError(db, fallback: "prepare insert person assets failed")
+            }
+            defer { sqlite3_finalize(mappingStmt) }
+
+            for person in people {
+                let trimmedID = person.id.trimmingCharacters(in: .whitespacesAndNewlines)
+                let trimmedName = person.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmedID.isEmpty, !trimmedName.isEmpty else { continue }
+
+                sqlite3_reset(personStmt)
+                sqlite3_clear_bindings(personStmt)
+                sqlite3_bind_text(personStmt, 1, (trimmedID as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(personStmt, 2, (trimmedName as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(personStmt, 3, (now as NSString).utf8String, -1, nil)
+                guard sqlite3_step(personStmt) == SQLITE_DONE else {
+                    throw storeError(db, fallback: "upsert people failed")
+                }
+
+                for assetID in Set(person.assetIDs.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }).filter({ !$0.isEmpty }) {
+                    sqlite3_reset(mappingStmt)
+                    sqlite3_clear_bindings(mappingStmt)
+                    sqlite3_bind_text(mappingStmt, 1, (trimmedID as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(mappingStmt, 2, (assetID as NSString).utf8String, -1, nil)
+                    guard sqlite3_step(mappingStmt) == SQLITE_DONE else {
+                        throw storeError(db, fallback: "insert person assets failed")
+                    }
+                }
+            }
         }
     }
 
@@ -259,7 +463,9 @@ actor SQLiteVideoStore {
         onlyThisWeek: Bool,
         referenceCaptureDate: String,
         placeCity: String,
-        placeCountry: String
+        placeCountry: String,
+        albumID: String = "",
+        personID: String = ""
     ) throws -> Int {
         try withDatabase { db in
             let filters = selectionFilters(
@@ -269,7 +475,9 @@ actor SQLiteVideoStore {
                 onlyThisWeek: onlyThisWeek,
                 referenceCaptureDate: referenceCaptureDate,
                 placeCity: placeCity,
-                placeCountry: placeCountry
+                placeCountry: placeCountry,
+                albumID: albumID,
+                personID: personID
             )
             let sql = """
             SELECT COUNT(*)
@@ -563,7 +771,9 @@ actor SQLiteVideoStore {
         onlyThisWeek: Bool,
         referenceCaptureDate: String,
         placeCity: String,
-        placeCountry: String
+        placeCountry: String,
+        albumID: String = "",
+        personID: String = ""
     ) throws -> VideoCandidate? {
         try withDatabase { db in
             let filters = selectionFilters(
@@ -573,7 +783,9 @@ actor SQLiteVideoStore {
                 onlyThisWeek: onlyThisWeek,
                 referenceCaptureDate: referenceCaptureDate,
                 placeCity: placeCity,
-                placeCountry: placeCountry
+                placeCountry: placeCountry,
+                albumID: albumID,
+                personID: personID
             )
             let sql = """
             SELECT asset_id, title, duration, is_favorite, is_hidden, times_watched, capture_date, city, country, camera_make, camera_model, lens_model, f_number, focal_length, iso, exposure_time, latitude, longitude
@@ -609,7 +821,9 @@ actor SQLiteVideoStore {
         onlyThisWeek: Bool,
         referenceCaptureDate: String,
         placeCity: String,
-        placeCountry: String
+        placeCountry: String,
+        albumID: String = "",
+        personID: String = ""
     ) throws -> VideoCandidate? {
         try withDatabase { db in
             let filters = selectionFilters(
@@ -619,7 +833,9 @@ actor SQLiteVideoStore {
                 onlyThisWeek: onlyThisWeek,
                 referenceCaptureDate: referenceCaptureDate,
                 placeCity: placeCity,
-                placeCountry: placeCountry
+                placeCountry: placeCountry,
+                albumID: albumID,
+                personID: personID
             )
             let baseWhere = "duration >= ? AND \(filters.whereClause) AND COALESCE(is_hidden, 0) = 0"
             let sortExpr = "CASE WHEN COALESCE(capture_date, '') = '' THEN 1 ELSE 0 END"
@@ -782,6 +998,70 @@ actor SQLiteVideoStore {
         }
     }
 
+    func listAlbumChannels(minDuration: Double) throws -> [StoredNamedChannel] {
+        try namedChannels(
+            sql: """
+            SELECT albums.album_id, albums.name, COUNT(*) AS c, COALESCE(albums.thumbnail_asset_id, '')
+            FROM albums
+            JOIN album_assets ON album_assets.album_id = albums.album_id
+            JOIN videos ON videos.asset_id = album_assets.asset_id
+            WHERE videos.duration >= ?
+              AND COALESCE(videos.is_hidden, 0) = 0
+            GROUP BY albums.album_id, albums.name
+            HAVING c > 0
+            ORDER BY c DESC, LOWER(albums.name) ASC
+            """,
+            minDuration: minDuration
+        )
+    }
+
+    func listPeopleChannels(minDuration: Double) throws -> [StoredNamedChannel] {
+        try namedChannels(
+            sql: """
+            SELECT people.person_id, people.name, COUNT(*) AS c, people.person_id
+            FROM people
+            JOIN person_assets ON person_assets.person_id = people.person_id
+            JOIN videos ON videos.asset_id = person_assets.asset_id
+            WHERE videos.duration >= ?
+              AND COALESCE(videos.is_hidden, 0) = 0
+            GROUP BY people.person_id, people.name
+            HAVING c > 0
+            ORDER BY c DESC, LOWER(people.name) ASC
+            """,
+            minDuration: minDuration
+        )
+    }
+
+    func peopleNames(for assetId: String) throws -> [String] {
+        try withDatabase { db in
+            let sql = """
+            SELECT DISTINCT people.name
+            FROM people
+            JOIN person_assets ON person_assets.person_id = people.person_id
+            WHERE person_assets.asset_id = ?
+              AND TRIM(COALESCE(people.name, '')) != ''
+            ORDER BY LOWER(people.name) ASC
+            """
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+                throw storeError(db, fallback: "prepare people names failed")
+            }
+            defer { sqlite3_finalize(stmt) }
+
+            sqlite3_bind_text(stmt, 1, (assetId as NSString).utf8String, -1, nil)
+
+            var names: [String] = []
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                let name = sqlite3_column_text(stmt, 0).map { String(cString: $0) } ?? ""
+                let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    names.append(trimmed)
+                }
+            }
+            return names
+        }
+    }
+
     private func withDatabase<T>(_ body: (OpaquePointer) throws -> T) throws -> T {
         let fm = FileManager.default
 
@@ -853,7 +1133,9 @@ actor SQLiteVideoStore {
         onlyThisWeek: Bool,
         referenceCaptureDate: String,
         placeCity: String,
-        placeCountry: String
+        placeCountry: String,
+        albumID: String,
+        personID: String
     ) -> (whereClause: String, bindings: [SQLiteBindValue]) {
         var clauses: [String] = []
         var bindings: [SQLiteBindValue] = []
@@ -891,6 +1173,32 @@ actor SQLiteVideoStore {
         } else if !trimmedCountry.isEmpty {
             clauses.append("LOWER(TRIM(COALESCE(country, ''))) = LOWER(?)")
             bindings.append(.text(trimmedCountry))
+        }
+
+        let trimmedAlbumID = albumID.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedAlbumID.isEmpty {
+            clauses.append("""
+            EXISTS (
+                SELECT 1
+                FROM album_assets
+                WHERE album_assets.asset_id = videos.asset_id
+                  AND album_assets.album_id = ?
+            )
+            """)
+            bindings.append(.text(trimmedAlbumID))
+        }
+
+        let trimmedPersonID = personID.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedPersonID.isEmpty {
+            clauses.append("""
+            EXISTS (
+                SELECT 1
+                FROM person_assets
+                WHERE person_assets.asset_id = videos.asset_id
+                  AND person_assets.person_id = ?
+            )
+            """)
+            bindings.append(.text(trimmedPersonID))
         }
 
         return (clauses.isEmpty ? "1 = 1" : clauses.joined(separator: " AND "), bindings)
@@ -968,7 +1276,8 @@ actor SQLiteVideoStore {
             iso: iso,
             exposureTime: exposureTime,
             latitude: latitude,
-            longitude: longitude
+            longitude: longitude,
+            peopleNames: []
         )
     }
 
@@ -1086,6 +1395,38 @@ actor SQLiteVideoStore {
         guard let c = sqlite3_column_text(stmt, 0) else { return nil }
         let text = String(cString: c).trimmingCharacters(in: .whitespacesAndNewlines)
         return text.isEmpty ? nil : text
+    }
+
+    private func namedChannels(sql: String, minDuration: Double) throws -> [StoredNamedChannel] {
+        try withDatabase { db in
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+                throw storeError(db, fallback: "prepare named channels failed")
+            }
+            defer { sqlite3_finalize(stmt) }
+
+            sqlite3_bind_double(stmt, 1, minDuration)
+
+            var rows: [StoredNamedChannel] = []
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                let id = sqlite3_column_text(stmt, 0).map { String(cString: $0) } ?? ""
+                let title = sqlite3_column_text(stmt, 1).map { String(cString: $0) } ?? ""
+                let count = Int(sqlite3_column_int64(stmt, 2))
+                let artworkID = sqlite3_column_text(stmt, 3).map { String(cString: $0) } ?? ""
+                let trimmedID = id.trimmingCharacters(in: .whitespacesAndNewlines)
+                let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmedID.isEmpty, !trimmedTitle.isEmpty, count > 0 else { continue }
+                rows.append(
+                    StoredNamedChannel(
+                        id: trimmedID,
+                        title: trimmedTitle,
+                        count: count,
+                        artworkID: artworkID.trimmingCharacters(in: .whitespacesAndNewlines)
+                    )
+                )
+            }
+            return rows
+        }
     }
 }
 
