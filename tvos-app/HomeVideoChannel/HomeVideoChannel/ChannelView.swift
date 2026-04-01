@@ -16,6 +16,7 @@ fileprivate enum ChannelSelectorTab: String, CaseIterable, Hashable, Identifiabl
     case timePlace
     case albums
     case people
+    case search
 
     var id: String { rawValue }
 
@@ -27,6 +28,8 @@ fileprivate enum ChannelSelectorTab: String, CaseIterable, Hashable, Identifiabl
             return "Albums"
         case .people:
             return "People"
+        case .search:
+            return "Search"
         }
     }
 }
@@ -54,6 +57,7 @@ struct ChannelView: View {
     @State private var channelCounts: [String: Int] = [:]
     @State private var albumChannelOptions: [ChannelOption] = []
     @State private var peopleChannelOptions: [ChannelOption] = []
+    @State private var searchQueryDraft = ""
     @State private var selectedChannelTab: ChannelSelectorTab = .timePlace
     @State private var channelDataTask: Task<Void, Never>?
     @State private var hideControlsTask: Task<Void, Never>?
@@ -62,6 +66,7 @@ struct ChannelView: View {
     @FocusState private var focusedControl: ControlsFocusTarget?
     @FocusState private var focusedChannelID: String?
     @FocusState private var focusedChannelTab: ChannelSelectorTab?
+    @FocusState private var searchFieldFocused: Bool
     @State private var lastFocusedControl: ControlsFocusTarget = .playPause
     private let channelStore = SQLiteVideoStore()
 
@@ -236,6 +241,7 @@ struct ChannelView: View {
                 controlsVisible = true
                 focusedControl = nil
                 scrubBarFocused = false
+                searchQueryDraft = configStore.config.searchQuery
                 selectedChannelTab = resolvedSelectedChannelTab
                 focusedChannelTab = resolvedSelectedChannelTab
                 focusSelectedChannel()
@@ -243,6 +249,7 @@ struct ChannelView: View {
             } else {
                 focusedChannelID = nil
                 focusedChannelTab = nil
+                searchFieldFocused = false
                 channelDataTask?.cancel()
             }
             recordInteraction()
@@ -546,7 +553,7 @@ struct ChannelView: View {
                             .foregroundStyle(.white.opacity(0.66))
                     }
 
-                    HStack(spacing: 12) {
+                    HStack(spacing: 0) {
                         ForEach(ChannelSelectorTab.allCases) { tab in
                             Button {
                                 selectedChannelTab = tab
@@ -559,11 +566,25 @@ struct ChannelView: View {
                             }
                             .buttonStyle(.plain)
                             .focused($focusedChannelTab, equals: tab)
+                            .frame(maxWidth: tab == .timePlace ? .infinity : 190)
                         }
                     }
+                    .padding(8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .fill(Color.black.opacity(0.24))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                            )
+                    )
 
-                    ScrollView {
-                        if channelOptionsForSelectedTab.isEmpty {
+                    ScrollView(.vertical, showsIndicators: false) {
+                        if selectedChannelTab == .search {
+                            searchTabContent
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 12)
+                        } else if channelOptionsForSelectedTab.isEmpty {
                             VStack(alignment: .leading, spacing: 12) {
                                 Text(emptyStateTitle)
                                     .font(.system(size: 26, weight: .bold, design: .rounded))
@@ -572,7 +593,7 @@ struct ChannelView: View {
                                     .foregroundStyle(.white.opacity(0.68))
                             }
                             .padding(.top, 14)
-                            .padding(.horizontal, 6)
+                            .padding(.horizontal, 14)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         } else {
                             VStack(alignment: .leading, spacing: 14) {
@@ -590,11 +611,10 @@ struct ChannelView: View {
                                     .focused($focusedChannelID, equals: option.id)
                                 }
                             }
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 10)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
                         }
                     }
-                    .scrollIndicators(.hidden)
                     .onMoveCommand { direction in
                         switch direction {
                         case .left:
@@ -863,10 +883,15 @@ struct ChannelView: View {
             return albumChannelOptions
         case .people:
             return peopleChannelOptions
+        case .search:
+            return []
         }
     }
 
     private var selectedChannelID: String {
+        if configStore.config.hasSearchFilter {
+            return "search"
+        }
         if !configStore.config.albumFilterID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return "album:\(configStore.config.albumFilterID)"
         }
@@ -895,6 +920,9 @@ struct ChannelView: View {
     }
 
     private var resolvedSelectedChannelTab: ChannelSelectorTab {
+        if configStore.config.hasSearchFilter {
+            return .search
+        }
         if !configStore.config.albumFilterID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return .albums
         }
@@ -935,6 +963,7 @@ struct ChannelView: View {
         nextConfig.albumFilterName = ""
         nextConfig.personFilterID = ""
         nextConfig.personFilterName = ""
+        nextConfig.searchQuery = ""
 
         switch channelID {
         case "favorites":
@@ -970,6 +999,35 @@ struct ChannelView: View {
         showChannelList = false
     }
 
+    private func applySearchChannel() {
+        let query = searchQueryDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return }
+
+        var nextConfig = configStore.config
+        nextConfig.onlyFavorites = false
+        nextConfig.onlyThisMonth = false
+        nextConfig.onlyThisDay = false
+        nextConfig.onlyThisWeek = false
+        nextConfig.referenceCaptureDate = ""
+        nextConfig.placeFilterCity = ""
+        nextConfig.placeFilterCountry = ""
+        nextConfig.albumFilterID = ""
+        nextConfig.albumFilterName = ""
+        nextConfig.personFilterID = ""
+        nextConfig.personFilterName = ""
+        nextConfig.searchQuery = query
+        configStore.save(nextConfig)
+        showChannelList = false
+    }
+
+    private func clearSearchChannel() {
+        searchQueryDraft = ""
+        guard configStore.config.hasSearchFilter else { return }
+        var nextConfig = configStore.config
+        nextConfig.searchQuery = ""
+        configStore.save(nextConfig)
+    }
+
     private func channelCount(for id: String) -> Int {
         channelCounts[id] ?? 0
     }
@@ -994,17 +1052,143 @@ struct ChannelView: View {
         return URL(string: "\(configStore.config.normalizedImmichBaseURL)/api/people/\(encoded)/thumbnail")
     }
 
+    @ViewBuilder
+    private var searchTabContent: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Search Immich")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                Text("Enter a search phrase and Home Video Channel will play matching videos from Immich search.")
+                    .font(.system(size: 18, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.68))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            TextField("Try “blue”, “sunset”, or “dog on beach”", text: $searchQueryDraft)
+                .textFieldStyle(.plain)
+                .font(.system(size: 24, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color.white.opacity(0.08))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .stroke(searchFieldFocused ? Color.white.opacity(0.95) : Color.white.opacity(0.08), lineWidth: searchFieldFocused ? 2 : 1)
+                        )
+                )
+                .focused($searchFieldFocused)
+                .onSubmit {
+                    applySearchChannel()
+                }
+
+            HStack(spacing: 14) {
+                Button {
+                    applySearchChannel()
+                } label: {
+                    searchActionButtonLabel(
+                        title: "Search",
+                        subtitle: "Play matching videos",
+                        highlighted: true
+                    )
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    clearSearchChannel()
+                } label: {
+                    searchActionButtonLabel(
+                        title: "Clear",
+                        subtitle: "Remove active search",
+                        highlighted: false
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
+            if configStore.config.hasSearchFilter {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Current Search")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.62))
+                    Text(configStore.config.searchQuery)
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                    Text("This search channel loops through matching Immich results using your current playback order.")
+                        .font(.system(size: 17, weight: .medium, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.68))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.96, green: 0.34, blue: 0.48).opacity(0.78),
+                                    Color(red: 0.74, green: 0.12, blue: 0.28).opacity(0.68)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func searchActionButtonLabel(title: String, subtitle: String, highlighted: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+            Text(subtitle)
+                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .foregroundStyle(.white.opacity(0.72))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 16)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(highlighted ? Color(red: 0.98, green: 0.42, blue: 0.36) : Color.white.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(Color.white.opacity(highlighted ? 0.10 : 0.08), lineWidth: 1)
+                )
+        )
+    }
+
     private func focusSelectedChannel() {
+        if selectedChannelTab == .search {
+            DispatchQueue.main.async {
+                focusedChannelID = nil
+                searchFieldFocused = true
+            }
+            return
+        }
         DispatchQueue.main.async {
             focusedChannelID = selectedChannelID
+            searchFieldFocused = false
         }
     }
 
     private func focusFirstOptionInSelectedTab() {
+        if selectedChannelTab == .search {
+            DispatchQueue.main.async {
+                focusedChannelID = nil
+                searchFieldFocused = true
+            }
+            return
+        }
         let options = channelOptionsForSelectedTab
         let targetID = options.first(where: { $0.id == selectedChannelID })?.id ?? options.first?.id
         DispatchQueue.main.async {
             focusedChannelID = targetID
+            searchFieldFocused = false
         }
     }
 
@@ -1016,6 +1200,8 @@ struct ChannelView: View {
             return "No album channels yet"
         case .people:
             return "No people channels yet"
+        case .search:
+            return "Search your videos"
         }
     }
 
@@ -1027,6 +1213,8 @@ struct ChannelView: View {
             return "Run a sync to load Immich albums that contain videos."
         case .people:
             return "Run a sync to load named people from your synced videos."
+        case .search:
+            return "Enter a phrase and play videos that match Immich smart search."
         }
     }
 
@@ -1217,29 +1405,73 @@ private struct ChannelTabButton: View {
     @Environment(\.isFocused) private var isFocused
 
     var body: some View {
-        Text(title)
-            .font(.system(size: 22, weight: .bold, design: .rounded))
-            .foregroundStyle(isFocused ? Color.black : Color.white)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 12)
-            .background(background)
-            .overlay {
-                Capsule()
-                    .stroke(borderColor, lineWidth: isFocused ? 2 : 1)
-            }
-            .clipShape(Capsule())
-            .scaleEffect(isFocused ? 1.04 : 1.0)
-            .animation(.easeInOut(duration: 0.16), value: isFocused)
+        VStack(spacing: 0) {
+            Text(title)
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .foregroundStyle(titleColor)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 20)
+            .padding(.top, 14)
+            .padding(.bottom, 12)
+            .background(tabBackground)
+
+            Rectangle()
+                .fill(indicatorColor)
+                .frame(height: 5)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(borderColor, lineWidth: isFocused ? 2 : 1)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .scaleEffect(isFocused ? 1.03 : 1.0)
+        .shadow(color: Color.black.opacity(isFocused ? 0.28 : 0), radius: 18, y: 6)
+        .animation(.easeInOut(duration: 0.16), value: isFocused)
+        .frame(maxWidth: .infinity)
     }
 
-    private var background: some ShapeStyle {
+    private var tabBackground: some ShapeStyle {
         if isFocused {
-            return AnyShapeStyle(Color.white)
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.96),
+                        Color.white.opacity(0.88)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
         }
         if isSelected {
-            return AnyShapeStyle(Color.white.opacity(0.14))
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.15),
+                        Color.white.opacity(0.10)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
         }
-        return AnyShapeStyle(Color.white.opacity(0.07))
+        return AnyShapeStyle(Color.white.opacity(0.04))
+    }
+
+    private var indicatorColor: Color {
+        if isFocused {
+            return Color.black.opacity(0.82)
+        }
+        if isSelected {
+            return Color(red: 1.0, green: 0.46, blue: 0.36)
+        }
+        return Color.clear
+    }
+
+    private var titleColor: Color {
+        isFocused ? .black : Color.white.opacity(isSelected ? 0.96 : 0.72)
     }
 
     private var borderColor: Color {
@@ -1247,9 +1479,9 @@ private struct ChannelTabButton: View {
             return Color.white.opacity(0.95)
         }
         if isSelected {
-            return Color.white.opacity(0.28)
+            return Color.white.opacity(0.16)
         }
-        return Color.white.opacity(0.08)
+        return Color.clear
     }
 }
 

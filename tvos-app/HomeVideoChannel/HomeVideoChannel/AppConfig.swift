@@ -16,6 +16,7 @@ struct AppConfig: Codable, Equatable {
     var albumFilterName: String = ""
     var personFilterID: String = ""
     var personFilterName: String = ""
+    var searchQuery: String = ""
     var debug: Bool = false
     var crossfadeEnabled: Bool = true
     var crossfadeDurationMs: Int = 450
@@ -47,6 +48,7 @@ struct AppConfig: Codable, Equatable {
         case albumFilterName
         case personFilterID
         case personFilterName
+        case searchQuery
         case debug
         case crossfadeEnabled
         case crossfadeDurationMs
@@ -82,6 +84,7 @@ struct AppConfig: Codable, Equatable {
         albumFilterName = try c.decodeIfPresent(String.self, forKey: .albumFilterName) ?? ""
         personFilterID = try c.decodeIfPresent(String.self, forKey: .personFilterID) ?? ""
         personFilterName = try c.decodeIfPresent(String.self, forKey: .personFilterName) ?? ""
+        searchQuery = try c.decodeIfPresent(String.self, forKey: .searchQuery) ?? ""
         debug = try c.decodeIfPresent(Bool.self, forKey: .debug) ?? false
         crossfadeEnabled = try c.decodeIfPresent(Bool.self, forKey: .crossfadeEnabled) ?? true
         crossfadeDurationMs = try c.decodeIfPresent(Int.self, forKey: .crossfadeDurationMs) ?? 450
@@ -114,6 +117,10 @@ struct AppConfig: Codable, Equatable {
     var hasCollectionFilter: Bool {
         !albumFilterID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
         !personFilterID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var hasSearchFilter: Bool {
+        !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var normalizedImmichBaseURL: String {

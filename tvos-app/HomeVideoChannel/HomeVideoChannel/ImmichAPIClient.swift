@@ -397,6 +397,69 @@ final class ImmichAPIClient {
         return items.map(\.syncRecord)
     }
 
+    func searchSmartVideos(
+        config: AppConfig,
+        query: String,
+        page: Int,
+        size: Int
+    ) async throws -> [VideoCandidate] {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedQuery.isEmpty else { return [] }
+        guard let url = URL(string: "\(config.normalizedImmichBaseURL)/api/search/smart") else {
+            throw ImmichAPIError.invalidBaseURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(config.apiKey, forHTTPHeaderField: "x-api-key")
+        request.timeoutInterval = 30
+        request.httpBody = try JSONEncoder().encode(
+            ImmichSmartSearchRequest(
+                query: trimmedQuery,
+                type: "VIDEO",
+                page: page,
+                size: max(1, min(size, 1000)),
+                withExif: true,
+                withPeople: true
+            )
+        )
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw ImmichAPIError.invalidResponse
+        }
+        guard 200..<300 ~= http.statusCode else {
+            throw ImmichAPIError.httpStatus(http.statusCode)
+        }
+
+        let decoded = try JSONDecoder().decode(ImmichSmartSearchResponse.self, from: data)
+        return decoded.resolvedItems.map { item in
+            VideoCandidate(
+                id: item.record.id,
+                title: item.record.title,
+                duration: item.record.duration,
+                isFavorite: item.record.isFavorite,
+                isHidden: false,
+                timesWatched: 0,
+                captureDate: item.record.captureDate,
+                city: item.record.city,
+                country: item.record.country,
+                cameraMake: item.record.cameraMake,
+                cameraModel: item.record.cameraModel,
+                lensModel: item.record.lensModel,
+                fNumber: item.record.fNumber,
+                focalLength: item.record.focalLength,
+                iso: item.record.iso,
+                exposureTime: item.record.exposureTime,
+                latitude: item.record.latitude,
+                longitude: item.record.longitude,
+                peopleNames: item.record.peopleNames
+            )
+        }
+    }
+
     func fetchAlbumsWithVideoAssets(config: AppConfig) async throws -> [SyncedAlbumRecord] {
         let albums = try await fetchAlbums(config: config)
         var results: [SyncedAlbumRecord] = []
@@ -682,12 +745,30 @@ private struct ImmichMetadataSearchRequest: Encodable {
     let withPeople: Bool
 }
 
+private struct ImmichSmartSearchRequest: Encodable {
+    let query: String
+    let type: String
+    let page: Int
+    let size: Int
+    let withExif: Bool
+    let withPeople: Bool
+}
+
 private struct ImmichFavoriteUpdateRequest: Encodable {
     let isFavorite: Bool
 }
 
 private struct ImmichMetadataSearchResponse: Decodable {
     let assets: ImmichAssetsPage
+}
+
+private struct ImmichSmartSearchResponse: Decodable {
+    let assets: ImmichAssetsPage?
+    let items: [ImmichAssetItem]?
+
+    var resolvedItems: [ImmichAssetItem] {
+        assets?.items ?? items ?? []
+    }
 }
 
 private struct ImmichAssetsPage: Decodable {
