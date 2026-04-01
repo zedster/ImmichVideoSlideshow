@@ -295,6 +295,7 @@ struct ChannelView: View {
                         .padding(.top, 8)
                         .padding(.bottom, 0)
                     }
+                    .focusDisabled(showChannelList)
                     .transition(.opacity)
                 }
 
@@ -338,6 +339,7 @@ struct ChannelView: View {
 
                             Spacer()
                         }
+                        .focusSection()
                         .padding(.horizontal, 32)
                         .padding(.vertical, 28)
                         .frame(width: min(520, geo.size.width * 0.42), height: geo.size.height, alignment: .topLeading)
@@ -487,6 +489,8 @@ struct ChannelView: View {
         .onChange(of: showChannelList) { isVisible in
             if isVisible {
                 controlsVisible = true
+                focusedControl = nil
+                scrubBarFocused = false
                 focusedChannelID = selectedChannelID
                 refreshChannelCounts()
             } else {
