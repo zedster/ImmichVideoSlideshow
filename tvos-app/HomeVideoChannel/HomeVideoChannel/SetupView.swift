@@ -1,6 +1,4 @@
-import CoreImage.CIFilterBuiltins
 import SwiftUI
-import UIKit
 
 struct SetupView: View {
     private enum SettingFocus: Hashable {
@@ -12,6 +10,7 @@ struct SetupView: View {
         case playbackOrder
         case playbackQuality
         case showDateLocationOverlay
+        case includeDiagnosticsInFeedback
         case onlyFavorites
         case resetPlayback
         case crossfadeEnabled
@@ -24,6 +23,7 @@ struct SetupView: View {
         case syncMaxPages
         case forceSync
         case openLibraryStats
+        case sendFeedback
         case debugLogging
         case saveAndStart
     }
@@ -68,6 +68,7 @@ struct SetupView: View {
     @State private var playbackOrder = "random"
     @State private var playbackQuality = "auto"
     @State private var showDateLocationOverlay = true
+    @State private var includeDiagnosticsInFeedback = true
     @State private var preloadSeconds = "4"
     @State private var crossfadeDuration = "450"
     @State private var queueTarget = "2"
@@ -129,6 +130,7 @@ struct SetupView: View {
             .onChange(of: playbackOrder) { _ in autoSaveSettingsIfNeeded() }
             .onChange(of: playbackQuality) { _ in autoSaveSettingsIfNeeded() }
             .onChange(of: showDateLocationOverlay) { _ in autoSaveSettingsIfNeeded() }
+            .onChange(of: includeDiagnosticsInFeedback) { _ in autoSaveSettingsIfNeeded() }
             .onChange(of: preloadSeconds) { _ in autoSaveSettingsIfNeeded() }
             .onChange(of: crossfadeDuration) { _ in autoSaveSettingsIfNeeded() }
             .onChange(of: queueTarget) { _ in autoSaveSettingsIfNeeded() }
@@ -203,20 +205,11 @@ struct SetupView: View {
                                 .overlay(Color.white.opacity(0.12))
 
                             HStack(alignment: .top, spacing: 18) {
-                                if let image = qrImage(from: bananaSystemsGuideURL) {
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Image(uiImage: image)
-                                            .interpolation(.none)
-                                            .resizable()
-                                            .scaledToFit()
-                                            .frame(width: 180, height: 180)
-                                            .padding(10)
-                                            .background(Color.white)
-                                            .clipShape(RoundedRectangle(cornerRadius: 18))
-                                        Text("Scan for the Banana Systems guide")
-                                            .font(.caption)
-                                            .foregroundStyle(.white.opacity(0.68))
-                                    }
+                                VStack(alignment: .leading, spacing: 8) {
+                                    QRCodeView(value: bananaSystemsGuideURL, size: 180)
+                                    Text("Scan for the Banana Systems guide")
+                                        .font(.caption)
+                                        .foregroundStyle(.white.opacity(0.68))
                                 }
 
                                 VStack(alignment: .leading, spacing: 8) {
@@ -254,20 +247,11 @@ struct SetupView: View {
 
                     Spacer()
 
-                    if let image = qrImage(from: bananaSystemsGuideURL) {
-                        VStack(alignment: .center, spacing: 8) {
-                            Image(uiImage: image)
-                                .interpolation(.none)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 132, height: 132)
-                                .padding(8)
-                                .background(Color.white)
-                                .clipShape(RoundedRectangle(cornerRadius: 16))
-                            Text("Setup help")
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.72))
-                        }
+                    VStack(alignment: .center, spacing: 8) {
+                        QRCodeView(value: bananaSystemsGuideURL, size: 132)
+                        Text("Setup help")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.72))
                     }
                 }
 
@@ -340,6 +324,32 @@ struct SetupView: View {
                             labeledField("Preload Seconds Before End", placeholder: "4", text: $preloadSeconds, focus: .preloadSeconds)
                             labeledField("Queue Target Size", placeholder: "2", text: $queueTarget, focus: .queueTarget)
                         }
+                    }
+                }
+
+                card {
+                    VStack(alignment: .leading, spacing: 16) {
+                        sectionHeading("Feedback")
+
+                        Text("We love making this app better for our users. If you have suggestions, bug reports, or feature ideas, we want to hear them.")
+                            .font(.body)
+                            .foregroundStyle(.white.opacity(0.82))
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        NavigationLink {
+                            FeedbackView(config: configStore.config)
+                        } label: {
+                            detailedSettingRowLabel(
+                                "Send Feedback",
+                                subtitle: "Scan a QR code to report a bug or request a feature",
+                                value: "Open",
+                                isFocused: focusedSetting == .sendFeedback
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .focused($focusedSetting, equals: .sendFeedback)
+
+                        booleanPicker("Include Diagnostics In Feedback", isOn: $includeDiagnosticsInFeedback, focus: .includeDiagnosticsInFeedback)
                     }
                 }
 
@@ -463,6 +473,7 @@ struct SetupView: View {
         }
         playbackQuality = cfg.playbackQuality
         showDateLocationOverlay = cfg.showDateLocationOverlay
+        includeDiagnosticsInFeedback = cfg.includeDiagnosticsInFeedback
         preloadSeconds = String(cfg.preloadSecondsBeforeEnd)
         crossfadeDuration = String(cfg.crossfadeDurationMs)
         queueTarget = String(cfg.queueTargetSize)
@@ -529,6 +540,7 @@ struct SetupView: View {
         }
         next.playbackQuality = playbackQuality
         next.showDateLocationOverlay = showDateLocationOverlay
+        next.includeDiagnosticsInFeedback = includeDiagnosticsInFeedback
         next.onlyFavorites = onlyFavorites
         if onlyFavorites {
             next.onlyThisMonth = false
@@ -778,6 +790,31 @@ struct SetupView: View {
     }
 
     @ViewBuilder
+    private func detailedSettingRowLabel(_ label: String, subtitle: String, value: String, isFocused: Bool) -> some View {
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(label)
+                    .foregroundStyle(isFocused ? .black : .white)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(isFocused ? Color.black.opacity(0.68) : Color.white.opacity(0.66))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 16)
+
+            Text(value)
+                .foregroundStyle(isFocused ? .black : .white.opacity(0.78))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(isFocused ? Color.white : Color.white.opacity(0.10))
+        )
+    }
+
+    @ViewBuilder
     private func aboutRow(_ label: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
@@ -841,18 +878,6 @@ struct SetupView: View {
         }
     }
 
-    private func qrImage(from value: String) -> UIImage? {
-        guard !value.isEmpty else { return nil }
-        let context = CIContext()
-        let filter = CIFilter.qrCodeGenerator()
-        filter.message = Data(value.utf8)
-        filter.correctionLevel = "M"
-
-        guard let output = filter.outputImage else { return nil }
-        let transformed = output.transformed(by: CGAffineTransform(scaleX: 10, y: 10))
-        guard let cgImage = context.createCGImage(transformed, from: transformed.extent) else { return nil }
-        return UIImage(cgImage: cgImage)
-    }
 }
 
 private struct LibraryStatsView: View {

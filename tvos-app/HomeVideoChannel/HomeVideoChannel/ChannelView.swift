@@ -47,8 +47,14 @@ struct ChannelView: View {
 
     var body: some View {
         GeometryReader { geo in
-            ZStack {
-                Color.black.ignoresSafeArea()
+            mainContent(in: geo)
+        }
+    }
+
+    @ViewBuilder
+    private func mainContent(in geo: GeometryProxy) -> some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
 
                 PlayerSurfaceView(player: coordinator.playerA)
                     .ignoresSafeArea()
@@ -150,295 +156,9 @@ struct ChannelView: View {
                 //     }
                 // }
 
-                if controlsVisible {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            Text(coordinator.secondsLeftText)
-                                .font(.caption2.monospaced())
-                                .foregroundStyle(.white.opacity(0.9))
-                                .padding(.trailing, 8)
-                        }
-                        .padding(.bottom, 0)
-
-                        if scrubBarFocused && !showChannelList {
-                            Text("Press Up for Channels")
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.84))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(Color.black.opacity(0.6))
-                                .clipShape(Capsule())
-                                .padding(.bottom, 8)
-                        }
-
-                        ScrubProgressBar(progress: coordinator.playbackProgress) { deltaSeconds in
-                            recordInteraction()
-                            coordinator.seek(bySeconds: deltaSeconds)
-                        } onOpenChannels: {
-                            recordInteraction()
-                            openChannelList()
-                        } onFocusChange: { isFocused in
-                            scrubBarFocused = isFocused
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 8)
-
-                        //text
-                        HStack(spacing: 10) {
-                            if !coordinator.captionText.isEmpty {
-                                Text(coordinator.captionText)
-                                    .font(.caption)
-                                    .lineLimit(2)
-                                    .multilineTextAlignment(.leading)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(Color.black.opacity(0.6))
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                            }
-
-                            Spacer()
-
-                            if configStore.config.debug {
-                                VStack(alignment: .trailing, spacing: 6) {
-                                    Text(coordinator.statusText)
-                                        .font(.caption2.monospaced())
-
-                                    if !coordinator.debugTelemetryText.isEmpty {
-                                        Text(coordinator.debugTelemetryText)
-                                            .font(.caption2.monospaced())
-                                            .multilineTextAlignment(.trailing)
-                                    }
-                                }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(Color.black.opacity(0.6))
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                            }
-
-                            if coordinator.canGoBack {
-                                Button {
-                                    recordInteraction()
-                                    coordinator.goBack()
-                                } label: {
-                                    Image(systemName: "backward.end.fill")
-                                }
-                                .buttonStyle(.bordered)
-                                .focused($focusedControl, equals: .back)
-                                .accessibilityLabel("Back")
-                            }
-
-                            Button {
-                                recordInteraction()
-                                coordinator.togglePlayPause()
-                            } label: {
-                                Image(systemName: coordinator.playPauseButtonSystemImage())
-                            }
-                            .buttonStyle(.bordered)
-                            .focused($focusedControl, equals: .playPause)
-                            .accessibilityLabel("Play Pause")
-
-                            Button {
-                                recordInteraction()
-                                coordinator.skip()
-                            } label: {
-                                Image(systemName: "forward.end.fill")
-                            }
-                            .buttonStyle(.bordered)
-                            .focused($focusedControl, equals: .skip)
-                            .accessibilityLabel("Skip")
-
-                            Button {
-                                recordInteraction()
-                                coordinator.toggleFavorite()
-                            } label: {
-                                Image(systemName: coordinator.favoriteButtonSystemImage())
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(coordinator.favoriteUpdateInProgress)
-                            .focused($focusedControl, equals: .favorite)
-                            .accessibilityLabel(coordinator.favoriteButtonLabel())
-
-                            Button(role: .destructive) {
-                                recordInteraction()
-                                showHideForeverConfirmation = true
-                            } label: {
-                                Image(systemName: coordinator.hideButtonSystemImage())
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(!coordinator.canHideToAlbum || coordinator.hideUpdateInProgress)
-                            .focused($focusedControl, equals: .hideForever)
-                            .accessibilityLabel("Hide Forever")
-
-                            Button {
-                                recordInteraction()
-                                showInfo.toggle()
-                            } label: {
-                                Image(systemName: "info.circle")
-                            }
-                            .buttonStyle(.bordered)
-                            .focused($focusedControl, equals: .info)
-                            .accessibilityLabel("Info")
-
-                            Button {
-                                recordInteraction()
-                                showSetup = true
-                            } label: {
-                                Image(systemName: "gearshape")
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .focused($focusedControl, equals: .settings)
-                            .accessibilityLabel("Settings")
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
-                        .padding(.bottom, 0)
-                    }
-                    .focusDisabled(showChannelList)
-                    .transition(.opacity)
-                }
-
-                if showChannelList {
-                    HStack(spacing: 0) {
-                        LinearGradient(
-                            colors: [
-                                Color.black.opacity(0.72),
-                                Color.black.opacity(0.38),
-                                Color.clear
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                        .ignoresSafeArea()
-
-                        VStack(alignment: .leading, spacing: 20) {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Channels")
-                                    .font(.system(size: 38, weight: .bold, design: .rounded))
-                            }
-
-                            VStack(alignment: .leading, spacing: 14) {
-                                ForEach(channelOptions) { option in
-                                    Button {
-                                        selectChannel(option.id)
-                                    } label: {
-                                        ChannelOptionRow(
-                                            option: option,
-                                            isSelected: option.id == selectedChannelID
-                                        )
-                                    }
-                                    .buttonStyle(.plain)
-                                    .focused($focusedChannelID, equals: option.id)
-                                }
-                            }
-
-                            Text("Press Back to close")
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.58))
-
-                            Spacer()
-                        }
-                        .focusSection()
-                        .padding(.horizontal, 32)
-                        .padding(.vertical, 28)
-                        .frame(width: min(520, geo.size.width * 0.42), height: geo.size.height, alignment: .topLeading)
-                        .background(
-                            LinearGradient(
-                                colors: [
-                                    Color(red: 0.09, green: 0.10, blue: 0.13).opacity(0.96),
-                                    Color(red: 0.13, green: 0.12, blue: 0.17).opacity(0.92)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .overlay(alignment: .trailing) {
-                            Rectangle()
-                                .fill(Color.white.opacity(0.08))
-                                .frame(width: 1)
-                        }
-
-                        Spacer()
-                    }
-                    .ignoresSafeArea()
-                    .transition(.move(edge: .leading).combined(with: .opacity))
-                }
-
-                if showInfo {
-                    HStack(spacing: 0) {
-                        Spacer(minLength: 0)
-
-                        VStack(spacing: 0) {
-                            HStack {
-                                Spacer()
-                                Button {
-                                    showInfo = false
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.title2)
-                                }
-                                .buttonStyle(.plain)
-                                .padding(.top, 16)
-                                .padding(.trailing, 16)
-                            }
-
-                            ScrollViewReader { proxy in
-                                ScrollView {
-                                    VStack(alignment: .leading, spacing: 12) {
-                                        VStack(alignment: .leading, spacing: 8) {
-                                            if let image = qrImage(from: coordinator.currentImmichAssetURL) {
-                                                HStack {
-                                                    Spacer()
-                                                    Image(uiImage: image)
-                                                        .interpolation(.none)
-                                                        .resizable()
-                                                        .scaledToFit()
-                                                        .frame(width: 180, height: 180)
-                                                    Spacer()
-                                                }
-                                            }
-                                            if !coordinator.currentImmichAssetURL.isEmpty {
-                                                Text(coordinator.currentImmichAssetURL)
-                                                    .font(.caption2.monospaced())
-                                                    .foregroundStyle(.secondary)
-                                            }
-                                        }
-                                        .id("row-0")
-
-                                        Text("Metadata")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-
-                                        ForEach(Array(coordinator.currentInfoFields.enumerated()), id: \.element.id) { index, field in
-                                            VStack(alignment: .leading, spacing: 4) {
-                                                Text(field.label)
-                                                    .font(.caption)
-                                                    .foregroundStyle(.secondary)
-                                                Text(field.value)
-                                                    .font(.body.monospaced())
-                                            }
-                                            .padding(.vertical, 4)
-                                            .id("row-\(index + 1)")
-                                        }
-                                    }
-                                    .padding(.horizontal, 20)
-                                    .padding(.bottom, 20)
-                                }
-                                .onChange(of: infoScrollIndex) { next in
-                                    withAnimation(.easeInOut(duration: 0.15)) {
-                                        proxy.scrollTo("row-\(next)", anchor: .top)
-                                    }
-                                }
-                            }
-                        }
-                        .frame(width: geo.size.width * 0.5, height: geo.size.height)
-                        .background(Color.black.opacity(0.45))
-                    }
-                    .ignoresSafeArea()
-                    .transition(.move(edge: .trailing))
-                }
-            }
+                controlsOverlay
+                channelListOverlay(in: geo)
+                infoOverlay(in: geo)
         }
         .onAppear {
             coordinator.start()
@@ -610,6 +330,310 @@ struct ChannelView: View {
     @ViewBuilder
     private func outlinedCaption(_ text: String) -> some View {
         outlinedText(text, fontSize: 34, weight: .heavy, fill: .white)
+    }
+
+    @ViewBuilder
+    private var controlsOverlay: some View {
+        if controlsVisible && !showChannelList {
+            controlsOverlayContent()
+                .transition(AnyTransition.opacity)
+        }
+    }
+
+    private func controlsOverlayContent() -> some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                Text(coordinator.secondsLeftText)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.white.opacity(0.9))
+                    .padding(.trailing, 8)
+            }
+            .padding(.bottom, 0)
+
+            if scrubBarFocused && !showChannelList {
+                Text("Press Up for Channels")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.84))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.black.opacity(0.6))
+                    .clipShape(Capsule())
+                    .padding(.bottom, 8)
+            }
+
+            ScrubProgressBar(progress: coordinator.playbackProgress) { deltaSeconds in
+                recordInteraction()
+                coordinator.seek(bySeconds: deltaSeconds)
+            } onOpenChannels: {
+                recordInteraction()
+                openChannelList()
+            } onFocusChange: { isFocused in
+                scrubBarFocused = isFocused
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+
+            controlsToolbarRow
+        }
+    }
+
+    private var controlsToolbarRow: some View {
+        HStack(spacing: 10) {
+            if !coordinator.captionText.isEmpty {
+                Text(coordinator.captionText)
+                    .font(.caption)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.black.opacity(0.6))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
+            Spacer()
+
+            if configStore.config.debug {
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text(coordinator.statusText)
+                        .font(.caption2.monospaced())
+
+                    if !coordinator.debugTelemetryText.isEmpty {
+                        Text(coordinator.debugTelemetryText)
+                            .font(.caption2.monospaced())
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.black.opacity(0.6))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
+            if coordinator.canGoBack {
+                Button {
+                    recordInteraction()
+                    coordinator.goBack()
+                } label: {
+                    Image(systemName: "backward.end.fill")
+                }
+                .buttonStyle(.bordered)
+                .focused($focusedControl, equals: .back)
+                .accessibilityLabel("Back")
+            }
+
+            Button {
+                recordInteraction()
+                coordinator.togglePlayPause()
+            } label: {
+                Image(systemName: coordinator.playPauseButtonSystemImage())
+            }
+            .buttonStyle(.bordered)
+            .focused($focusedControl, equals: .playPause)
+            .accessibilityLabel("Play Pause")
+
+            Button {
+                recordInteraction()
+                coordinator.skip()
+            } label: {
+                Image(systemName: "forward.end.fill")
+            }
+            .buttonStyle(.bordered)
+            .focused($focusedControl, equals: .skip)
+            .accessibilityLabel("Skip")
+
+            Button {
+                recordInteraction()
+                coordinator.toggleFavorite()
+            } label: {
+                Image(systemName: coordinator.favoriteButtonSystemImage())
+            }
+            .buttonStyle(.bordered)
+            .disabled(coordinator.favoriteUpdateInProgress)
+            .focused($focusedControl, equals: .favorite)
+            .accessibilityLabel(coordinator.favoriteButtonLabel())
+
+            Button(role: .destructive) {
+                recordInteraction()
+                showHideForeverConfirmation = true
+            } label: {
+                Image(systemName: coordinator.hideButtonSystemImage())
+            }
+            .buttonStyle(.bordered)
+            .disabled(!coordinator.canHideToAlbum || coordinator.hideUpdateInProgress)
+            .focused($focusedControl, equals: .hideForever)
+            .accessibilityLabel("Hide Forever")
+
+            Button {
+                recordInteraction()
+                showInfo.toggle()
+            } label: {
+                Image(systemName: "info.circle")
+            }
+            .buttonStyle(.bordered)
+            .focused($focusedControl, equals: .info)
+            .accessibilityLabel("Info")
+
+            Button {
+                recordInteraction()
+                showSetup = true
+            } label: {
+                Image(systemName: "gearshape")
+            }
+            .buttonStyle(.borderedProminent)
+            .focused($focusedControl, equals: .settings)
+            .accessibilityLabel("Settings")
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 0)
+    }
+
+    @ViewBuilder
+    private func channelListOverlay(in geo: GeometryProxy) -> some View {
+        if showChannelList {
+            HStack(spacing: 0) {
+                LinearGradient(
+                    colors: [
+                        Color.black.opacity(0.72),
+                        Color.black.opacity(0.38),
+                        Color.clear
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .ignoresSafeArea()
+
+                VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Channels")
+                            .font(.system(size: 38, weight: .bold, design: .rounded))
+                    }
+
+                    VStack(alignment: .leading, spacing: 14) {
+                        ForEach(channelOptions) { option in
+                            Button {
+                                selectChannel(option.id)
+                            } label: {
+                                ChannelOptionRow(
+                                    option: option,
+                                    isSelected: option.id == selectedChannelID
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .focused($focusedChannelID, equals: option.id)
+                        }
+                    }
+
+                    Text("Press Back to close")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.58))
+
+                    Spacer()
+                }
+                .focusSection()
+                .padding(.horizontal, 32)
+                .padding(.vertical, 28)
+                .frame(width: min(720, geo.size.width * 0.42), height: geo.size.height, alignment: .topLeading)
+                .background(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.09, green: 0.10, blue: 0.13).opacity(0.96),
+                            Color(red: 0.13, green: 0.12, blue: 0.17).opacity(0.92)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(alignment: .trailing) {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.08))
+                        .frame(width: 1)
+                }
+
+                Spacer()
+            }
+            .ignoresSafeArea()
+            .transition(.move(edge: .leading).combined(with: .opacity))
+        }
+    }
+
+    @ViewBuilder
+    private func infoOverlay(in geo: GeometryProxy) -> some View {
+        if showInfo {
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+
+                VStack(spacing: 0) {
+                    HStack {
+                        Spacer()
+                        Button {
+                            showInfo = false
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.title2)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.top, 16)
+                        .padding(.trailing, 16)
+                    }
+
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    if let image = qrImage(from: coordinator.currentImmichAssetURL) {
+                                        HStack {
+                                            Spacer()
+                                            Image(uiImage: image)
+                                                .interpolation(.none)
+                                                .resizable()
+                                                .scaledToFit()
+                                                .frame(width: 180, height: 180)
+                                            Spacer()
+                                        }
+                                    }
+                                    if !coordinator.currentImmichAssetURL.isEmpty {
+                                        Text(coordinator.currentImmichAssetURL)
+                                            .font(.caption2.monospaced())
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                .id("row-0")
+
+                                Text("Metadata")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+
+                                ForEach(Array(coordinator.currentInfoFields.enumerated()), id: \.element.id) { index, field in
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(field.label)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                        Text(field.value)
+                                            .font(.body.monospaced())
+                                    }
+                                    .padding(.vertical, 4)
+                                    .id("row-\(index + 1)")
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 20)
+                        }
+                        .onChange(of: infoScrollIndex) { next in
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                proxy.scrollTo("row-\(next)", anchor: .top)
+                            }
+                        }
+                    }
+                }
+                .frame(width: geo.size.width * 0.5, height: geo.size.height)
+                .background(Color.black.opacity(0.45))
+            }
+            .ignoresSafeArea()
+            .transition(.move(edge: .trailing))
+        }
     }
 
     @ViewBuilder

@@ -20,6 +20,7 @@ struct AppConfig: Codable, Equatable {
     var playbackOrder: String = "random"
     var playbackQuality: String = "auto"
     var showDateLocationOverlay: Bool = true
+    var includeDiagnosticsInFeedback: Bool = true
     var useSQLiteCache: Bool = true
     var syncOnStartup: Bool = true
     var syncPageSize: Int = 200
@@ -45,6 +46,7 @@ struct AppConfig: Codable, Equatable {
         case playbackOrder
         case playbackQuality
         case showDateLocationOverlay
+        case includeDiagnosticsInFeedback
         case useSQLiteCache
         case syncOnStartup
         case syncPageSize
@@ -82,6 +84,7 @@ struct AppConfig: Codable, Equatable {
         }
         playbackQuality = try c.decodeIfPresent(String.self, forKey: .playbackQuality) ?? "auto"
         showDateLocationOverlay = try c.decodeIfPresent(Bool.self, forKey: .showDateLocationOverlay) ?? true
+        includeDiagnosticsInFeedback = try c.decodeIfPresent(Bool.self, forKey: .includeDiagnosticsInFeedback) ?? true
         useSQLiteCache = try c.decodeIfPresent(Bool.self, forKey: .useSQLiteCache) ?? true
         syncOnStartup = try c.decodeIfPresent(Bool.self, forKey: .syncOnStartup) ?? true
         syncPageSize = try c.decodeIfPresent(Int.self, forKey: .syncPageSize) ?? 200
