@@ -85,8 +85,8 @@ enum WhatsNewContentProvider {
                 )
             ]
         ),
-        "2.3": WhatsNewEntry(
-            version: "2.3",
+        "2.4": WhatsNewEntry(
+            version: "2.4",
             title: "What's New",
             subtitle: "A bigger upgrade for channels, feedback, and metadata-rich playback.",
             items: [
