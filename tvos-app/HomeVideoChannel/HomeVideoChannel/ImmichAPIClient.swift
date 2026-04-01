@@ -163,6 +163,20 @@ final class ImmichAPIClient {
                 if config.onlyThisMonth && !captureDateMatchesCurrentMonth(item.captureDate) {
                     continue
                 }
+                if config.onlyThisDay && !captureDateMatchesReferenceDay(item.captureDate, reference: config.referenceCaptureDate) {
+                    continue
+                }
+                if config.onlyThisWeek && !captureDateMatchesReferenceWeek(item.captureDate, reference: config.referenceCaptureDate) {
+                    continue
+                }
+                if !config.placeFilterCity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                    !locationMatches(item.city, expected: config.placeFilterCity) {
+                    continue
+                }
+                if !config.placeFilterCountry.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                    !locationMatches(item.country, expected: config.placeFilterCountry) {
+                    continue
+                }
 
                 return VideoCandidate(
                     id: item.id,
@@ -190,10 +204,38 @@ final class ImmichAPIClient {
     }
 
     private func captureDateMatchesCurrentMonth(_ captureDate: String) -> Bool {
-        guard captureDate.count >= 7 else { return false }
-        let assetMonth = String(captureDate.dropFirst(5).prefix(2))
-        let currentMonth = DateFormatter.cachedChannelMonthFormatter.string(from: Date())
-        return assetMonth == currentMonth
+        guard let date = parseCaptureDate(captureDate) else { return false }
+        let calendar = Calendar.current
+        return calendar.component(.month, from: date) == calendar.component(.month, from: Date())
+    }
+
+    private func captureDateMatchesReferenceDay(_ captureDate: String, reference: String) -> Bool {
+        guard let date = parseCaptureDate(captureDate),
+              let referenceDate = parseCaptureDate(reference) else { return false }
+        let calendar = Calendar.current
+        return calendar.component(.month, from: date) == calendar.component(.month, from: referenceDate) &&
+            calendar.component(.day, from: date) == calendar.component(.day, from: referenceDate)
+    }
+
+    private func captureDateMatchesReferenceWeek(_ captureDate: String, reference: String) -> Bool {
+        guard let date = parseCaptureDate(captureDate),
+              let referenceDate = parseCaptureDate(reference) else { return false }
+        let calendar = Calendar.current
+        return calendar.component(.weekOfYear, from: date) == calendar.component(.weekOfYear, from: referenceDate)
+    }
+
+    private func parseCaptureDate(_ captureDate: String) -> Date? {
+        let value = captureDate.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return nil }
+        if let date = ISO8601DateFormatter().date(from: value) {
+            return date
+        }
+        return DateFormatter.cachedFallbackCaptureDateFormatter.date(from: value)
+    }
+
+    private func locationMatches(_ actual: String, expected: String) -> Bool {
+        actual.trimmingCharacters(in: .whitespacesAndNewlines)
+            .caseInsensitiveCompare(expected.trimmingCharacters(in: .whitespacesAndNewlines)) == .orderedSame
     }
 
     func resolveHiddenAlbumAccess(config: AppConfig, albumName: String = "Hidden") async -> HiddenAlbumAccess {
@@ -501,10 +543,10 @@ final class ImmichAPIClient {
 }
 
 private extension DateFormatter {
-    static let cachedChannelMonthFormatter: DateFormatter = {
+    static let cachedFallbackCaptureDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "MM"
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         return formatter
     }()
 }

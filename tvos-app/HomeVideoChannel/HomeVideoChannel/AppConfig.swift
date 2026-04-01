@@ -7,6 +7,11 @@ struct AppConfig: Codable, Equatable {
     var randomBatchSize: Int = 20
     var onlyFavorites: Bool = false
     var onlyThisMonth: Bool = false
+    var onlyThisDay: Bool = false
+    var onlyThisWeek: Bool = false
+    var referenceCaptureDate: String = ""
+    var placeFilterCity: String = ""
+    var placeFilterCountry: String = ""
     var debug: Bool = false
     var crossfadeEnabled: Bool = true
     var crossfadeDurationMs: Int = 450
@@ -27,6 +32,11 @@ struct AppConfig: Codable, Equatable {
         case randomBatchSize
         case onlyFavorites
         case onlyThisMonth
+        case onlyThisDay
+        case onlyThisWeek
+        case referenceCaptureDate
+        case placeFilterCity
+        case placeFilterCountry
         case debug
         case crossfadeEnabled
         case crossfadeDurationMs
@@ -51,6 +61,11 @@ struct AppConfig: Codable, Equatable {
         randomBatchSize = try c.decodeIfPresent(Int.self, forKey: .randomBatchSize) ?? 20
         onlyFavorites = try c.decodeIfPresent(Bool.self, forKey: .onlyFavorites) ?? false
         onlyThisMonth = try c.decodeIfPresent(Bool.self, forKey: .onlyThisMonth) ?? false
+        onlyThisDay = try c.decodeIfPresent(Bool.self, forKey: .onlyThisDay) ?? false
+        onlyThisWeek = try c.decodeIfPresent(Bool.self, forKey: .onlyThisWeek) ?? false
+        referenceCaptureDate = try c.decodeIfPresent(String.self, forKey: .referenceCaptureDate) ?? ""
+        placeFilterCity = try c.decodeIfPresent(String.self, forKey: .placeFilterCity) ?? ""
+        placeFilterCountry = try c.decodeIfPresent(String.self, forKey: .placeFilterCountry) ?? ""
         debug = try c.decodeIfPresent(Bool.self, forKey: .debug) ?? false
         crossfadeEnabled = try c.decodeIfPresent(Bool.self, forKey: .crossfadeEnabled) ?? true
         crossfadeDurationMs = try c.decodeIfPresent(Int.self, forKey: .crossfadeDurationMs) ?? 450

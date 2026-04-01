@@ -532,6 +532,11 @@ struct SetupView: View {
         next.onlyFavorites = onlyFavorites
         if onlyFavorites {
             next.onlyThisMonth = false
+            next.onlyThisDay = false
+            next.onlyThisWeek = false
+            next.referenceCaptureDate = ""
+            next.placeFilterCity = ""
+            next.placeFilterCountry = ""
         }
         next.debug = debugEnabled
         next.crossfadeEnabled = crossfadeEnabled

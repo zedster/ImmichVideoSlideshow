@@ -28,6 +28,10 @@ final class ChannelCoordinator: ObservableObject {
     @Published var isBuffering: Bool = false
     @Published var currentInfoFields: [VideoInfoField] = []
     @Published var currentImmichAssetURL: String = ""
+    @Published var currentCaptureDateRaw: String = ""
+    @Published var currentPlaceCity: String = ""
+    @Published var currentPlaceCountry: String = ""
+    @Published var currentPlaceLabel: String = ""
     @Published var canGoBack: Bool = false
     @Published var currentIsFavorite: Bool = false
     @Published var canHideToAlbum: Bool = false
@@ -218,6 +222,10 @@ final class ChannelCoordinator: ObservableObject {
         isBuffering = false
         currentInfoFields = []
         currentImmichAssetURL = ""
+        currentCaptureDateRaw = ""
+        currentPlaceCity = ""
+        currentPlaceCountry = ""
+        currentPlaceLabel = ""
         canGoBack = false
         currentIsFavorite = false
         canHideToAlbum = false
@@ -398,7 +406,12 @@ final class ChannelCoordinator: ObservableObject {
                     let count = try await store.countQualifying(
                         minDuration: configStore.config.minDuration,
                         onlyFavorites: configStore.config.onlyFavorites,
-                        onlyThisMonth: configStore.config.onlyThisMonth
+                        onlyThisMonth: configStore.config.onlyThisMonth,
+                        onlyThisDay: configStore.config.onlyThisDay,
+                        onlyThisWeek: configStore.config.onlyThisWeek,
+                        referenceCaptureDate: configStore.config.referenceCaptureDate,
+                        placeCity: configStore.config.placeFilterCity,
+                        placeCountry: configStore.config.placeFilterCountry
                     )
                     if count == 0 {
                         await runForceSync(silent: true)
@@ -597,7 +610,12 @@ final class ChannelCoordinator: ObservableObject {
                 newestFirst: newestFirst,
                 minDuration: configStore.config.minDuration,
                 onlyFavorites: configStore.config.onlyFavorites,
-                onlyThisMonth: configStore.config.onlyThisMonth
+                onlyThisMonth: configStore.config.onlyThisMonth,
+                onlyThisDay: configStore.config.onlyThisDay,
+                onlyThisWeek: configStore.config.onlyThisWeek,
+                referenceCaptureDate: configStore.config.referenceCaptureDate,
+                placeCity: configStore.config.placeFilterCity,
+                placeCountry: configStore.config.placeFilterCountry
             ) {
                 return fromDB
             }
@@ -607,7 +625,12 @@ final class ChannelCoordinator: ObservableObject {
                 newestFirst: newestFirst,
                 minDuration: configStore.config.minDuration,
                 onlyFavorites: configStore.config.onlyFavorites,
-                onlyThisMonth: configStore.config.onlyThisMonth
+                onlyThisMonth: configStore.config.onlyThisMonth,
+                onlyThisDay: configStore.config.onlyThisDay,
+                onlyThisWeek: configStore.config.onlyThisWeek,
+                referenceCaptureDate: configStore.config.referenceCaptureDate,
+                placeCity: configStore.config.placeFilterCity,
+                placeCountry: configStore.config.placeFilterCountry
             ) {
                 return fromDB
             }
@@ -615,7 +638,12 @@ final class ChannelCoordinator: ObservableObject {
             if let fromDB = try await store.selectRandom(
                 minDuration: configStore.config.minDuration,
                 onlyFavorites: configStore.config.onlyFavorites,
-                onlyThisMonth: configStore.config.onlyThisMonth
+                onlyThisMonth: configStore.config.onlyThisMonth,
+                onlyThisDay: configStore.config.onlyThisDay,
+                onlyThisWeek: configStore.config.onlyThisWeek,
+                referenceCaptureDate: configStore.config.referenceCaptureDate,
+                placeCity: configStore.config.placeFilterCity,
+                placeCountry: configStore.config.placeFilterCountry
             ) {
                 return fromDB
             }
@@ -623,7 +651,12 @@ final class ChannelCoordinator: ObservableObject {
             if let fromDB = try await store.selectRandom(
                 minDuration: configStore.config.minDuration,
                 onlyFavorites: configStore.config.onlyFavorites,
-                onlyThisMonth: configStore.config.onlyThisMonth
+                onlyThisMonth: configStore.config.onlyThisMonth,
+                onlyThisDay: configStore.config.onlyThisDay,
+                onlyThisWeek: configStore.config.onlyThisWeek,
+                referenceCaptureDate: configStore.config.referenceCaptureDate,
+                placeCity: configStore.config.placeFilterCity,
+                placeCountry: configStore.config.placeFilterCountry
             ) {
                 return fromDB
             }
@@ -753,6 +786,7 @@ final class ChannelCoordinator: ObservableObject {
         secondsLeftText = "-\(formatDuration(candidate.duration))"
         currentImmichAssetURL = buildImmichAssetURL(for: candidate)
         currentInfoFields = buildInfoFields(for: candidate)
+        updateCurrentChannelContext(for: candidate)
         await resetDebugPlaybackTelemetry(for: item)
         let overlay = overlayTexts(for: candidate)
         dateLocationText = overlayDateLocationText(for: candidate)
@@ -856,6 +890,7 @@ final class ChannelCoordinator: ObservableObject {
             secondsLeftText = "-\(formatDuration(next.duration))"
             currentImmichAssetURL = buildImmichAssetURL(for: next)
             currentInfoFields = buildInfoFields(for: next)
+            updateCurrentChannelContext(for: next)
             let overlay = overlayTexts(for: next)
             dateLocationText = overlayDateLocationText(for: next)
             title = overlay.title
@@ -942,6 +977,7 @@ final class ChannelCoordinator: ObservableObject {
             secondsLeftText = "-\(formatDuration(previous.duration))"
             currentImmichAssetURL = buildImmichAssetURL(for: previous)
             currentInfoFields = buildInfoFields(for: previous)
+            updateCurrentChannelContext(for: previous)
             let overlay = overlayTexts(for: previous)
             dateLocationText = overlayDateLocationText(for: previous)
             title = overlay.title
@@ -1332,6 +1368,13 @@ final class ChannelCoordinator: ObservableObject {
         }
 
         return ""
+    }
+
+    private func updateCurrentChannelContext(for candidate: VideoCandidate) {
+        currentCaptureDateRaw = candidate.captureDate
+        currentPlaceCity = candidate.city.trimmingCharacters(in: .whitespacesAndNewlines)
+        currentPlaceCountry = candidate.country.trimmingCharacters(in: .whitespacesAndNewlines)
+        currentPlaceLabel = formatLocation(city: candidate.city, country: candidate.country)
     }
 
     private func buildInfoFields(for candidate: VideoCandidate) -> [VideoInfoField] {

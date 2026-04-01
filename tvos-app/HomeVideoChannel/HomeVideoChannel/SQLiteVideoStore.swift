@@ -251,14 +251,31 @@ actor SQLiteVideoStore {
         try setSyncState(key: sequentialLastAssetIdKey, value: "")
     }
 
-    func countQualifying(minDuration: Double, onlyFavorites: Bool, onlyThisMonth: Bool) throws -> Int {
+    func countQualifying(
+        minDuration: Double,
+        onlyFavorites: Bool,
+        onlyThisMonth: Bool,
+        onlyThisDay: Bool,
+        onlyThisWeek: Bool,
+        referenceCaptureDate: String,
+        placeCity: String,
+        placeCountry: String
+    ) throws -> Int {
         try withDatabase { db in
+            let filters = selectionFilters(
+                onlyFavorites: onlyFavorites,
+                onlyThisMonth: onlyThisMonth,
+                onlyThisDay: onlyThisDay,
+                onlyThisWeek: onlyThisWeek,
+                referenceCaptureDate: referenceCaptureDate,
+                placeCity: placeCity,
+                placeCountry: placeCountry
+            )
             let sql = """
             SELECT COUNT(*)
             FROM videos
             WHERE duration >= ?
-              AND (\(onlyFavorites ? "is_favorite = 1" : "1 = 1"))
-              AND (\(onlyThisMonth ? currentMonthSQLCondition(column: "capture_date") : "1 = 1"))
+              AND \(filters.whereClause)
               AND COALESCE(is_hidden, 0) = 0
             """
             var stmt: OpaquePointer?
@@ -268,6 +285,7 @@ actor SQLiteVideoStore {
             defer { sqlite3_finalize(stmt) }
 
             sqlite3_bind_double(stmt, 1, minDuration)
+            bind(filters.bindings, to: stmt, startingAt: 2)
             guard sqlite3_step(stmt) == SQLITE_ROW else {
                 throw storeError(db, fallback: "countQualifying step failed")
             }
@@ -537,14 +555,31 @@ actor SQLiteVideoStore {
         }
     }
 
-    func selectRandom(minDuration: Double, onlyFavorites: Bool, onlyThisMonth: Bool) throws -> VideoCandidate? {
+    func selectRandom(
+        minDuration: Double,
+        onlyFavorites: Bool,
+        onlyThisMonth: Bool,
+        onlyThisDay: Bool,
+        onlyThisWeek: Bool,
+        referenceCaptureDate: String,
+        placeCity: String,
+        placeCountry: String
+    ) throws -> VideoCandidate? {
         try withDatabase { db in
+            let filters = selectionFilters(
+                onlyFavorites: onlyFavorites,
+                onlyThisMonth: onlyThisMonth,
+                onlyThisDay: onlyThisDay,
+                onlyThisWeek: onlyThisWeek,
+                referenceCaptureDate: referenceCaptureDate,
+                placeCity: placeCity,
+                placeCountry: placeCountry
+            )
             let sql = """
             SELECT asset_id, title, duration, is_favorite, is_hidden, times_watched, capture_date, city, country, camera_make, camera_model, lens_model, f_number, focal_length, iso, exposure_time, latitude, longitude
             FROM videos
             WHERE duration >= ?
-              AND (\(onlyFavorites ? "is_favorite = 1" : "1 = 1"))
-              AND (\(onlyThisMonth ? currentMonthSQLCondition(column: "capture_date") : "1 = 1"))
+              AND \(filters.whereClause)
               AND COALESCE(is_hidden, 0) = 0
             ORDER BY CASE WHEN COALESCE(times_watched, 0) = 0 THEN 0 ELSE 1 END ASC, RANDOM()
             LIMIT 1
@@ -556,6 +591,7 @@ actor SQLiteVideoStore {
             defer { sqlite3_finalize(stmt) }
 
             sqlite3_bind_double(stmt, 1, minDuration)
+            bind(filters.bindings, to: stmt, startingAt: 2)
             guard sqlite3_step(stmt) == SQLITE_ROW else {
                 return nil
             }
@@ -563,14 +599,29 @@ actor SQLiteVideoStore {
         }
     }
 
-    func selectSequential(afterAssetId: String?, newestFirst: Bool, minDuration: Double, onlyFavorites: Bool, onlyThisMonth: Bool) throws -> VideoCandidate? {
+    func selectSequential(
+        afterAssetId: String?,
+        newestFirst: Bool,
+        minDuration: Double,
+        onlyFavorites: Bool,
+        onlyThisMonth: Bool,
+        onlyThisDay: Bool,
+        onlyThisWeek: Bool,
+        referenceCaptureDate: String,
+        placeCity: String,
+        placeCountry: String
+    ) throws -> VideoCandidate? {
         try withDatabase { db in
-            let baseWhere = """
-            duration >= ?
-            AND (\(onlyFavorites ? "is_favorite = 1" : "1 = 1"))
-            AND (\(onlyThisMonth ? currentMonthSQLCondition(column: "capture_date") : "1 = 1"))
-            AND COALESCE(is_hidden, 0) = 0
-            """
+            let filters = selectionFilters(
+                onlyFavorites: onlyFavorites,
+                onlyThisMonth: onlyThisMonth,
+                onlyThisDay: onlyThisDay,
+                onlyThisWeek: onlyThisWeek,
+                referenceCaptureDate: referenceCaptureDate,
+                placeCity: placeCity,
+                placeCountry: placeCountry
+            )
+            let baseWhere = "duration >= ? AND \(filters.whereClause) AND COALESCE(is_hidden, 0) = 0"
             let sortExpr = "CASE WHEN COALESCE(capture_date, '') = '' THEN 1 ELSE 0 END"
             let compareDate = newestFirst ? "<" : ">"
             let compareBucket = newestFirst ? "<" : ">"
@@ -601,11 +652,13 @@ actor SQLiteVideoStore {
                 defer { sqlite3_finalize(stmt) }
 
                 sqlite3_bind_double(stmt, 1, minDuration)
-                sqlite3_bind_int(stmt, 2, Int32(anchor.emptyDateBucket))
-                sqlite3_bind_int(stmt, 3, Int32(anchor.emptyDateBucket))
-                sqlite3_bind_text(stmt, 4, (anchor.captureDate as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 5, (anchor.captureDate as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 6, (anchor.assetId as NSString).utf8String, -1, nil)
+                bind(filters.bindings, to: stmt, startingAt: 2)
+                let anchorIndex = Int32(2 + filters.bindings.count)
+                sqlite3_bind_int(stmt, anchorIndex, Int32(anchor.emptyDateBucket))
+                sqlite3_bind_int(stmt, anchorIndex + 1, Int32(anchor.emptyDateBucket))
+                sqlite3_bind_text(stmt, anchorIndex + 2, (anchor.captureDate as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, anchorIndex + 3, (anchor.captureDate as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, anchorIndex + 4, (anchor.assetId as NSString).utf8String, -1, nil)
                 if sqlite3_step(stmt) == SQLITE_ROW {
                     return decodeCandidate(stmt: stmt)
                 }
@@ -625,6 +678,7 @@ actor SQLiteVideoStore {
             defer { sqlite3_finalize(fallbackStmt) }
 
             sqlite3_bind_double(fallbackStmt, 1, minDuration)
+            bind(filters.bindings, to: fallbackStmt, startingAt: 2)
             guard sqlite3_step(fallbackStmt) == SQLITE_ROW else {
                 return nil
             }
@@ -782,6 +836,97 @@ actor SQLiteVideoStore {
 
     private func currentMonthSQLCondition(column: String) -> String {
         "SUBSTR(COALESCE(\(column), ''), 6, 2) = STRFTIME('%m', 'now', 'localtime')"
+    }
+
+    private func currentDaySQLCondition(column: String) -> String {
+        "SUBSTR(COALESCE(\(column), ''), 6, 5) = ?"
+    }
+
+    private func currentWeekSQLCondition(column: String) -> String {
+        "STRFTIME('%W', DATETIME(COALESCE(\(column), ''))) = ?"
+    }
+
+    private func selectionFilters(
+        onlyFavorites: Bool,
+        onlyThisMonth: Bool,
+        onlyThisDay: Bool,
+        onlyThisWeek: Bool,
+        referenceCaptureDate: String,
+        placeCity: String,
+        placeCountry: String
+    ) -> (whereClause: String, bindings: [SQLiteBindValue]) {
+        var clauses: [String] = []
+        var bindings: [SQLiteBindValue] = []
+
+        if onlyFavorites {
+            clauses.append("is_favorite = 1")
+        }
+        if onlyThisMonth {
+            clauses.append(currentMonthSQLCondition(column: "capture_date"))
+        }
+        if onlyThisDay {
+            let referenceMonthDay = monthDayComponent(from: referenceCaptureDate)
+            if !referenceMonthDay.isEmpty {
+                clauses.append(currentDaySQLCondition(column: "capture_date"))
+                bindings.append(.text(referenceMonthDay))
+            }
+        }
+        if onlyThisWeek {
+            let referenceWeek = weekOfYearComponent(from: referenceCaptureDate)
+            if !referenceWeek.isEmpty {
+                clauses.append(currentWeekSQLCondition(column: "capture_date"))
+                bindings.append(.text(referenceWeek))
+            }
+        }
+
+        let trimmedCity = placeCity.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedCountry = placeCountry.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedCity.isEmpty && !trimmedCountry.isEmpty {
+            clauses.append("LOWER(TRIM(COALESCE(city, ''))) = LOWER(?) AND LOWER(TRIM(COALESCE(country, ''))) = LOWER(?)")
+            bindings.append(.text(trimmedCity))
+            bindings.append(.text(trimmedCountry))
+        } else if !trimmedCity.isEmpty {
+            clauses.append("LOWER(TRIM(COALESCE(city, ''))) = LOWER(?)")
+            bindings.append(.text(trimmedCity))
+        } else if !trimmedCountry.isEmpty {
+            clauses.append("LOWER(TRIM(COALESCE(country, ''))) = LOWER(?)")
+            bindings.append(.text(trimmedCountry))
+        }
+
+        return (clauses.isEmpty ? "1 = 1" : clauses.joined(separator: " AND "), bindings)
+    }
+
+    private func monthDayComponent(from raw: String) -> String {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard value.count >= 10 else { return "" }
+        return String(value.dropFirst(5).prefix(5))
+    }
+
+    private func weekOfYearComponent(from raw: String) -> String {
+        guard let date = parseCaptureDate(raw) else { return "" }
+        let week = Calendar.current.component(.weekOfYear, from: date)
+        return String(format: "%02d", week)
+    }
+
+    private func parseCaptureDate(_ raw: String) -> Date? {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return nil }
+        if let date = ISO8601DateFormatter().date(from: value) {
+            return date
+        }
+        return Self.fallbackCaptureDateFormatter.date(from: value)
+    }
+
+    private func bind(_ values: [SQLiteBindValue], to stmt: OpaquePointer?, startingAt index: Int) {
+        for (offset, value) in values.enumerated() {
+            let bindIndex = Int32(index + offset)
+            switch value {
+            case .double(let number):
+                sqlite3_bind_double(stmt, bindIndex, number)
+            case .text(let string):
+                sqlite3_bind_text(stmt, bindIndex, (string as NSString).utf8String, -1, nil)
+            }
+        }
     }
 
     private func decodeCandidate(stmt: OpaquePointer?) -> VideoCandidate? {
@@ -942,4 +1087,18 @@ actor SQLiteVideoStore {
         let text = String(cString: c).trimmingCharacters(in: .whitespacesAndNewlines)
         return text.isEmpty ? nil : text
     }
+}
+
+private enum SQLiteBindValue {
+    case double(Double)
+    case text(String)
+}
+
+private extension SQLiteVideoStore {
+    static let fallbackCaptureDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter
+    }()
 }

@@ -7,6 +7,7 @@ fileprivate struct ChannelOption: Identifiable, Equatable {
     let id: String
     let title: String
     let subtitle: String
+    let count: Int
 }
 
 struct ChannelView: View {
@@ -29,12 +30,15 @@ struct ChannelView: View {
     @State private var infoScrollIndex = 0
     @State private var controlsVisible = true
     @State private var scrubBarFocused = false
+    @State private var channelCounts: [String: Int] = [:]
+    @State private var channelCountsTask: Task<Void, Never>?
     @State private var hideControlsTask: Task<Void, Never>?
     @State private var showHideForeverConfirmation = false
     @FocusState private var inputAnchorFocused: Bool
     @FocusState private var focusedControl: ControlsFocusTarget?
     @FocusState private var focusedChannelID: String?
     @State private var lastFocusedControl: ControlsFocusTarget = .playPause
+    private let channelStore = SQLiteVideoStore()
 
     init(configStore: ConfigStore) {
         self._configStore = ObservedObject(wrappedValue: configStore)
@@ -441,6 +445,7 @@ struct ChannelView: View {
         .onDisappear {
             coordinator.stop()
             hideControlsTask?.cancel()
+            channelCountsTask?.cancel()
         }
         .onChange(of: configStore.config) { _ in
             coordinator.restart()
@@ -483,11 +488,25 @@ struct ChannelView: View {
             if isVisible {
                 controlsVisible = true
                 focusedChannelID = selectedChannelID
+                refreshChannelCounts()
             } else {
                 focusedChannelID = nil
+                channelCountsTask?.cancel()
             }
             recordInteraction()
             refreshInputAnchorFocus()
+        }
+        .onChange(of: coordinator.currentCaptureDateRaw) { _ in
+            guard showChannelList else { return }
+            refreshChannelCounts()
+        }
+        .onChange(of: coordinator.currentPlaceCity) { _ in
+            guard showChannelList else { return }
+            refreshChannelCounts()
+        }
+        .onChange(of: coordinator.currentPlaceCountry) { _ in
+            guard showChannelList else { return }
+            refreshChannelCounts()
         }
         .onChange(of: controlsVisible) { _ in
             refreshInputAnchorFocus()
@@ -649,26 +668,84 @@ struct ChannelView: View {
     }
 
     private var channelOptions: [ChannelOption] {
-        [
+        var options: [ChannelOption] = [
             ChannelOption(
                 id: "all",
                 title: "All Videos",
-                subtitle: "Play everything that matches your normal playback settings."
+                subtitle: "Play everything that matches your normal playback settings.",
+                count: channelCount(for: "all")
             ),
             ChannelOption(
                 id: "favorites",
                 title: "Favorites",
-                subtitle: "Only play videos marked as favorite in Immich."
+                subtitle: "Only play videos marked as favorite in Immich.",
+                count: channelCount(for: "favorites")
             ),
             ChannelOption(
                 id: "this_month",
                 title: "In This Month (\(currentMonthShortName))",
-                subtitle: "Play videos filmed in this calendar month across all years."
+                subtitle: "Play videos filmed in this calendar month across all years.",
+                count: channelCount(for: "this_month")
             )
         ]
+
+        if hasCurrentCaptureDate {
+            options.append(
+                ChannelOption(
+                    id: "this_day",
+                    title: "More On This Day",
+                    subtitle: "Play videos filmed on this calendar day across all years.",
+                    count: channelCount(for: "this_day")
+                )
+            )
+            options.append(
+                ChannelOption(
+                    id: "this_week",
+                    title: "More On This Week",
+                    subtitle: "Play videos filmed in this week of the year across all years.",
+                    count: channelCount(for: "this_week")
+                )
+            )
+        }
+
+        if !coordinator.currentPlaceCity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            options.append(
+                ChannelOption(
+                    id: "place_city",
+                    title: "Place (\(shortBracketLabel(coordinator.currentPlaceCity)))",
+                    subtitle: "Play more videos from this place.",
+                    count: channelCount(for: "place_city")
+                )
+            )
+        }
+
+        if !coordinator.currentPlaceCountry.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            options.append(
+                ChannelOption(
+                    id: "place_country",
+                    title: "Country (\(shortBracketLabel(coordinator.currentPlaceCountry)))",
+                    subtitle: "Play more videos from this country.",
+                    count: channelCount(for: "place_country")
+                )
+            )
+        }
+
+        return options
     }
 
     private var selectedChannelID: String {
+        if !configStore.config.placeFilterCity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "place_city"
+        }
+        if !configStore.config.placeFilterCountry.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "place_country"
+        }
+        if configStore.config.onlyThisWeek {
+            return "this_week"
+        }
+        if configStore.config.onlyThisDay {
+            return "this_day"
+        }
         if configStore.config.onlyThisMonth {
             return "this_month"
         }
@@ -680,6 +757,10 @@ struct ChannelView: View {
 
     private var currentMonthShortName: String {
         DateFormatter.channelMonthDisplayFormatter.string(from: Date())
+    }
+
+    private var hasCurrentCaptureDate: Bool {
+        !coordinator.currentCaptureDateRaw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func openChannelList() {
@@ -694,10 +775,138 @@ struct ChannelView: View {
         }
 
         var nextConfig = configStore.config
-        nextConfig.onlyFavorites = (channelID == "favorites")
-        nextConfig.onlyThisMonth = (channelID == "this_month")
+        nextConfig.onlyFavorites = false
+        nextConfig.onlyThisMonth = false
+        nextConfig.onlyThisDay = false
+        nextConfig.onlyThisWeek = false
+        nextConfig.referenceCaptureDate = ""
+        nextConfig.placeFilterCity = ""
+        nextConfig.placeFilterCountry = ""
+
+        switch channelID {
+        case "favorites":
+            nextConfig.onlyFavorites = true
+        case "this_month":
+            nextConfig.onlyThisMonth = true
+        case "this_day":
+            nextConfig.onlyThisDay = true
+            nextConfig.referenceCaptureDate = coordinator.currentCaptureDateRaw
+        case "this_week":
+            nextConfig.onlyThisWeek = true
+            nextConfig.referenceCaptureDate = coordinator.currentCaptureDateRaw
+        case "place_city":
+            nextConfig.placeFilterCity = coordinator.currentPlaceCity.trimmingCharacters(in: .whitespacesAndNewlines)
+        case "place_country":
+            nextConfig.placeFilterCountry = coordinator.currentPlaceCountry.trimmingCharacters(in: .whitespacesAndNewlines)
+        default:
+            break
+        }
         configStore.save(nextConfig)
         showChannelList = false
+    }
+
+    private func channelCount(for id: String) -> Int {
+        channelCounts[id] ?? 0
+    }
+
+    private func shortBracketLabel(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let firstPart = trimmed.split(separator: ",").first.map(String.init) ?? trimmed
+        return String(firstPart.prefix(14))
+    }
+
+    private func refreshChannelCounts() {
+        channelCountsTask?.cancel()
+        channelCountsTask = Task { @MainActor in
+            var nextCounts: [String: Int] = [:]
+            try? await channelStore.initializeSchema()
+
+            nextCounts["all"] = (try? await channelStore.countQualifying(
+                minDuration: configStore.config.minDuration,
+                onlyFavorites: false,
+                onlyThisMonth: false,
+                onlyThisDay: false,
+                onlyThisWeek: false,
+                referenceCaptureDate: "",
+                placeCity: "",
+                placeCountry: ""
+            )) ?? 0
+
+            nextCounts["favorites"] = (try? await channelStore.countQualifying(
+                minDuration: configStore.config.minDuration,
+                onlyFavorites: true,
+                onlyThisMonth: false,
+                onlyThisDay: false,
+                onlyThisWeek: false,
+                referenceCaptureDate: "",
+                placeCity: "",
+                placeCountry: ""
+            )) ?? 0
+
+            nextCounts["this_month"] = (try? await channelStore.countQualifying(
+                minDuration: configStore.config.minDuration,
+                onlyFavorites: false,
+                onlyThisMonth: true,
+                onlyThisDay: false,
+                onlyThisWeek: false,
+                referenceCaptureDate: "",
+                placeCity: "",
+                placeCountry: ""
+            )) ?? 0
+
+            if hasCurrentCaptureDate {
+                nextCounts["this_day"] = (try? await channelStore.countQualifying(
+                    minDuration: configStore.config.minDuration,
+                    onlyFavorites: false,
+                    onlyThisMonth: false,
+                    onlyThisDay: true,
+                    onlyThisWeek: false,
+                    referenceCaptureDate: coordinator.currentCaptureDateRaw,
+                    placeCity: "",
+                    placeCountry: ""
+                )) ?? 0
+
+                nextCounts["this_week"] = (try? await channelStore.countQualifying(
+                    minDuration: configStore.config.minDuration,
+                    onlyFavorites: false,
+                    onlyThisMonth: false,
+                    onlyThisDay: false,
+                    onlyThisWeek: true,
+                    referenceCaptureDate: coordinator.currentCaptureDateRaw,
+                    placeCity: "",
+                    placeCountry: ""
+                )) ?? 0
+            }
+
+            if !coordinator.currentPlaceCity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                nextCounts["place_city"] = (try? await channelStore.countQualifying(
+                    minDuration: configStore.config.minDuration,
+                    onlyFavorites: false,
+                    onlyThisMonth: false,
+                    onlyThisDay: false,
+                    onlyThisWeek: false,
+                    referenceCaptureDate: "",
+                    placeCity: coordinator.currentPlaceCity,
+                    placeCountry: ""
+                )) ?? 0
+            }
+
+            if !coordinator.currentPlaceCountry.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                nextCounts["place_country"] = (try? await channelStore.countQualifying(
+                    minDuration: configStore.config.minDuration,
+                    onlyFavorites: false,
+                    onlyThisMonth: false,
+                    onlyThisDay: false,
+                    onlyThisWeek: false,
+                    referenceCaptureDate: "",
+                    placeCity: "",
+                    placeCountry: coordinator.currentPlaceCountry
+                )) ?? 0
+            }
+
+            guard !Task.isCancelled else { return }
+            channelCounts = nextCounts
+        }
     }
 
     private func resolvedFocusTarget(from target: ControlsFocusTarget) -> ControlsFocusTarget {
@@ -755,10 +964,20 @@ private struct ChannelOptionRow: View {
                 }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(option.title)
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundStyle(titleColor)
-                    .lineLimit(2)
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(option.title)
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundStyle(titleColor)
+                        .lineLimit(2)
+
+                    Text("\(option.count)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(countTextColor)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(countBackground)
+                        .clipShape(Capsule())
+                }
 
                 Text(option.subtitle)
                     .font(.system(size: 18, weight: .medium, design: .rounded))
@@ -844,6 +1063,14 @@ private struct ChannelOptionRow: View {
 
     private var iconForeground: Color {
         isFocused ? .black : .white
+    }
+
+    private var countBackground: Color {
+        isFocused ? Color.black.opacity(0.12) : Color.white.opacity(0.10)
+    }
+
+    private var countTextColor: Color {
+        isFocused ? Color.black.opacity(0.78) : Color.white.opacity(0.82)
     }
 }
 
