@@ -565,6 +565,7 @@ struct ChannelView: View {
                                 )
                             }
                             .buttonStyle(.plain)
+                            .modifier(TVFocusEffectDisabled())
                             .focused($focusedChannelTab, equals: tab)
                             .frame(maxWidth: tab == .timePlace ? .infinity : 190)
                         }
@@ -608,6 +609,7 @@ struct ChannelView: View {
                                         )
                                     }
                                     .buttonStyle(.plain)
+                                    .modifier(TVFocusEffectDisabled())
                                     .focused($focusedChannelID, equals: option.id)
                                 }
                             }
@@ -1094,6 +1096,7 @@ struct ChannelView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .modifier(TVFocusEffectDisabled())
 
                 Button {
                     clearSearchChannel()
@@ -1105,6 +1108,7 @@ struct ChannelView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .modifier(TVFocusEffectDisabled())
             }
 
             if configStore.config.hasSearchFilter {
@@ -1398,6 +1402,16 @@ private extension DateFormatter {
     }()
 }
 
+private struct TVFocusEffectDisabled: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(tvOS 17.0, *) {
+            content.focusEffectDisabled()
+        } else {
+            content
+        }
+    }
+}
+
 private struct ChannelTabButton: View {
     let title: String
     let isSelected: Bool
@@ -1410,6 +1424,7 @@ private struct ChannelTabButton: View {
                 .font(.system(size: 22, weight: .bold, design: .rounded))
                 .foregroundStyle(titleColor)
                 .lineLimit(1)
+                .minimumScaleFactor(0.72)
                 .frame(maxWidth: .infinity)
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 20)
@@ -1426,7 +1441,7 @@ private struct ChannelTabButton: View {
                 .stroke(borderColor, lineWidth: isFocused ? 2 : 1)
         }
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .scaleEffect(isFocused ? 1.03 : 1.0)
+        .scaleEffect(1.0)
         .shadow(color: Color.black.opacity(isFocused ? 0.28 : 0), radius: 18, y: 6)
         .animation(.easeInOut(duration: 0.16), value: isFocused)
         .frame(maxWidth: .infinity)
@@ -1623,8 +1638,15 @@ private struct ChannelOptionRow: View {
             RoundedRectangle(cornerRadius: 22)
                 .stroke(borderColor, lineWidth: isFocused ? 2 : 1)
         }
+        .overlay(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(Color(red: 1.0, green: 0.72, blue: 0.78))
+                .frame(width: isFocused ? 6 : 0, height: 54)
+                .padding(.leading, 10)
+                .opacity(isFocused ? 1 : 0)
+        }
         .clipShape(RoundedRectangle(cornerRadius: 22))
-        .scaleEffect(isFocused ? 1.035 : 1.0)
+        .scaleEffect(1.0)
         .shadow(color: Color.black.opacity(isFocused ? 0.45 : 0.18), radius: isFocused ? 24 : 10, y: isFocused ? 10 : 4)
         .animation(.easeInOut(duration: 0.16), value: isFocused)
     }
@@ -1634,8 +1656,8 @@ private struct ChannelOptionRow: View {
             return AnyShapeStyle(
                 LinearGradient(
                     colors: [
-                        Color.white.opacity(0.96),
-                        Color.white.opacity(0.88)
+                        Color.white.opacity(0.12),
+                        Color.white.opacity(0.08)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -1661,7 +1683,7 @@ private struct ChannelOptionRow: View {
 
     private var borderColor: Color {
         if isFocused {
-            return Color.white.opacity(0.95)
+            return Color(red: 1.0, green: 0.80, blue: 0.86)
         }
         if isSelected {
             return Color(red: 1.0, green: 0.72, blue: 0.78).opacity(0.95)
@@ -1670,29 +1692,29 @@ private struct ChannelOptionRow: View {
     }
 
     private var titleColor: Color {
-        isFocused ? .black : .white
+        .white
     }
 
     private var iconBackground: Color {
         if isFocused {
-            return Color.black.opacity(0.10)
+            return Color.white.opacity(0.16)
         }
         return isSelected ? Color.white.opacity(0.22) : Color.white.opacity(0.10)
     }
 
     private var iconForeground: Color {
-        isFocused ? .black : .white
+        .white
     }
 
     private var countBackground: Color {
         if isFocused {
-            return Color.black.opacity(0.12)
+            return Color.white.opacity(0.16)
         }
         return isSelected ? Color.white.opacity(0.24) : Color.white.opacity(0.10)
     }
 
     private var countTextColor: Color {
-        isFocused ? Color.black.opacity(0.78) : Color.white.opacity(0.92)
+        Color.white.opacity(0.92)
     }
 }
 

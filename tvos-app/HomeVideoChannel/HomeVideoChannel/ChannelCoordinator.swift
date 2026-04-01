@@ -87,6 +87,11 @@ final class ChannelCoordinator: ObservableObject {
     private var hiddenAssetIds = Set<String>()
     private var sequentialLastAssetId: String?
     private var sequentialStateLoaded = false
+    private var searchLoadedQuery = ""
+    private var searchPool: [VideoCandidate] = []
+    private var searchSeenIDs = Set<String>()
+    private var searchNextPage = 1
+    private var searchHasMorePages = true
 
     private var timeObserver: Any?
     private var timeObserverPlayer: AVPlayer?
@@ -233,6 +238,7 @@ final class ChannelCoordinator: ObservableObject {
         canHideToAlbum = false
         hideUpdateInProgress = false
         isPlaybackPaused = false
+        resetSearchState()
         favoriteUpdateInProgress = false
         opacityA = 1
         opacityB = 0
@@ -605,6 +611,10 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func fetchNextCandidate() async throws -> VideoCandidate {
+        if configStore.config.hasSearchFilter {
+            return try await fetchNextSearchCandidate()
+        }
+
         let order = configStore.config.playbackOrder
         if isSequentialOrder(order) {
             let newestFirst = (order == "sequential_newest")
@@ -683,6 +693,82 @@ final class ChannelCoordinator: ObservableObject {
             return candidate
         }
         throw ImmichAPIError.noEligibleVideo
+    }
+
+    private func fetchNextSearchCandidate() async throws -> VideoCandidate {
+        let query = configStore.config.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            throw ImmichAPIError.noEligibleVideo
+        }
+
+        if query != searchLoadedQuery {
+            resetSearchState()
+            searchLoadedQuery = query
+        }
+
+        if searchPool.isEmpty {
+            try await refillSearchPool(minimumCount: 12)
+        }
+
+        if searchPool.isEmpty {
+            resetSearchState()
+            searchLoadedQuery = query
+            try await refillSearchPool(minimumCount: 12)
+        }
+
+        guard !searchPool.isEmpty else {
+            throw ImmichAPIError.noEligibleVideo
+        }
+
+        let candidate: VideoCandidate
+        if configStore.config.playbackOrder == "random" {
+            let index = Int.random(in: 0..<searchPool.count)
+            candidate = searchPool.remove(at: index)
+        } else {
+            candidate = searchPool.removeFirst()
+        }
+        searchSeenIDs.insert(candidate.id)
+        return candidate
+    }
+
+    private func refillSearchPool(minimumCount: Int) async throws {
+        let target = max(1, minimumCount)
+        let query = configStore.config.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return }
+
+        while searchPool.count < target && searchHasMorePages {
+            let pageResults = try await client.searchSmartVideos(
+                config: configStore.config,
+                query: query,
+                page: searchNextPage,
+                size: 100
+            )
+            searchNextPage += 1
+            searchHasMorePages = !pageResults.isEmpty
+
+            let filtered = pageResults.filter { candidate in
+                guard candidate.duration >= configStore.config.minDuration else { return false }
+                guard !hiddenAssetIds.contains(candidate.id) else { return false }
+                guard !searchSeenIDs.contains(candidate.id) else { return false }
+                guard candidate.id != currentItem?.id else { return false }
+                guard !queue.contains(where: { $0.id == candidate.id }) else { return false }
+                return true
+            }
+
+            if filtered.isEmpty && pageResults.isEmpty {
+                break
+            }
+
+            searchPool.append(contentsOf: filtered)
+        }
+    }
+
+    private func resetSearchState() {
+        searchLoadedQuery = ""
+        searchPool = []
+        searchSeenIDs = []
+        searchNextPage = 1
+        searchHasMorePages = true
     }
 
     private func fillQueueIfNeeded() async {
