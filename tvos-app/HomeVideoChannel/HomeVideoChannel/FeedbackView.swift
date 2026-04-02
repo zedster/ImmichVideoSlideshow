@@ -20,7 +20,15 @@ struct FeedbackView: View {
                 VStack(alignment: .center, spacing: 30) {
                     feedbackSection(.feedback) {
                         HStack(alignment: .center, spacing: 34) {
-                            QRCodeView(value: diagnostics.feedbackURL.absoluteString, size: 360)
+                            QRCodeView(
+                                value: diagnostics.feedbackURL.absoluteString,
+                                size: 360,
+                                accessibilityLabelText: L10n.tr(
+                                    "feedback.qr.accessibility_label",
+                                    "Feedback QR code",
+                                    comment: "Accessibility label for the feedback QR code"
+                                )
+                            )
 
                             VStack(alignment: .leading, spacing: 18) {
                                 Text(L10n.tr(

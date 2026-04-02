@@ -666,6 +666,41 @@
                                                                                         },
                                                                       "comment":  "Connection test failure message with reason"
                                                                   },
+                    "errors.library.sqlite_cache_disabled":  {
+                                                                 "localizations":  {
+                                                                                       "en":  {
+                                                                                                  "stringUnit":  {
+                                                                                                                     "state":  "translated",
+                                                                                                                     "value":  "SQLite cache is disabled."
+                                                                                                                 }
+                                                                                              },
+                                                                                       "de":  {
+                                                                                                  "stringUnit":  {
+                                                                                                                     "state":  "new",
+                                                                                                                     "value":  "SQLite cache is disabled."
+                                                                                                                 }
+                                                                                              },
+                                                                                       "fr":  {
+                                                                                                  "stringUnit":  {
+                                                                                                                     "state":  "new",
+                                                                                                                     "value":  "SQLite cache is disabled."
+                                                                                                                 }
+                                                                                              },
+                                                                                       "es":  {
+                                                                                                  "stringUnit":  {
+                                                                                                                     "state":  "new",
+                                                                                                                     "value":  "SQLite cache is disabled."
+                                                                                                                 }
+                                                                                              },
+                                                                                       "ja":  {
+                                                                                                  "stringUnit":  {
+                                                                                                                     "state":  "new",
+                                                                                                                     "value":  "SQLite cache is disabled."
+                                                                                                                 }
+                                                                                              }
+                                                                                   },
+                                                                 "comment":  "Library stats error when cache-backed stats are unavailable"
+                                                             },
                     "errors.library.stats":  {
                                                  "localizations":  {
                                                                        "en":  {
@@ -1679,43 +1714,8 @@
                                                                                                             }
                                                                                          }
                                                                               },
-                                                            "comment":  "Accessibility label for a QR code that opens the feedback page"
+                                                            "comment":  "Accessibility label for the feedback QR code"
                                                         },
-                    "feedback.qr.unavailable":  {
-                                                    "localizations":  {
-                                                                          "en":  {
-                                                                                     "stringUnit":  {
-                                                                                                        "state":  "translated",
-                                                                                                        "value":  "QR unavailable"
-                                                                                                    }
-                                                                                 },
-                                                                          "de":  {
-                                                                                     "stringUnit":  {
-                                                                                                        "state":  "new",
-                                                                                                        "value":  "QR unavailable"
-                                                                                                    }
-                                                                                 },
-                                                                          "fr":  {
-                                                                                     "stringUnit":  {
-                                                                                                        "state":  "new",
-                                                                                                        "value":  "QR unavailable"
-                                                                                                    }
-                                                                                 },
-                                                                          "es":  {
-                                                                                     "stringUnit":  {
-                                                                                                        "state":  "new",
-                                                                                                        "value":  "QR unavailable"
-                                                                                                    }
-                                                                                 },
-                                                                          "ja":  {
-                                                                                     "stringUnit":  {
-                                                                                                        "state":  "new",
-                                                                                                        "value":  "QR unavailable"
-                                                                                                    }
-                                                                                 }
-                                                                      },
-                                                    "comment":  "Shown when a QR code cannot be generated"
-                                                },
                     "feedback.section":  {
                                              "localizations":  {
                                                                    "en":  {
@@ -5531,6 +5531,76 @@
                                                                        },
                                                      "comment":  "Message shown while metadata sync is running"
                                                  },
+                    "playback.buffering":  {
+                                               "localizations":  {
+                                                                     "en":  {
+                                                                                "stringUnit":  {
+                                                                                                   "state":  "translated",
+                                                                                                   "value":  "Buffering..."
+                                                                                               }
+                                                                            },
+                                                                     "de":  {
+                                                                                "stringUnit":  {
+                                                                                                   "state":  "new",
+                                                                                                   "value":  "Buffering..."
+                                                                                               }
+                                                                            },
+                                                                     "fr":  {
+                                                                                "stringUnit":  {
+                                                                                                   "state":  "new",
+                                                                                                   "value":  "Buffering..."
+                                                                                               }
+                                                                            },
+                                                                     "es":  {
+                                                                                "stringUnit":  {
+                                                                                                   "state":  "new",
+                                                                                                   "value":  "Buffering..."
+                                                                                               }
+                                                                            },
+                                                                     "ja":  {
+                                                                                "stringUnit":  {
+                                                                                                   "state":  "new",
+                                                                                                   "value":  "Buffering..."
+                                                                                               }
+                                                                            }
+                                                                 },
+                                               "comment":  "Playback buffering status"
+                                           },
+                    "playback.buffering_ended":  {
+                                                     "localizations":  {
+                                                                           "en":  {
+                                                                                      "stringUnit":  {
+                                                                                                         "state":  "translated",
+                                                                                                         "value":  "Buffering ended"
+                                                                                                     }
+                                                                                  },
+                                                                           "de":  {
+                                                                                      "stringUnit":  {
+                                                                                                         "state":  "new",
+                                                                                                         "value":  "Buffering ended"
+                                                                                                     }
+                                                                                  },
+                                                                           "fr":  {
+                                                                                      "stringUnit":  {
+                                                                                                         "state":  "new",
+                                                                                                         "value":  "Buffering ended"
+                                                                                                     }
+                                                                                  },
+                                                                           "es":  {
+                                                                                      "stringUnit":  {
+                                                                                                         "state":  "new",
+                                                                                                         "value":  "Buffering ended"
+                                                                                                     }
+                                                                                  },
+                                                                           "ja":  {
+                                                                                      "stringUnit":  {
+                                                                                                         "state":  "new",
+                                                                                                         "value":  "Buffering ended"
+                                                                                                     }
+                                                                                  }
+                                                                       },
+                                                     "comment":  "Playback buffering ended status"
+                                                 },
                     "playback.controls.back":  {
                                                    "localizations":  {
                                                                          "en":  {
@@ -6931,6 +7001,76 @@
                                                                               },
                                                             "comment":  "Smooth playback section title"
                                                         },
+                    "qrcode.accessibility_label":  {
+                                                       "localizations":  {
+                                                                             "en":  {
+                                                                                        "stringUnit":  {
+                                                                                                           "state":  "translated",
+                                                                                                           "value":  "QR code"
+                                                                                                       }
+                                                                                    },
+                                                                             "de":  {
+                                                                                        "stringUnit":  {
+                                                                                                           "state":  "new",
+                                                                                                           "value":  "QR code"
+                                                                                                       }
+                                                                                    },
+                                                                             "fr":  {
+                                                                                        "stringUnit":  {
+                                                                                                           "state":  "new",
+                                                                                                           "value":  "QR code"
+                                                                                                       }
+                                                                                    },
+                                                                             "es":  {
+                                                                                        "stringUnit":  {
+                                                                                                           "state":  "new",
+                                                                                                           "value":  "QR code"
+                                                                                                       }
+                                                                                    },
+                                                                             "ja":  {
+                                                                                        "stringUnit":  {
+                                                                                                           "state":  "new",
+                                                                                                           "value":  "QR code"
+                                                                                                       }
+                                                                                    }
+                                                                         },
+                                                       "comment":  "Accessibility label for a generic QR code image"
+                                                   },
+                    "qrcode.unavailable":  {
+                                               "localizations":  {
+                                                                     "en":  {
+                                                                                "stringUnit":  {
+                                                                                                   "state":  "translated",
+                                                                                                   "value":  "QR unavailable"
+                                                                                               }
+                                                                            },
+                                                                     "de":  {
+                                                                                "stringUnit":  {
+                                                                                                   "state":  "new",
+                                                                                                   "value":  "QR unavailable"
+                                                                                               }
+                                                                            },
+                                                                     "fr":  {
+                                                                                "stringUnit":  {
+                                                                                                   "state":  "new",
+                                                                                                   "value":  "QR unavailable"
+                                                                                               }
+                                                                            },
+                                                                     "es":  {
+                                                                                "stringUnit":  {
+                                                                                                   "state":  "new",
+                                                                                                   "value":  "QR unavailable"
+                                                                                               }
+                                                                            },
+                                                                     "ja":  {
+                                                                                "stringUnit":  {
+                                                                                                   "state":  "new",
+                                                                                                   "value":  "QR unavailable"
+                                                                                               }
+                                                                            }
+                                                                 },
+                                               "comment":  "Shown when a QR code cannot be generated"
+                                           },
                     "settings.autosave_hint":  {
                                                    "localizations":  {
                                                                          "en":  {
@@ -7981,6 +8121,356 @@
                                                                      },
                                                    "comment":  "Tools section title"
                                                },
+                    "support.build_only":  {
+                                               "localizations":  {
+                                                                     "en":  {
+                                                                                "stringUnit":  {
+                                                                                                   "state":  "translated",
+                                                                                                   "value":  "Build %@"
+                                                                                               }
+                                                                            },
+                                                                     "de":  {
+                                                                                "stringUnit":  {
+                                                                                                   "state":  "new",
+                                                                                                   "value":  "Build %@"
+                                                                                               }
+                                                                            },
+                                                                     "fr":  {
+                                                                                "stringUnit":  {
+                                                                                                   "state":  "new",
+                                                                                                   "value":  "Build %@"
+                                                                                               }
+                                                                            },
+                                                                     "es":  {
+                                                                                "stringUnit":  {
+                                                                                                   "state":  "new",
+                                                                                                   "value":  "Build %@"
+                                                                                               }
+                                                                            },
+                                                                     "ja":  {
+                                                                                "stringUnit":  {
+                                                                                                   "state":  "new",
+                                                                                                   "value":  "Build %@"
+                                                                                               }
+                                                                            }
+                                                                 },
+                                               "comment":  "Build-only text shown on support screen"
+                                           },
+                    "support.description.primary":  {
+                                                        "localizations":  {
+                                                                              "en":  {
+                                                                                         "stringUnit":  {
+                                                                                                            "state":  "translated",
+                                                                                                            "value":  "If you\u0027ve enjoyed Home Video Channel, you can support development by scanning this QR code on your phone."
+                                                                                                        }
+                                                                                     },
+                                                                              "de":  {
+                                                                                         "stringUnit":  {
+                                                                                                            "state":  "new",
+                                                                                                            "value":  "If you\u0027ve enjoyed Home Video Channel, you can support development by scanning this QR code on your phone."
+                                                                                                        }
+                                                                                     },
+                                                                              "fr":  {
+                                                                                         "stringUnit":  {
+                                                                                                            "state":  "new",
+                                                                                                            "value":  "If you\u0027ve enjoyed Home Video Channel, you can support development by scanning this QR code on your phone."
+                                                                                                        }
+                                                                                     },
+                                                                              "es":  {
+                                                                                         "stringUnit":  {
+                                                                                                            "state":  "new",
+                                                                                                            "value":  "If you\u0027ve enjoyed Home Video Channel, you can support development by scanning this QR code on your phone."
+                                                                                                        }
+                                                                                     },
+                                                                              "ja":  {
+                                                                                         "stringUnit":  {
+                                                                                                            "state":  "new",
+                                                                                                            "value":  "If you\u0027ve enjoyed Home Video Channel, you can support development by scanning this QR code on your phone."
+                                                                                                        }
+                                                                                     }
+                                                                          },
+                                                        "comment":  "Primary support screen description"
+                                                    },
+                    "support.description.secondary":  {
+                                                          "localizations":  {
+                                                                                "en":  {
+                                                                                           "stringUnit":  {
+                                                                                                              "state":  "translated",
+                                                                                                              "value":  "Your support helps fund updates and future features."
+                                                                                                          }
+                                                                                       },
+                                                                                "de":  {
+                                                                                           "stringUnit":  {
+                                                                                                              "state":  "new",
+                                                                                                              "value":  "Your support helps fund updates and future features."
+                                                                                                          }
+                                                                                       },
+                                                                                "fr":  {
+                                                                                           "stringUnit":  {
+                                                                                                              "state":  "new",
+                                                                                                              "value":  "Your support helps fund updates and future features."
+                                                                                                          }
+                                                                                       },
+                                                                                "es":  {
+                                                                                           "stringUnit":  {
+                                                                                                              "state":  "new",
+                                                                                                              "value":  "Your support helps fund updates and future features."
+                                                                                                          }
+                                                                                       },
+                                                                                "ja":  {
+                                                                                           "stringUnit":  {
+                                                                                                              "state":  "new",
+                                                                                                              "value":  "Your support helps fund updates and future features."
+                                                                                                          }
+                                                                                       }
+                                                                            },
+                                                          "comment":  "Secondary support screen description"
+                                                      },
+                    "support.fallback_url.label":  {
+                                                       "localizations":  {
+                                                                             "en":  {
+                                                                                        "stringUnit":  {
+                                                                                                           "state":  "translated",
+                                                                                                           "value":  "Support URL"
+                                                                                                       }
+                                                                                    },
+                                                                             "de":  {
+                                                                                        "stringUnit":  {
+                                                                                                           "state":  "new",
+                                                                                                           "value":  "Support URL"
+                                                                                                       }
+                                                                                    },
+                                                                             "fr":  {
+                                                                                        "stringUnit":  {
+                                                                                                           "state":  "new",
+                                                                                                           "value":  "Support URL"
+                                                                                                       }
+                                                                                    },
+                                                                             "es":  {
+                                                                                        "stringUnit":  {
+                                                                                                           "state":  "new",
+                                                                                                           "value":  "Support URL"
+                                                                                                       }
+                                                                                    },
+                                                                             "ja":  {
+                                                                                        "stringUnit":  {
+                                                                                                           "state":  "new",
+                                                                                                           "value":  "Support URL"
+                                                                                                       }
+                                                                                    }
+                                                                         },
+                                                       "comment":  "Label shown above support fallback URL"
+                                                   },
+                    "support.qr.accessibility_label":  {
+                                                           "localizations":  {
+                                                                                 "en":  {
+                                                                                            "stringUnit":  {
+                                                                                                               "state":  "translated",
+                                                                                                               "value":  "Support QR code"
+                                                                                                           }
+                                                                                        },
+                                                                                 "de":  {
+                                                                                            "stringUnit":  {
+                                                                                                               "state":  "new",
+                                                                                                               "value":  "Support QR code"
+                                                                                                           }
+                                                                                        },
+                                                                                 "fr":  {
+                                                                                            "stringUnit":  {
+                                                                                                               "state":  "new",
+                                                                                                               "value":  "Support QR code"
+                                                                                                           }
+                                                                                        },
+                                                                                 "es":  {
+                                                                                            "stringUnit":  {
+                                                                                                               "state":  "new",
+                                                                                                               "value":  "Support QR code"
+                                                                                                           }
+                                                                                        },
+                                                                                 "ja":  {
+                                                                                            "stringUnit":  {
+                                                                                                               "state":  "new",
+                                                                                                               "value":  "Support QR code"
+                                                                                                           }
+                                                                                        }
+                                                                             },
+                                                           "comment":  "Accessibility label for the support QR code"
+                                                       },
+                    "support.secure_note":  {
+                                                "localizations":  {
+                                                                      "en":  {
+                                                                                 "stringUnit":  {
+                                                                                                    "state":  "translated",
+                                                                                                    "value":  "This opens a secure support page on your phone."
+                                                                                                }
+                                                                             },
+                                                                      "de":  {
+                                                                                 "stringUnit":  {
+                                                                                                    "state":  "new",
+                                                                                                    "value":  "This opens a secure support page on your phone."
+                                                                                                }
+                                                                             },
+                                                                      "fr":  {
+                                                                                 "stringUnit":  {
+                                                                                                    "state":  "new",
+                                                                                                    "value":  "This opens a secure support page on your phone."
+                                                                                                }
+                                                                             },
+                                                                      "es":  {
+                                                                                 "stringUnit":  {
+                                                                                                    "state":  "new",
+                                                                                                    "value":  "This opens a secure support page on your phone."
+                                                                                                }
+                                                                             },
+                                                                      "ja":  {
+                                                                                 "stringUnit":  {
+                                                                                                    "state":  "new",
+                                                                                                    "value":  "This opens a secure support page on your phone."
+                                                                                                }
+                                                                             }
+                                                                  },
+                                                "comment":  "Note below support fallback URL"
+                                            },
+                    "support.settings.subtitle":  {
+                                                      "localizations":  {
+                                                                            "en":  {
+                                                                                       "stringUnit":  {
+                                                                                                          "state":  "translated",
+                                                                                                          "value":  "Scan a QR code to support development"
+                                                                                                      }
+                                                                                   },
+                                                                            "de":  {
+                                                                                       "stringUnit":  {
+                                                                                                          "state":  "new",
+                                                                                                          "value":  "Scan a QR code to support development"
+                                                                                                      }
+                                                                                   },
+                                                                            "fr":  {
+                                                                                       "stringUnit":  {
+                                                                                                          "state":  "new",
+                                                                                                          "value":  "Scan a QR code to support development"
+                                                                                                      }
+                                                                                   },
+                                                                            "es":  {
+                                                                                       "stringUnit":  {
+                                                                                                          "state":  "new",
+                                                                                                          "value":  "Scan a QR code to support development"
+                                                                                                      }
+                                                                                   },
+                                                                            "ja":  {
+                                                                                       "stringUnit":  {
+                                                                                                          "state":  "new",
+                                                                                                          "value":  "Scan a QR code to support development"
+                                                                                                      }
+                                                                                   }
+                                                                        },
+                                                      "comment":  "Support settings row subtitle"
+                                                  },
+                    "support.title":  {
+                                          "localizations":  {
+                                                                "en":  {
+                                                                           "stringUnit":  {
+                                                                                              "state":  "translated",
+                                                                                              "value":  "Support the App"
+                                                                                          }
+                                                                       },
+                                                                "de":  {
+                                                                           "stringUnit":  {
+                                                                                              "state":  "new",
+                                                                                              "value":  "Support the App"
+                                                                                          }
+                                                                       },
+                                                                "fr":  {
+                                                                           "stringUnit":  {
+                                                                                              "state":  "new",
+                                                                                              "value":  "Support the App"
+                                                                                          }
+                                                                       },
+                                                                "es":  {
+                                                                           "stringUnit":  {
+                                                                                              "state":  "new",
+                                                                                              "value":  "Support the App"
+                                                                                          }
+                                                                       },
+                                                                "ja":  {
+                                                                           "stringUnit":  {
+                                                                                              "state":  "new",
+                                                                                              "value":  "Support the App"
+                                                                                          }
+                                                                       }
+                                                            },
+                                          "comment":  "Support settings row title"
+                                      },
+                    "support.version_build":  {
+                                                  "localizations":  {
+                                                                        "en":  {
+                                                                                   "stringUnit":  {
+                                                                                                      "state":  "translated",
+                                                                                                      "value":  "Version %@ (%@)"
+                                                                                                  }
+                                                                               },
+                                                                        "de":  {
+                                                                                   "stringUnit":  {
+                                                                                                      "state":  "new",
+                                                                                                      "value":  "Version %@ (%@)"
+                                                                                                  }
+                                                                               },
+                                                                        "fr":  {
+                                                                                   "stringUnit":  {
+                                                                                                      "state":  "new",
+                                                                                                      "value":  "Version %@ (%@)"
+                                                                                                  }
+                                                                               },
+                                                                        "es":  {
+                                                                                   "stringUnit":  {
+                                                                                                      "state":  "new",
+                                                                                                      "value":  "Version %@ (%@)"
+                                                                                                  }
+                                                                               },
+                                                                        "ja":  {
+                                                                                   "stringUnit":  {
+                                                                                                      "state":  "new",
+                                                                                                      "value":  "Version %@ (%@)"
+                                                                                                  }
+                                                                               }
+                                                                    },
+                                                  "comment":  "Version and build text shown on support screen"
+                                              },
+                    "support.version_only":  {
+                                                 "localizations":  {
+                                                                       "en":  {
+                                                                                  "stringUnit":  {
+                                                                                                     "state":  "translated",
+                                                                                                     "value":  "Version %@"
+                                                                                                 }
+                                                                              },
+                                                                       "de":  {
+                                                                                  "stringUnit":  {
+                                                                                                     "state":  "new",
+                                                                                                     "value":  "Version %@"
+                                                                                                 }
+                                                                              },
+                                                                       "fr":  {
+                                                                                  "stringUnit":  {
+                                                                                                     "state":  "new",
+                                                                                                     "value":  "Version %@"
+                                                                                                 }
+                                                                              },
+                                                                       "es":  {
+                                                                                  "stringUnit":  {
+                                                                                                     "state":  "new",
+                                                                                                     "value":  "Version %@"
+                                                                                                 }
+                                                                              },
+                                                                       "ja":  {
+                                                                                  "stringUnit":  {
+                                                                                                     "state":  "new",
+                                                                                                     "value":  "Version %@"
+                                                                                                 }
+                                                                              }
+                                                                   },
+                                                 "comment":  "Version-only text shown on support screen"
+                                             },
                     "whatsnew.2.item1.description":  {
                                                          "localizations":  {
                                                                                "en":  {
@@ -9034,4 +9524,3 @@
                 },
     "version":  "1.0"
 }
-

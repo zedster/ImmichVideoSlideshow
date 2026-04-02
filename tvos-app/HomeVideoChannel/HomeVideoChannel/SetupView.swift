@@ -25,6 +25,7 @@ struct SetupView: View {
         case forceSync
         case openLibraryStats
         case sendFeedback
+        case supportApp
         case debugLogging
         case saveAndStart
     }
@@ -385,6 +386,23 @@ struct SetupView: View {
                         }
                         .buttonStyle(.plain)
                         .focused($focusedSetting, equals: .sendFeedback)
+
+                        NavigationLink {
+                            SupportAppView()
+                        } label: {
+                            detailedSettingRowLabel(
+                                L10n.tr("support.title", "Support the App", comment: "Support settings row title"),
+                                subtitle: L10n.tr(
+                                    "support.settings.subtitle",
+                                    "Scan a QR code to support development",
+                                    comment: "Support settings row subtitle"
+                                ),
+                                value: L10n.tr("common.open", "Open", comment: "Generic open action"),
+                                isFocused: focusedSetting == .supportApp
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .focused($focusedSetting, equals: .supportApp)
 
                         booleanPicker(L10n.tr("feedback.include_diagnostics", "Include Diagnostics In Feedback", comment: "Feedback setting toggle"), isOn: $includeDiagnosticsInFeedback, focus: .includeDiagnosticsInFeedback)
                     }

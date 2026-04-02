@@ -5,6 +5,7 @@ import UIKit
 struct QRCodeView: View {
     let value: String
     var size: CGFloat = 280
+    var accessibilityLabelText: String? = nil
 
     var body: some View {
         Group {
@@ -21,10 +22,10 @@ struct QRCodeView: View {
                         RoundedRectangle(cornerRadius: size * 0.10, style: .continuous)
                             .stroke(Color.black.opacity(0.08), lineWidth: 1)
                     )
-                    .accessibilityLabel(L10n.tr(
-                        "feedback.qr.accessibility_label",
-                        "Feedback QR code",
-                        comment: "Accessibility label for a QR code that opens the feedback page"
+                    .accessibilityLabel(accessibilityLabelText ?? L10n.tr(
+                        "qrcode.accessibility_label",
+                        "QR code",
+                        comment: "Accessibility label for a generic QR code image"
                     ))
             } else {
                 RoundedRectangle(cornerRadius: size * 0.10, style: .continuous)
@@ -32,7 +33,7 @@ struct QRCodeView: View {
                     .frame(width: size, height: size)
                     .overlay {
                         Text(L10n.tr(
-                            "feedback.qr.unavailable",
+                            "qrcode.unavailable",
                             "QR unavailable",
                             comment: "Shown when a QR code cannot be generated"
                         ))
