@@ -27,21 +27,58 @@ struct FeedbackDiagnostics {
 
     var summaryItems: [Item] {
         var items: [Item] = [
-            Item(label: "Support Code", value: supportCode),
-            Item(label: "Diagnostics Sharing", value: config.includeDiagnosticsInFeedback ? "On" : "Off")
+            Item(
+                label: L10n.tr("feedback.diagnostics.support_code", "Support Code", comment: "Diagnostics field label"),
+                value: supportCode
+            ),
+            Item(
+                label: L10n.tr("feedback.diagnostics.sharing", "Diagnostics Sharing", comment: "Diagnostics field label"),
+                value: L10n.onOff(config.includeDiagnosticsInFeedback)
+            )
         ]
 
         if config.includeDiagnosticsInFeedback {
-            items.append(Item(label: "App Version", value: appVersionSummary))
-            items.append(Item(label: "Platform", value: "tvOS \(device.systemVersion)"))
+            items.append(Item(
+                label: L10n.tr("feedback.diagnostics.app_version", "App Version", comment: "Diagnostics field label"),
+                value: appVersionSummary
+            ))
+            items.append(Item(
+                label: L10n.tr("feedback.diagnostics.platform", "Platform", comment: "Diagnostics field label"),
+                value: String(format: L10n.tr(
+                    "feedback.diagnostics.platform.value",
+                    "tvOS %@",
+                    comment: "Platform value with OS version"
+                ), device.systemVersion)
+            ))
             if let deviceModel, !deviceModel.isEmpty {
-                items.append(Item(label: "Device", value: deviceModel))
+                items.append(Item(
+                    label: L10n.tr("feedback.diagnostics.device", "Device", comment: "Diagnostics field label"),
+                    value: deviceModel
+                ))
             }
-            items.append(Item(label: "Playback Mode", value: playbackModeLabel))
-            items.append(Item(label: "Minimum Clip", value: formattedMinDuration))
-            items.append(Item(label: "Crossfade", value: config.crossfadeEnabled ? "Enabled" : "Disabled"))
+            items.append(Item(
+                label: L10n.tr("feedback.diagnostics.playback_mode", "Playback Mode", comment: "Diagnostics field label"),
+                value: playbackModeLabel
+            ))
+            items.append(Item(
+                label: L10n.tr("feedback.diagnostics.minimum_clip", "Minimum Clip", comment: "Diagnostics field label"),
+                value: formattedMinDuration
+            ))
+            items.append(Item(
+                label: L10n.tr("feedback.diagnostics.crossfade", "Crossfade", comment: "Diagnostics field label"),
+                value: config.crossfadeEnabled
+                    ? L10n.tr("common.enabled", "Enabled", comment: "Generic enabled label")
+                    : L10n.tr("common.disabled", "Disabled", comment: "Generic disabled label")
+            ))
         } else {
-            items.append(Item(label: "Shared In URL", value: "Support code only"))
+            items.append(Item(
+                label: L10n.tr("feedback.diagnostics.shared_in_url", "Shared In URL", comment: "Diagnostics field label"),
+                value: L10n.tr(
+                    "feedback.diagnostics.shared_in_url.value",
+                    "Support code only",
+                    comment: "Diagnostic summary text when sharing is disabled"
+                )
+            ))
         }
 
         return items
@@ -109,19 +146,31 @@ struct FeedbackDiagnostics {
     private var playbackModeLabel: String {
         switch config.playbackOrder {
         case "sequential_oldest":
-            return "Chronological (Oldest First)"
+            return L10n.tr(
+                "playback.mode.chronological_oldest",
+                "Chronological (Oldest First)",
+                comment: "Playback order option"
+            )
         case "sequential_newest":
-            return "Chronological (Newest First)"
+            return L10n.tr(
+                "playback.mode.chronological_newest",
+                "Chronological (Newest First)",
+                comment: "Playback order option"
+            )
         default:
-            return "Random"
+            return L10n.tr("playback.mode.random", "Random", comment: "Playback order option")
         }
     }
 
     private var formattedMinDuration: String {
-        if config.minDuration.rounded() == config.minDuration {
-            return "\(Int(config.minDuration)) sec"
-        }
-        return String(format: "%.1f sec", config.minDuration)
+        let measurement = Measurement(value: config.minDuration, unit: UnitDuration.seconds)
+        return measurement.formatted(
+            .measurement(
+                width: .abbreviated,
+                usage: .asProvided,
+                numberFormatStyle: .number.precision(.fractionLength(config.minDuration.rounded() == config.minDuration ? 0 : 1))
+            )
+        )
     }
 
     private var formattedMinDurationParameter: String {
@@ -138,9 +187,13 @@ struct FeedbackDiagnostics {
         case let (.some(version), nil):
             return version
         case let (nil, .some(build)):
-            return "Build \(build)"
+            return String(format: L10n.tr(
+                "about.build.value",
+                "Build %@",
+                comment: "Build label with build number"
+            ), build)
         default:
-            return "-"
+            return L10n.unknownDash
         }
     }
 

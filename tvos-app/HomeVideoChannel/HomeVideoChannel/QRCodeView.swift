@@ -21,13 +21,21 @@ struct QRCodeView: View {
                         RoundedRectangle(cornerRadius: size * 0.10, style: .continuous)
                             .stroke(Color.black.opacity(0.08), lineWidth: 1)
                     )
-                    .accessibilityLabel("Feedback QR code")
+                    .accessibilityLabel(L10n.tr(
+                        "feedback.qr.accessibility_label",
+                        "Feedback QR code",
+                        comment: "Accessibility label for a QR code that opens the feedback page"
+                    ))
             } else {
                 RoundedRectangle(cornerRadius: size * 0.10, style: .continuous)
                     .fill(Color.white.opacity(0.12))
                     .frame(width: size, height: size)
                     .overlay {
-                        Text("QR unavailable")
+                        Text(L10n.tr(
+                            "feedback.qr.unavailable",
+                            "QR unavailable",
+                            comment: "Shown when a QR code cannot be generated"
+                        ))
                             .font(.headline)
                             .foregroundStyle(.white.opacity(0.82))
                     }

@@ -16,7 +16,11 @@ struct WhatsNewView: View {
                         .font(.system(size: 58, weight: .bold, design: .rounded))
                         .multilineTextAlignment(.center)
 
-                    Text("Version \(entry.version)")
+                    Text(String(format: L10n.tr(
+                        "whatsnew.version.label",
+                        "Version %@",
+                        comment: "Version label shown on What's New screen"
+                    ), entry.version))
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(Color.white.opacity(0.78))
 
@@ -35,7 +39,11 @@ struct WhatsNewView: View {
                 .frame(maxWidth: 980)
 
                 Button(action: onContinue) {
-                    Text("Continue")
+                    Text(L10n.tr(
+                        "common.continue",
+                        "Continue",
+                        comment: "Generic continue action button label"
+                    ))
                         .font(.system(size: 28, weight: .bold, design: .rounded))
                         .frame(minWidth: 280)
                         .padding(.horizontal, 34)
@@ -124,7 +132,7 @@ struct WhatsNewView: View {
 struct WhatsNewView_Previews: PreviewProvider {
     static var previews: some View {
         WhatsNewView(
-            entry: WhatsNewContentProvider.entry(for: "2.3")!,
+            entry: WhatsNewContentProvider.entry(for: "2.5")!,
             onContinue: {}
         )
         .preferredColorScheme(.dark)

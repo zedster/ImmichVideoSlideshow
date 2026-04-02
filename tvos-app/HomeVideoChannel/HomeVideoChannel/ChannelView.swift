@@ -23,13 +23,13 @@ fileprivate enum ChannelSelectorTab: String, CaseIterable, Hashable, Identifiabl
     var title: String {
         switch self {
         case .timePlace:
-            return "Time & Place"
+            return L10n.tr("library.channels.tab.time_place", "Time & Place", comment: "Channel selector tab title")
         case .albums:
-            return "Albums"
+            return L10n.tr("library.channels.tab.albums", "Albums", comment: "Channel selector tab title")
         case .people:
-            return "People"
+            return L10n.tr("library.channels.tab.people", "People", comment: "Channel selector tab title")
         case .search:
-            return "Search"
+            return L10n.tr("library.channels.tab.search", "Search", comment: "Channel selector tab title")
         }
     }
 }
@@ -355,14 +355,18 @@ struct ChannelView: View {
             playbackError: Binding(get: { coordinator.setupErrorMessage }, set: { coordinator.setupErrorMessage = $0 }))
                 .environmentObject(configStore)
         }
-        .alert("Hide Forever?", isPresented: $showHideForeverConfirmation) {
-            Button("Cancel", role: .cancel) {}
-            Button("Hide Forever", role: .destructive) {
+        .alert(L10n.tr("playback.hide_forever.confirm_title", "Hide Forever?", comment: "Hide forever confirmation title"), isPresented: $showHideForeverConfirmation) {
+            Button(L10n.tr("common.cancel", "Cancel", comment: "Generic cancel action"), role: .cancel) {}
+            Button(L10n.tr("playback.hide_forever.action", "Hide Forever", comment: "Hide forever destructive action"), role: .destructive) {
                 recordInteraction()
                 coordinator.hideCurrentVideo()
             }
         } message: {
-            Text("Are you sure? This hides the video in Immich too. The only way to unhide it is via the web interface.")
+            Text(L10n.tr(
+                "playback.hide_forever.confirm_message",
+                "Are you sure? This hides the video in Immich too. The only way to unhide it is via the web interface.",
+                comment: "Warning message for hide forever action"
+            ))
         }
     }
 
@@ -392,7 +396,11 @@ struct ChannelView: View {
             .padding(.bottom, 0)
 
             if scrubBarFocused && !showChannelList {
-                Text("Press Up for Channels")
+                Text(L10n.tr(
+                    "playback.controls.press_up_for_channels",
+                    "Press Up for Channels",
+                    comment: "Hint shown above scrub bar"
+                ))
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.84))
                     .padding(.horizontal, 12)
@@ -459,7 +467,7 @@ struct ChannelView: View {
                 }
                 .buttonStyle(.bordered)
                 .focused($focusedControl, equals: .back)
-                .accessibilityLabel("Back")
+                .accessibilityLabel(L10n.tr("playback.controls.back", "Back", comment: "Back control accessibility label"))
             }
 
             Button {
@@ -470,7 +478,7 @@ struct ChannelView: View {
             }
             .buttonStyle(.bordered)
             .focused($focusedControl, equals: .playPause)
-            .accessibilityLabel("Play Pause")
+            .accessibilityLabel(L10n.tr("playback.controls.play_pause", "Play Pause", comment: "Play/pause control accessibility label"))
 
             Button {
                 recordInteraction()
@@ -480,7 +488,7 @@ struct ChannelView: View {
             }
             .buttonStyle(.bordered)
             .focused($focusedControl, equals: .skip)
-            .accessibilityLabel("Skip")
+            .accessibilityLabel(L10n.tr("playback.controls.skip", "Skip", comment: "Skip control accessibility label"))
 
             Button {
                 recordInteraction()
@@ -502,7 +510,7 @@ struct ChannelView: View {
             .buttonStyle(.bordered)
             .disabled(!coordinator.canHideToAlbum || coordinator.hideUpdateInProgress)
             .focused($focusedControl, equals: .hideForever)
-            .accessibilityLabel("Hide Forever")
+            .accessibilityLabel(L10n.tr("playback.hide_forever.action", "Hide Forever", comment: "Hide forever accessibility label"))
 
             Button {
                 recordInteraction()
@@ -512,7 +520,7 @@ struct ChannelView: View {
             }
             .buttonStyle(.bordered)
             .focused($focusedControl, equals: .info)
-            .accessibilityLabel("Info")
+            .accessibilityLabel(L10n.tr("playback.controls.info", "Info", comment: "Info control accessibility label"))
 
             Button {
                 recordInteraction()
@@ -522,7 +530,7 @@ struct ChannelView: View {
             }
             .buttonStyle(.borderedProminent)
             .focused($focusedControl, equals: .settings)
-            .accessibilityLabel("Settings")
+            .accessibilityLabel(L10n.tr("settings.title", "Settings", comment: "Settings accessibility label"))
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
@@ -546,9 +554,13 @@ struct ChannelView: View {
 
                 VStack(alignment: .leading, spacing: 20) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Channels")
+                        Text(L10n.tr("library.channels.title", "Channels", comment: "Channel selector overlay title"))
                             .font(.system(size: 38, weight: .bold, design: .rounded))
-                        Text("Swipe left and right to switch tabs, then up and down to pick a channel.")
+                        Text(L10n.tr(
+                            "library.channels.hint",
+                            "Swipe left and right to switch tabs, then up and down to pick a channel.",
+                            comment: "Channel selector usage hint"
+                        ))
                             .font(.system(size: 18, weight: .medium, design: .rounded))
                             .foregroundStyle(.white.opacity(0.66))
                     }
@@ -628,7 +640,7 @@ struct ChannelView: View {
                         }
                     }
 
-                    Text("Press Back to close")
+                    Text(L10n.tr("common.press_back_to_close", "Press Back to close", comment: "Overlay close hint"))
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.58))
 
@@ -704,7 +716,7 @@ struct ChannelView: View {
                                 }
                                 .id("row-0")
 
-                                Text("Metadata")
+                                Text(L10n.tr("library.metadata.title", "Metadata", comment: "Metadata section title"))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
 
@@ -801,24 +813,28 @@ struct ChannelView: View {
         var options: [ChannelOption] = [
             ChannelOption(
                 id: "all",
-                title: "All Videos",
-                subtitle: "Play everything that matches your normal playback settings.",
+                title: L10n.tr("library.channels.all.title", "All Videos", comment: "All videos channel title"),
+                subtitle: L10n.tr("library.channels.all.subtitle", "Play everything that matches your normal playback settings.", comment: "All videos channel subtitle"),
                 count: channelCount(for: "all"),
                 artworkURL: nil,
                 fallbackSymbol: "tv.fill"
             ),
             ChannelOption(
                 id: "favorites",
-                title: "Favorites",
-                subtitle: "Only play videos marked as favorite in Immich.",
+                title: L10n.tr("library.channels.favorites.title", "Favorites", comment: "Favorites channel title"),
+                subtitle: L10n.tr("library.channels.favorites.subtitle", "Only play videos marked as favorite in Immich.", comment: "Favorites channel subtitle"),
                 count: channelCount(for: "favorites"),
                 artworkURL: nil,
                 fallbackSymbol: "heart.fill"
             ),
             ChannelOption(
                 id: "this_month",
-                title: "In This Month (\(currentMonthShortName))",
-                subtitle: "Play videos filmed in this calendar month across all years.",
+                title: String(format: L10n.tr(
+                    "library.channels.this_month.title",
+                    "In This Month (%@)",
+                    comment: "Current month channel title with abbreviated month name"
+                ), currentMonthShortName),
+                subtitle: L10n.tr("library.channels.this_month.subtitle", "Play videos filmed in this calendar month across all years.", comment: "Current month channel subtitle"),
                 count: channelCount(for: "this_month"),
                 artworkURL: nil,
                 fallbackSymbol: "calendar"
@@ -829,8 +845,8 @@ struct ChannelView: View {
             options.append(
                 ChannelOption(
                     id: "this_day",
-                    title: "More On This Day",
-                    subtitle: "Play videos filmed on this calendar day across all years.",
+                    title: L10n.tr("library.channels.this_day.title", "More On This Day", comment: "Current day channel title"),
+                    subtitle: L10n.tr("library.channels.this_day.subtitle", "Play videos filmed on this calendar day across all years.", comment: "Current day channel subtitle"),
                     count: channelCount(for: "this_day"),
                     artworkURL: nil,
                     fallbackSymbol: "calendar.badge.clock"
@@ -839,8 +855,8 @@ struct ChannelView: View {
             options.append(
                 ChannelOption(
                     id: "this_week",
-                    title: "More On This Week",
-                    subtitle: "Play videos filmed in this week of the year across all years.",
+                    title: L10n.tr("library.channels.this_week.title", "More On This Week", comment: "Current week channel title"),
+                    subtitle: L10n.tr("library.channels.this_week.subtitle", "Play videos filmed in this week of the year across all years.", comment: "Current week channel subtitle"),
                     count: channelCount(for: "this_week"),
                     artworkURL: nil,
                     fallbackSymbol: "calendar.badge.exclamationmark"
@@ -852,8 +868,12 @@ struct ChannelView: View {
             options.append(
                 ChannelOption(
                     id: "place_city",
-                    title: "Place (\(shortBracketLabel(coordinator.currentPlaceCity)))",
-                    subtitle: "Play more videos from this place.",
+                    title: String(format: L10n.tr(
+                        "library.channels.place_city.title",
+                        "Place (%@)",
+                        comment: "Place city channel title with city label"
+                    ), shortBracketLabel(coordinator.currentPlaceCity)),
+                    subtitle: L10n.tr("library.channels.place_city.subtitle", "Play more videos from this place.", comment: "Place city channel subtitle"),
                     count: channelCount(for: "place_city"),
                     artworkURL: nil,
                     fallbackSymbol: "mappin.and.ellipse"
@@ -865,8 +885,12 @@ struct ChannelView: View {
             options.append(
                 ChannelOption(
                     id: "place_country",
-                    title: "Country (\(shortBracketLabel(coordinator.currentPlaceCountry)))",
-                    subtitle: "Play more videos from this country.",
+                    title: String(format: L10n.tr(
+                        "library.channels.place_country.title",
+                        "Country (%@)",
+                        comment: "Place country channel title with country label"
+                    ), shortBracketLabel(coordinator.currentPlaceCountry)),
+                    subtitle: L10n.tr("library.channels.place_country.subtitle", "Play more videos from this country.", comment: "Place country channel subtitle"),
                     count: channelCount(for: "place_country"),
                     artworkURL: nil,
                     fallbackSymbol: "globe.europe.africa"
@@ -1058,15 +1082,23 @@ struct ChannelView: View {
     private var searchTabContent: some View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Search Immich")
+                Text(L10n.tr("library.search.title", "Search Immich", comment: "Search tab title"))
                     .font(.system(size: 28, weight: .bold, design: .rounded))
-                Text("Enter a search phrase and Home Video Channel will play matching videos from Immich search.")
+                Text(L10n.tr(
+                    "library.search.subtitle",
+                    "Enter a search phrase and Home Video Channel will play matching videos from Immich search.",
+                    comment: "Search tab subtitle"
+                ))
                     .font(.system(size: 18, weight: .medium, design: .rounded))
                     .foregroundStyle(.white.opacity(0.68))
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            TextField("Try “blue”, “sunset”, or “dog on beach”", text: $searchQueryDraft)
+            TextField(L10n.tr(
+                "library.search.placeholder",
+                "Try “blue”, “sunset”, or “dog on beach”",
+                comment: "Search field placeholder examples"
+            ), text: $searchQueryDraft)
                 .textFieldStyle(.plain)
                 .font(.system(size: 24, weight: .semibold, design: .rounded))
                 .foregroundStyle(.white)
@@ -1090,8 +1122,8 @@ struct ChannelView: View {
                     applySearchChannel()
                 } label: {
                     searchActionButtonLabel(
-                        title: "Search",
-                        subtitle: "Play matching videos",
+                        title: L10n.tr("library.search.action.search.title", "Search", comment: "Search action button title"),
+                        subtitle: L10n.tr("library.search.action.search.subtitle", "Play matching videos", comment: "Search action button subtitle"),
                         highlighted: true
                     )
                 }
@@ -1102,8 +1134,8 @@ struct ChannelView: View {
                     clearSearchChannel()
                 } label: {
                     searchActionButtonLabel(
-                        title: "Clear",
-                        subtitle: "Remove active search",
+                        title: L10n.tr("library.search.action.clear.title", "Clear", comment: "Clear search action button title"),
+                        subtitle: L10n.tr("library.search.action.clear.subtitle", "Remove active search", comment: "Clear search action button subtitle"),
                         highlighted: false
                     )
                 }
@@ -1113,13 +1145,17 @@ struct ChannelView: View {
 
             if configStore.config.hasSearchFilter {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Current Search")
+                    Text(L10n.tr("library.search.current.title", "Current Search", comment: "Current search section title"))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.62))
                     Text(configStore.config.searchQuery)
                         .font(.system(size: 24, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
-                    Text("This search channel loops through matching Immich results using your current playback order.")
+                    Text(L10n.tr(
+                        "library.search.current.subtitle",
+                        "This search channel loops through matching Immich results using your current playback order.",
+                        comment: "Current search section subtitle"
+                    ))
                         .font(.system(size: 17, weight: .medium, design: .rounded))
                         .foregroundStyle(.white.opacity(0.68))
                         .fixedSize(horizontal: false, vertical: true)
@@ -1199,26 +1235,26 @@ struct ChannelView: View {
     private var emptyStateTitle: String {
         switch selectedChannelTab {
         case .timePlace:
-            return "No channel options"
+            return L10n.tr("library.channels.empty.time_place.title", "No channel options", comment: "Empty state title for time and place tab")
         case .albums:
-            return "No album channels yet"
+            return L10n.tr("library.channels.empty.albums.title", "No album channels yet", comment: "Empty state title for albums tab")
         case .people:
-            return "No people channels yet"
+            return L10n.tr("library.channels.empty.people.title", "No people channels yet", comment: "Empty state title for people tab")
         case .search:
-            return "Search your videos"
+            return L10n.tr("library.channels.empty.search.title", "Search your videos", comment: "Empty state title for search tab")
         }
     }
 
     private var emptyStateSubtitle: String {
         switch selectedChannelTab {
         case .timePlace:
-            return "Play a video first to unlock time and place shortcuts."
+            return L10n.tr("library.channels.empty.time_place.subtitle", "Play a video first to unlock time and place shortcuts.", comment: "Empty state subtitle for time and place tab")
         case .albums:
-            return "Run a sync to load Immich albums that contain videos."
+            return L10n.tr("library.channels.empty.albums.subtitle", "Run a sync to load Immich albums that contain videos.", comment: "Empty state subtitle for albums tab")
         case .people:
-            return "Run a sync to load named people from your synced videos."
+            return L10n.tr("library.channels.empty.people.subtitle", "Run a sync to load named people from your synced videos.", comment: "Empty state subtitle for people tab")
         case .search:
-            return "Enter a phrase and play videos that match Immich smart search."
+            return L10n.tr("library.channels.empty.search.subtitle", "Enter a phrase and play videos that match Immich smart search.", comment: "Empty state subtitle for search tab")
         }
     }
 
@@ -1339,7 +1375,7 @@ struct ChannelView: View {
                 ChannelOption(
                     id: "album:\($0.id)",
                     title: $0.title,
-                    subtitle: "Play videos from this album.",
+                    subtitle: L10n.tr("library.channels.album.subtitle", "Play videos from this album.", comment: "Album channel subtitle"),
                     count: $0.count,
                     artworkURL: albumArtworkURL(for: $0.artworkID),
                     fallbackSymbol: "photo.on.rectangle.angled"
@@ -1350,7 +1386,7 @@ struct ChannelView: View {
                 ChannelOption(
                     id: "person:\($0.id)",
                     title: $0.title,
-                    subtitle: "Play videos featuring this person.",
+                    subtitle: L10n.tr("library.channels.person.subtitle", "Play videos featuring this person.", comment: "People channel subtitle"),
                     count: $0.count,
                     artworkURL: personArtworkURL(for: $0.artworkID),
                     fallbackSymbol: "person.crop.circle.fill"
@@ -1396,8 +1432,8 @@ struct ChannelView: View {
 private extension DateFormatter {
     static let channelMonthDisplayFormatter: DateFormatter = {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "MMM"
+        formatter.locale = .autoupdatingCurrent
+        formatter.setLocalizedDateFormatFromTemplate("MMM")
         return formatter
     }()
 }
@@ -1622,7 +1658,7 @@ private struct ChannelOptionRow: View {
             Spacer(minLength: 12)
 
             if isSelected {
-                Text("Live")
+                Text(L10n.tr("playback.live_badge", "Live", comment: "Badge shown for current live channel"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(isFocused ? Color.black : Color.white)
                     .padding(.horizontal, 10)
@@ -1778,7 +1814,7 @@ private struct ScrubProgressBar: View {
         .onChange(of: isFocused) { focused in
             onFocusChange(focused)
         }
-        .accessibilityLabel("Scrub Position")
+        .accessibilityLabel(L10n.tr("playback.controls.scrub_position", "Scrub Position", comment: "Scrub progress accessibility label"))
     }
 }
 

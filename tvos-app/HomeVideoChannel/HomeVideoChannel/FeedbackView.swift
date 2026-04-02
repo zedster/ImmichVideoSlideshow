@@ -23,16 +23,28 @@ struct FeedbackView: View {
                             QRCodeView(value: diagnostics.feedbackURL.absoluteString, size: 360)
 
                             VStack(alignment: .leading, spacing: 18) {
-                                Text("Send Feedback")
+                                Text(L10n.tr(
+                                    "feedback.title",
+                                    "Send Feedback",
+                                    comment: "Feedback screen main title"
+                                ))
                                     .font(.system(size: 52, weight: .bold, design: .rounded))
 
-                                Text("Scan this QR code with your phone to send feedback. We'll include app and device info to help diagnose issues.")
+                                Text(L10n.tr(
+                                    "feedback.description",
+                                    "Scan this QR code with your phone to send feedback. We'll include app and device info to help diagnose issues.",
+                                    comment: "Feedback screen description explaining QR code usage"
+                                ))
                                     .font(.title3.weight(.medium))
                                     .multilineTextAlignment(.leading)
                                     .foregroundStyle(.white.opacity(0.82))
 
                                 VStack(alignment: .leading, spacing: 10) {
-                                    Text("Fallback URL")
+                                    Text(L10n.tr(
+                                        "feedback.fallback_url.label",
+                                        "Fallback URL",
+                                        comment: "Label above the fallback feedback URL"
+                                    ))
                                         .font(.caption.weight(.semibold))
                                         .foregroundStyle(.white.opacity(0.66))
                                     Text(FeedbackDiagnostics.fallbackDisplayURL)
@@ -43,7 +55,11 @@ struct FeedbackView: View {
                                 let supportEmail = FeedbackDiagnostics.supportEmail.trimmingCharacters(in: .whitespacesAndNewlines)
                                 if !supportEmail.isEmpty {
                                     VStack(alignment: .leading, spacing: 8) {
-                                        Text("Support Email")
+                                        Text(L10n.tr(
+                                            "feedback.support_email.label",
+                                            "Support Email",
+                                            comment: "Label above support email address"
+                                        ))
                                             .font(.caption.weight(.semibold))
                                             .foregroundStyle(.white.opacity(0.66))
                                         Text(supportEmail)
@@ -52,7 +68,11 @@ struct FeedbackView: View {
                                     }
                                 }
 
-                                Text("Support code: \(supportCode)")
+                                Text(String(format: L10n.tr(
+                                    "feedback.support_code.value",
+                                    "Support code: %@",
+                                    comment: "Support code shown in feedback screen"
+                                ), supportCode))
                                     .font(.headline.monospaced())
                                     .foregroundStyle(Color(red: 0.98, green: 0.83, blue: 0.42))
                                     .padding(.horizontal, 16)
@@ -67,7 +87,11 @@ struct FeedbackView: View {
 
                     feedbackSection(.diagnostics) {
                         VStack(alignment: .leading, spacing: 16) {
-                            Text("Diagnostics Summary")
+                            Text(L10n.tr(
+                                "feedback.diagnostics.title",
+                                "Diagnostics Summary",
+                                comment: "Section title listing diagnostics fields included in feedback"
+                            ))
                                 .font(.title3.weight(.semibold))
 
                             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
@@ -109,7 +133,11 @@ struct FeedbackView: View {
             }
         }
         .background(backgroundGradient.ignoresSafeArea())
-        .navigationTitle("Send Feedback")
+        .navigationTitle(L10n.tr(
+            "feedback.title",
+            "Send Feedback",
+            comment: "Feedback screen navigation title"
+        ))
     }
 
     @ViewBuilder

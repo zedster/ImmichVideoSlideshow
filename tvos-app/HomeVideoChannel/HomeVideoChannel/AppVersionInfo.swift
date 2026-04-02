@@ -10,7 +10,9 @@ struct AppVersionInfo: Equatable {
             return trimmedVersion
         }
         let trimmedBuild = buildNumber.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmedBuild.isEmpty ? "Unknown" : trimmedBuild
+        return trimmedBuild.isEmpty
+            ? L10n.tr("common.unknown", "Unknown", comment: "Fallback text for unknown version")
+            : trimmedBuild
     }
 
     static var current: AppVersionInfo {

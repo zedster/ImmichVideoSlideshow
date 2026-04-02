@@ -14,7 +14,7 @@ final class ChannelCoordinator: ObservableObject {
     @Published var activeIndex: Int = 0
     @Published var opacityA: Double = 1
     @Published var opacityB: Double = 0
-    @Published var title: String = "Loading..."
+    @Published var title: String = L10n.tr("playback.loading", "Loading...", comment: "Loading state title")
     @Published var captionText: String = ""
     @Published var dateLocationText: String = ""
     @Published var fallbackMessage: String = ""
@@ -42,7 +42,7 @@ final class ChannelCoordinator: ObservableObject {
     @Published var isSyncing: Bool = false
     @Published var syncPagesFetched: Int = 0
     @Published var syncRowsUpserted: Int = 0
-    @Published var syncLastSyncAt: String = "-"
+    @Published var syncLastSyncAt: String = L10n.unknownDash
     @Published var syncLastError: String = ""
     @Published var statsTotalVideos: Int = 0
     @Published var statsTotalVideoDuration: Double = 0
@@ -54,16 +54,16 @@ final class ChannelCoordinator: ObservableObject {
     @Published var statsFavoritesCount: Int = 0
     @Published var statsHiddenCount: Int = 0
     @Published var sessionVideosWatchedCount: Int = 0
-    @Published var statsMostPopularCamera: String = "-"
-    @Published var statsMostPopularCodec: String = "-"
-    @Published var statsMostPopularFileType: String = "-"
-    @Published var statsMostPopularPlace: String = "-"
-    @Published var statsMostPopularYear: String = "-"
-    @Published var statsTopCamerasSummary: String = "-"
-    @Published var statsTopCodecsSummary: String = "-"
-    @Published var statsTopFileTypesSummary: String = "-"
-    @Published var statsTopPlacesSummary: String = "-"
-    @Published var statsTopYearsSummary: String = "-"
+    @Published var statsMostPopularCamera: String = L10n.unknownDash
+    @Published var statsMostPopularCodec: String = L10n.unknownDash
+    @Published var statsMostPopularFileType: String = L10n.unknownDash
+    @Published var statsMostPopularPlace: String = L10n.unknownDash
+    @Published var statsMostPopularYear: String = L10n.unknownDash
+    @Published var statsTopCamerasSummary: String = L10n.unknownDash
+    @Published var statsTopCodecsSummary: String = L10n.unknownDash
+    @Published var statsTopFileTypesSummary: String = L10n.unknownDash
+    @Published var statsTopPlacesSummary: String = L10n.unknownDash
+    @Published var statsTopYearsSummary: String = L10n.unknownDash
     @Published var statsLastError: String = ""
     @Published var shouldOpenSetup: Bool = false
     @Published var setupErrorMessage: String = ""
@@ -128,7 +128,11 @@ final class ChannelCoordinator: ObservableObject {
 
     func start() {
         guard configStore.config.isConfigured else {
-            fallbackMessage = "Please complete setup first"
+            fallbackMessage = L10n.tr(
+                "errors.setup.complete_first",
+                "Please complete setup first",
+                comment: "Error shown when playback starts before setup is complete"
+            )
             addDebugMessage("Start blocked: app not configured")
             return
         }
@@ -204,21 +208,21 @@ final class ChannelCoordinator: ObservableObject {
         statsFavoritesCount = 0
         statsHiddenCount = 0
         sessionVideosWatchedCount = 0
-        statsMostPopularCamera = "-"
-        statsMostPopularCodec = "-"
-        statsMostPopularFileType = "-"
-        statsMostPopularPlace = "-"
-        statsMostPopularYear = "-"
-        statsTopCamerasSummary = "-"
-        statsTopCodecsSummary = "-"
-        statsTopFileTypesSummary = "-"
-        statsTopPlacesSummary = "-"
-        statsTopYearsSummary = "-"
+        statsMostPopularCamera = L10n.unknownDash
+        statsMostPopularCodec = L10n.unknownDash
+        statsMostPopularFileType = L10n.unknownDash
+        statsMostPopularPlace = L10n.unknownDash
+        statsMostPopularYear = L10n.unknownDash
+        statsTopCamerasSummary = L10n.unknownDash
+        statsTopCodecsSummary = L10n.unknownDash
+        statsTopFileTypesSummary = L10n.unknownDash
+        statsTopPlacesSummary = L10n.unknownDash
+        statsTopYearsSummary = L10n.unknownDash
         statsLastError = ""
         shouldOpenSetup = false
         setupErrorMessage = ""
         fallbackMessage = ""
-        title = "Loading..."
+        title = L10n.tr("playback.loading", "Loading...", comment: "Loading state title")
         captionText = ""
         dateLocationText = ""
         playbackProgress = 0
@@ -294,7 +298,9 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     func muteButtonLabel() -> String {
-        activePlayer().isMuted ? "Unmute" : "Mute"
+        activePlayer().isMuted
+            ? L10n.tr("playback.controls.unmute", "Unmute", comment: "Unmute action label")
+            : L10n.tr("playback.controls.mute", "Mute", comment: "Mute action label")
     }
 
     func forceSyncNow() {
@@ -317,7 +323,9 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     func favoriteButtonLabel() -> String {
-        currentIsFavorite ? "Unfavorite" : "Favorite"
+        currentIsFavorite
+            ? L10n.tr("playback.controls.unfavorite", "Unfavorite", comment: "Remove favorite action label")
+            : L10n.tr("playback.controls.favorite", "Favorite", comment: "Favorite action label")
     }
 
     func favoriteButtonSystemImage() -> String {
@@ -392,11 +400,19 @@ final class ChannelCoordinator: ObservableObject {
                     try await store.setHidden(assetId: target.id, isHidden: true)
                 }
                 applyHiddenStateLocally(assetId: target.id, isHidden: true)
-                fallbackMessage = "Hidden: \(target.title)"
+                fallbackMessage = String(format: L10n.tr(
+                    "playback.hide_forever.success",
+                    "Hidden: %@",
+                    comment: "Confirmation after hiding current video"
+                ), target.title)
                 addDebugMessage("Archived (locked): \(target.title)")
                 await transitionToNext(reason: "manual_hide")
             } catch {
-                fallbackMessage = "Hide failed: \(error.localizedDescription)"
+                fallbackMessage = String(format: L10n.tr(
+                    "errors.playback.hide_failed",
+                    "Hide failed: %@",
+                    comment: "Hide action failure message with reason"
+                ), error.localizedDescription)
                 if configStore.config.debug {
                     print("[ChannelCoordinator] hide failed: \(error)")
                 }
@@ -409,7 +425,7 @@ final class ChannelCoordinator: ObservableObject {
         do {
             if shouldUseSQLiteSelection() {
                 try await store.initializeSchema()
-                syncLastSyncAt = (try await store.getSyncState(key: "last_sync_at")) ?? "-"
+                syncLastSyncAt = (try await store.getSyncState(key: "last_sync_at")) ?? L10n.unknownDash
                 if configStore.config.syncOnStartup {
                     let count = try await store.countQualifying(
                         minDuration: configStore.config.minDuration,
@@ -436,7 +452,11 @@ final class ChannelCoordinator: ObservableObject {
             await loadLibraryStats()
             addDebugMessage("Bootstrap playback started")
         } catch {
-            registerPlaybackFailure("Could not load initial video. Retrying...", error: error)
+            registerPlaybackFailure(L10n.tr(
+                "errors.playback.initial_load_retry",
+                "Could not load initial video. Retrying...",
+                comment: "Playback failure message when initial video loading fails"
+            ), error: error)
             if configStore.config.debug {
                 print("[ChannelCoordinator] bootstrap failed: \(error)")
             }
@@ -466,7 +486,11 @@ final class ChannelCoordinator: ObservableObject {
         syncLastError = ""
         updateStatus()
         if !silent {
-            fallbackMessage = "Syncing metadata..."
+            fallbackMessage = L10n.tr(
+                "library.sync.in_progress",
+                "Syncing metadata...",
+                comment: "Message shown while metadata sync is running"
+            )
         }
         addDebugMessage("Sync started")
 
@@ -482,16 +506,16 @@ final class ChannelCoordinator: ObservableObject {
             )
             syncPagesFetched = result.pagesFetched
             syncRowsUpserted = result.rowsUpserted
-            syncLastSyncAt = (try await store.getSyncState(key: "last_sync_at")) ?? "-"
+            syncLastSyncAt = (try await store.getSyncState(key: "last_sync_at")) ?? L10n.unknownDash
             if configStore.config.debug {
                 print("[ChannelCoordinator] sync done pages=\(result.pagesFetched) upserted=\(result.rowsUpserted)")
             }
             addDebugMessage("Sync done p\(result.pagesFetched) r\(result.rowsUpserted)")
             if !silent {
-                fallbackMessage = "Sync complete"
+                fallbackMessage = L10n.tr("library.sync.complete", "Sync complete", comment: "Message shown when metadata sync is complete")
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
                     guard let self else { return }
-                    if self.fallbackMessage == "Sync complete" {
+                    if self.fallbackMessage == L10n.tr("library.sync.complete", "Sync complete", comment: "Message shown when metadata sync is complete") {
                         self.fallbackMessage = ""
                     }
                 }
@@ -500,7 +524,11 @@ final class ChannelCoordinator: ObservableObject {
             await loadLibraryStats()
         } catch {
             syncLastError = error.localizedDescription
-            fallbackMessage = "Sync failed: \(error.localizedDescription)"
+            fallbackMessage = String(format: L10n.tr(
+                "errors.library.sync_failed",
+                "Sync failed: %@",
+                comment: "Metadata sync failure message with reason"
+            ), error.localizedDescription)
             if configStore.config.debug {
                 print("[ChannelCoordinator] sync failed: \(error)")
             }
@@ -786,7 +814,11 @@ final class ChannelCoordinator: ObservableObject {
                 queue.append(item)
                 updateStatus()
                 await maybePrepareNext()
-                if fallbackMessage == "Could not fetch next video. Retrying..." {
+                if fallbackMessage == L10n.tr(
+                    "errors.playback.fetch_next_retry",
+                    "Could not fetch next video. Retrying...",
+                    comment: "Playback failure message when queue cannot fetch next video"
+                ) {
                     fallbackMessage = ""
                 }
                 addDebugMessage("Queued \(item.title)")
@@ -794,7 +826,11 @@ final class ChannelCoordinator: ObservableObject {
                 if configStore.config.debug {
                     print("[ChannelCoordinator] queue fetch failed: \(error)")
                 }
-                registerPlaybackFailure("Could not fetch next video. Retrying...", error: error)
+                registerPlaybackFailure(L10n.tr(
+                    "errors.playback.fetch_next_retry",
+                    "Could not fetch next video. Retrying...",
+                    comment: "Playback failure message when queue cannot fetch next video"
+                ), error: error)
                 addDebugMessage("Queue fetch failed: \(error.localizedDescription)")
                 break
             }
@@ -929,7 +965,11 @@ final class ChannelCoordinator: ObservableObject {
         }
 
         guard !queue.isEmpty else {
-            registerPlaybackFailure("No eligible videos right now. Retrying...")
+            registerPlaybackFailure(L10n.tr(
+                "errors.playback.no_eligible_videos_retry",
+                "No eligible videos right now. Retrying...",
+                comment: "Playback failure message when no qualifying videos are available"
+            ))
             return
         }
 
@@ -1007,7 +1047,11 @@ final class ChannelCoordinator: ObservableObject {
             }
             addDebugMessage("Next: \(next.title)")
         } catch {
-            registerPlaybackFailure("Transition failed. Skipping...", error: error)
+            registerPlaybackFailure(L10n.tr(
+                "errors.playback.transition_failed_skipping",
+                "Transition failed. Skipping...",
+                comment: "Playback failure message when transition to next video fails"
+            ), error: error)
             nextPreparedId = ""
             if configStore.config.debug {
                 print("[ChannelCoordinator] transition failed: \(reason) error=\(error)")
@@ -1100,7 +1144,11 @@ final class ChannelCoordinator: ObservableObject {
         } catch {
             history.append(previous)
             canGoBack = !history.isEmpty
-            fallbackMessage = "Back failed: \(error.localizedDescription)"
+            fallbackMessage = String(format: L10n.tr(
+                "errors.playback.back_failed",
+                "Back failed: %@",
+                comment: "Back navigation failure message with reason"
+            ), error.localizedDescription)
             if configStore.config.debug {
                 print("[ChannelCoordinator] previous transition failed: \(reason) error=\(error)")
             }
@@ -1296,7 +1344,11 @@ final class ChannelCoordinator: ObservableObject {
 
     private func loadLibraryStats() async {
         guard shouldUseSQLiteSelection() else {
-            statsLastError = "SQLite cache is disabled."
+            statsLastError = L10n.tr(
+                "errors.library.sqlite_cache_disabled",
+                "SQLite cache is disabled.",
+                comment: "Library stats error when cache-backed stats are unavailable"
+            )
             return
         }
 
@@ -1334,7 +1386,7 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func formatTop(_ rows: [SQLiteVideoStore.RankedStat]) -> String {
-        guard !rows.isEmpty else { return "-" }
+        guard !rows.isEmpty else { return L10n.unknownDash }
         return rows.map { "\($0.label) (\($0.count))" }.joined(separator: ", ")
     }
 
@@ -1414,42 +1466,34 @@ final class ChannelCoordinator: ObservableObject {
 
         let iso = ISO8601DateFormatter()
         if let date = iso.date(from: value) {
-            let f = DateFormatter()
-            f.locale = Locale(identifier: "en_US_POSIX")
-            f.dateFormat = "MMM yyyy"
-            return f.string(from: date)
+            return date.formatted(Date.FormatStyle().month(.abbreviated).year())
         }
 
         let f1 = DateFormatter()
         f1.locale = Locale(identifier: "en_US_POSIX")
         f1.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSZ"
         if let date = f1.date(from: value) {
-            let f = DateFormatter()
-            f.locale = Locale(identifier: "en_US_POSIX")
-            f.dateFormat = "MMM yyyy"
-            return f.string(from: date)
+            return date.formatted(Date.FormatStyle().month(.abbreviated).year())
         }
 
         let f2 = DateFormatter()
         f2.locale = Locale(identifier: "en_US_POSIX")
         f2.dateFormat = "yyyy-MM-dd HH:mm:ss"
         if let date = f2.date(from: value) {
-            let f = DateFormatter()
-            f.locale = Locale(identifier: "en_US_POSIX")
-            f.dateFormat = "MMM yyyy"
-            return f.string(from: date)
+            return date.formatted(Date.FormatStyle().month(.abbreviated).year())
         }
 
         if value.count >= 7 {
             let prefix = String(value.prefix(7))
-            let monthMap = [
-                "01": "Jan", "02": "Feb", "03": "Mar", "04": "Apr",
-                "05": "May", "06": "Jun", "07": "Jul", "08": "Aug",
-                "09": "Sep", "10": "Oct", "11": "Nov", "12": "Dec"
-            ]
             let parts = prefix.split(separator: "-")
-            if parts.count == 2, parts[0].count == 4, let month = monthMap[String(parts[1])] {
-                return "\(month) \(parts[0])"
+            if parts.count == 2, parts[0].count == 4, let monthNumber = Int(parts[1]), (1...12).contains(monthNumber) {
+                var comps = DateComponents()
+                comps.year = Int(parts[0])
+                comps.month = monthNumber
+                comps.day = 1
+                if let date = Calendar.current.date(from: comps) {
+                    return date.formatted(Date.FormatStyle().month(.abbreviated).year())
+                }
             }
         }
 
@@ -1502,49 +1546,49 @@ final class ChannelCoordinator: ObservableObject {
         let dateTime = formatCaptureDateTime(candidate.captureDate)
 
         var fields: [VideoInfoField] = [
-            VideoInfoField(id: "title", label: "Title", value: nonEmptyOrDash(candidate.title)),
-            VideoInfoField(id: "id", label: "Asset ID", value: nonEmptyOrDash(candidate.id)),
-            VideoInfoField(id: "duration", label: "Duration", value: formatDuration(candidate.duration)),
-            VideoInfoField(id: "times_watched", label: "Times Watched", value: String(candidate.timesWatched)),
-            VideoInfoField(id: "session_watched", label: "Session Watched", value: String(sessionVideosWatchedCount)),
-            VideoInfoField(id: "favorite", label: "Favorite", value: candidate.isFavorite ? "Yes" : "No"),
-            VideoInfoField(id: "hidden", label: "Hidden", value: candidate.isHidden ? "Yes" : "No")
+            VideoInfoField(id: "title", label: L10n.tr("library.metadata.field.title", "Title", comment: "Metadata field label"), value: nonEmptyOrDash(candidate.title)),
+            VideoInfoField(id: "id", label: L10n.tr("library.metadata.field.asset_id", "Asset ID", comment: "Metadata field label"), value: nonEmptyOrDash(candidate.id)),
+            VideoInfoField(id: "duration", label: L10n.tr("library.metadata.field.duration", "Duration", comment: "Metadata field label"), value: formatDuration(candidate.duration)),
+            VideoInfoField(id: "times_watched", label: L10n.tr("library.metadata.field.times_watched", "Times Watched", comment: "Metadata field label"), value: String(candidate.timesWatched)),
+            VideoInfoField(id: "session_watched", label: L10n.tr("library.metadata.field.session_watched", "Session Watched", comment: "Metadata field label"), value: String(sessionVideosWatchedCount)),
+            VideoInfoField(id: "favorite", label: L10n.tr("library.metadata.field.favorite", "Favorite", comment: "Metadata field label"), value: candidate.isFavorite ? L10n.tr("common.yes", "Yes", comment: "Yes value") : L10n.tr("common.no", "No", comment: "No value")),
+            VideoInfoField(id: "hidden", label: L10n.tr("library.metadata.field.hidden", "Hidden", comment: "Metadata field label"), value: candidate.isHidden ? L10n.tr("common.yes", "Yes", comment: "Yes value") : L10n.tr("common.no", "No", comment: "No value"))
         ]
 
         if !monthYear.isEmpty {
-            fields.append(VideoInfoField(id: "month_year", label: "Year / Month", value: monthYear))
+            fields.append(VideoInfoField(id: "month_year", label: L10n.tr("library.metadata.field.year_month", "Year / Month", comment: "Metadata field label"), value: monthYear))
         }
         if !location.isEmpty {
-            fields.append(VideoInfoField(id: "current_location", label: "Current Location", value: location))
+            fields.append(VideoInfoField(id: "current_location", label: L10n.tr("library.metadata.field.current_location", "Current Location", comment: "Metadata field label"), value: location))
         }
         if !peopleText.isEmpty {
-            fields.append(VideoInfoField(id: "people", label: "People", value: peopleText))
+            fields.append(VideoInfoField(id: "people", label: L10n.tr("library.metadata.field.people", "People", comment: "Metadata field label"), value: peopleText))
         }
 
         fields.append(contentsOf: [
-            VideoInfoField(id: "capture_raw", label: "Capture Date (Raw)", value: nonEmptyOrDash(candidate.captureDate)),
-            VideoInfoField(id: "capture_fmt", label: "Capture Date (Parsed)", value: nonEmptyOrDash(dateTime)),
-            VideoInfoField(id: "city", label: "City", value: nonEmptyOrDash(candidate.city)),
-            VideoInfoField(id: "country", label: "Country", value: nonEmptyOrDash(candidate.country)),
-            VideoInfoField(id: "location", label: "Location", value: nonEmptyOrDash(location)),
-            VideoInfoField(id: "camera_make", label: "Camera Make", value: nonEmptyOrDash(candidate.cameraMake)),
-            VideoInfoField(id: "camera_model", label: "Camera Model", value: nonEmptyOrDash(candidate.cameraModel)),
-            VideoInfoField(id: "camera", label: "Camera (Combined)", value: nonEmptyOrDash(camera)),
-            VideoInfoField(id: "lens", label: "Lens", value: nonEmptyOrDash(candidate.lensModel)),
-            VideoInfoField(id: "fnumber", label: "Aperture", value: nonEmptyOrDash(candidate.fNumber)),
-            VideoInfoField(id: "focal", label: "Focal Length", value: nonEmptyOrDash(candidate.focalLength)),
-            VideoInfoField(id: "iso", label: "ISO", value: nonEmptyOrDash(candidate.iso)),
-            VideoInfoField(id: "shutter", label: "Exposure", value: nonEmptyOrDash(candidate.exposureTime)),
-            VideoInfoField(id: "latitude", label: "Latitude", value: nonEmptyOrDash(candidate.latitude)),
-            VideoInfoField(id: "longitude", label: "Longitude", value: nonEmptyOrDash(candidate.longitude)),
-            VideoInfoField(id: "immich_url", label: "Immich URL", value: nonEmptyOrDash(currentImmichAssetURL))
+            VideoInfoField(id: "capture_raw", label: L10n.tr("library.metadata.field.capture_raw", "Capture Date (Raw)", comment: "Metadata field label"), value: nonEmptyOrDash(candidate.captureDate)),
+            VideoInfoField(id: "capture_fmt", label: L10n.tr("library.metadata.field.capture_parsed", "Capture Date (Parsed)", comment: "Metadata field label"), value: nonEmptyOrDash(dateTime)),
+            VideoInfoField(id: "city", label: L10n.tr("library.metadata.field.city", "City", comment: "Metadata field label"), value: nonEmptyOrDash(candidate.city)),
+            VideoInfoField(id: "country", label: L10n.tr("library.metadata.field.country", "Country", comment: "Metadata field label"), value: nonEmptyOrDash(candidate.country)),
+            VideoInfoField(id: "location", label: L10n.tr("library.metadata.field.location", "Location", comment: "Metadata field label"), value: nonEmptyOrDash(location)),
+            VideoInfoField(id: "camera_make", label: L10n.tr("library.metadata.field.camera_make", "Camera Make", comment: "Metadata field label"), value: nonEmptyOrDash(candidate.cameraMake)),
+            VideoInfoField(id: "camera_model", label: L10n.tr("library.metadata.field.camera_model", "Camera Model", comment: "Metadata field label"), value: nonEmptyOrDash(candidate.cameraModel)),
+            VideoInfoField(id: "camera", label: L10n.tr("library.metadata.field.camera_combined", "Camera (Combined)", comment: "Metadata field label"), value: nonEmptyOrDash(camera)),
+            VideoInfoField(id: "lens", label: L10n.tr("library.metadata.field.lens", "Lens", comment: "Metadata field label"), value: nonEmptyOrDash(candidate.lensModel)),
+            VideoInfoField(id: "fnumber", label: L10n.tr("library.metadata.field.aperture", "Aperture", comment: "Metadata field label"), value: nonEmptyOrDash(candidate.fNumber)),
+            VideoInfoField(id: "focal", label: L10n.tr("library.metadata.field.focal_length", "Focal Length", comment: "Metadata field label"), value: nonEmptyOrDash(candidate.focalLength)),
+            VideoInfoField(id: "iso", label: L10n.tr("library.metadata.field.iso", "ISO", comment: "Metadata field label"), value: nonEmptyOrDash(candidate.iso)),
+            VideoInfoField(id: "shutter", label: L10n.tr("library.metadata.field.exposure", "Exposure", comment: "Metadata field label"), value: nonEmptyOrDash(candidate.exposureTime)),
+            VideoInfoField(id: "latitude", label: L10n.tr("library.metadata.field.latitude", "Latitude", comment: "Metadata field label"), value: nonEmptyOrDash(candidate.latitude)),
+            VideoInfoField(id: "longitude", label: L10n.tr("library.metadata.field.longitude", "Longitude", comment: "Metadata field label"), value: nonEmptyOrDash(candidate.longitude)),
+            VideoInfoField(id: "immich_url", label: L10n.tr("library.metadata.field.immich_url", "Immich URL", comment: "Metadata field label"), value: nonEmptyOrDash(currentImmichAssetURL))
         ])
 
         return fields
     }
 
     private func formatDuration(_ seconds: Double) -> String {
-        guard seconds.isFinite, seconds >= 0 else { return "-" }
+        guard seconds.isFinite, seconds >= 0 else { return L10n.unknownDash }
         let total = Int(seconds.rounded())
         let h = total / 3600
         let m = (total % 3600) / 60
@@ -1561,10 +1605,7 @@ final class ChannelCoordinator: ObservableObject {
 
         let iso = ISO8601DateFormatter()
         if let date = iso.date(from: value) {
-            let f = DateFormatter()
-            f.locale = Locale(identifier: "en_US_POSIX")
-            f.dateFormat = "yyyy-MM-dd HH:mm:ss"
-            return f.string(from: date)
+            return date.formatted(date: .numeric, time: .standard)
         }
 
         let formats = [
@@ -1577,10 +1618,7 @@ final class ChannelCoordinator: ObservableObject {
             parser.locale = Locale(identifier: "en_US_POSIX")
             parser.dateFormat = format
             if let date = parser.date(from: value) {
-                let out = DateFormatter()
-                out.locale = Locale(identifier: "en_US_POSIX")
-                out.dateFormat = "yyyy-MM-dd HH:mm:ss"
-                return out.string(from: date)
+                return date.formatted(date: .numeric, time: .standard)
             }
         }
         return value
@@ -1604,7 +1642,9 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func bufferingStateText(_ buffering: Bool) -> String {
-        buffering ? "Buffering..." : "Buffering ended"
+        buffering
+            ? L10n.tr("playback.buffering", "Buffering...", comment: "Playback buffering status")
+            : L10n.tr("playback.buffering_ended", "Buffering ended", comment: "Playback buffering ended status")
     }
 
     private func currentBitrateStatus() -> String {
@@ -1766,7 +1806,7 @@ final class ChannelCoordinator: ObservableObject {
 
     private func nonEmptyOrDash(_ value: String) -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "-" : trimmed
+        return trimmed.isEmpty ? L10n.unknownDash : trimmed
     }
 }
 

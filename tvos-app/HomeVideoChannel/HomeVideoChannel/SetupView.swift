@@ -116,7 +116,10 @@ struct SetupView: View {
                     settingsLayout
                 }
             }
-            .navigationTitle(isOnboarding ? "Welcome" : "Settings")
+            .navigationTitle(isOnboarding
+                ? L10n.tr("settings.onboarding.title", "Welcome", comment: "Onboarding navigation title")
+                : L10n.tr("settings.title", "Settings", comment: "Settings navigation title")
+            )
             .onAppear {
                 loadFromConfig()
                 onRefreshStats?()
@@ -151,9 +154,13 @@ struct SetupView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Set up your channel")
+                    Text(L10n.tr("settings.onboarding.heading", "Set up your channel", comment: "Onboarding heading"))
                         .font(.system(size: 52, weight: .bold, design: .rounded))
-                    Text("Add your Immich server URL and API key once, then press Go.")
+                    Text(L10n.tr(
+                        "settings.onboarding.subtitle",
+                        "Add your Immich server URL and API key once, then press Go.",
+                        comment: "Onboarding subtitle"
+                    ))
                         .font(.title3)
                         .foregroundStyle(.white.opacity(0.82))
                 }
@@ -161,33 +168,45 @@ struct SetupView: View {
                 HStack(alignment: .top, spacing: 24) {
                     card {
                         VStack(alignment: .leading, spacing: 18) {
-                            Text("Connect")
+                            Text(L10n.tr("settings.onboarding.connect.section", "Connect", comment: "Onboarding connection card title"))
                                 .font(.title2.weight(.semibold))
 
                             labeledField(
-                                "Immich URL",
-                                placeholder: "https://immich.example.com",
+                                L10n.tr("settings.connection.immich_url", "Immich URL", comment: "Immich URL field label"),
+                                placeholder: L10n.tr(
+                                    "settings.connection.immich_url.placeholder",
+                                    "https://immich.example.com",
+                                    comment: "Immich URL field placeholder"
+                                ),
                                 text: $immichURL,
                                 disableAutocorrect: true,
                                 focus: .immichURL
                             )
 
                             labeledField(
-                                "Immich API key",
-                                placeholder: "Paste your API key",
+                                L10n.tr("settings.connection.api_key", "Immich API key", comment: "Immich API key field label"),
+                                placeholder: L10n.tr("settings.connection.api_key.placeholder", "Paste your API key", comment: "Immich API key field placeholder"),
                                 text: $apiKey,
                                 disableAutocorrect: true,
                                 focus: .apiKey
                             )
-                            Text("Required permissions: asset.read, asset.view, asset.update, album.read.")
+                            Text(L10n.tr(
+                                "settings.connection.permissions",
+                                "Required permissions: asset.read, asset.view, asset.update, album.read.",
+                                comment: "Required API key permissions for Immich"
+                            ))
                                 .font(.caption)
                                 .foregroundStyle(.white.opacity(0.68))
 
-                            Text("Use the full server address, including https://.")
+                            Text(L10n.tr(
+                                "settings.connection.url_hint",
+                                "Use the full server address, including https://.",
+                                comment: "Immich URL hint"
+                            ))
                                 .font(.caption)
                                 .foregroundStyle(.white.opacity(0.68))
 
-                            primaryActionButton("Go", focus: .saveAndStart) {
+                            primaryActionButton(L10n.tr("settings.onboarding.go", "Go", comment: "Onboarding primary action"), focus: .saveAndStart) {
                                 save()
                             }
                         }
@@ -195,13 +214,13 @@ struct SetupView: View {
 
                     card {
                         VStack(alignment: .leading, spacing: 18) {
-                            Text("How to find your API key")
+                            Text(L10n.tr("settings.onboarding.api_key_help.title", "How to find your API key", comment: "API key help section title"))
                                 .font(.title2.weight(.semibold))
 
                             VStack(alignment: .leading, spacing: 10) {
-                                guideStep(number: "1", text: "Open Immich in your browser or phone app.")
-                                guideStep(number: "2", text: "Go to Account Settings, then API Keys.")
-                                guideStep(number: "3", text: "Create a new key and paste it here.")
+                                guideStep(number: "1", text: L10n.tr("settings.onboarding.api_key_help.step1", "Open Immich in your browser or phone app.", comment: "API key help step 1"))
+                                guideStep(number: "2", text: L10n.tr("settings.onboarding.api_key_help.step2", "Go to Account Settings, then API Keys.", comment: "API key help step 2"))
+                                guideStep(number: "3", text: L10n.tr("settings.onboarding.api_key_help.step3", "Create a new key and paste it here.", comment: "API key help step 3"))
                             }
 
                             Divider()
@@ -210,15 +229,19 @@ struct SetupView: View {
                             HStack(alignment: .top, spacing: 18) {
                                 VStack(alignment: .leading, spacing: 8) {
                                     QRCodeView(value: bananaSystemsGuideURL, size: 180)
-                                    Text("Scan for the Banana Systems guide")
+                                    Text(L10n.tr("settings.onboarding.scan_guide", "Scan for the Banana Systems guide", comment: "Caption below setup QR code"))
                                         .font(.caption)
                                         .foregroundStyle(.white.opacity(0.68))
                                 }
 
                                 VStack(alignment: .leading, spacing: 8) {
-                                    Text("Need help?")
+                                    Text(L10n.tr("settings.onboarding.need_help", "Need help?", comment: "Onboarding helper heading"))
                                         .font(.headline)
-                                    Text("Scan the QR code for the Banana Systems site and follow the setup guide.")
+                                    Text(L10n.tr(
+                                        "settings.onboarding.need_help.description",
+                                        "Scan the QR code for the Banana Systems site and follow the setup guide.",
+                                        comment: "Onboarding help description"
+                                    ))
                                         .foregroundStyle(.white.opacity(0.82))
                                     Text(bananaSystemsGuideURL)
                                         .font(.caption.monospaced())
@@ -241,9 +264,13 @@ struct SetupView: View {
             VStack(alignment: .leading, spacing: 24) {
                 HStack(alignment: .top, spacing: 24) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Channel settings")
+                        Text(L10n.tr("settings.channel.heading", "Channel settings", comment: "Settings hero heading"))
                             .font(.system(size: 46, weight: .bold, design: .rounded))
-                        Text("Keep playback simple up front. Advanced controls are grouped below.")
+                        Text(L10n.tr(
+                            "settings.channel.subtitle",
+                            "Keep playback simple up front. Advanced controls are grouped below.",
+                            comment: "Settings hero subtitle"
+                        ))
                             .font(.title3)
                             .foregroundStyle(.white.opacity(0.78))
                     }
@@ -252,7 +279,7 @@ struct SetupView: View {
 
                     VStack(alignment: .center, spacing: 8) {
                         QRCodeView(value: bananaSystemsGuideURL, size: 132)
-                        Text("Setup help")
+                        Text(L10n.tr("settings.setup_help", "Setup help", comment: "Setup QR helper label"))
                             .font(.caption)
                             .foregroundStyle(.white.opacity(0.72))
                     }
@@ -260,34 +287,36 @@ struct SetupView: View {
 
                 card {
                     VStack(alignment: .leading, spacing: 16) {
-                        sectionHeading("Connection")
+                        sectionHeading(L10n.tr("settings.connection.section", "Connection", comment: "Connection section title"))
                         labeledField(
-                            "Immich URL",
-                            placeholder: "https://immich.example.com",
+                            L10n.tr("settings.connection.immich_url", "Immich URL", comment: "Immich URL field label"),
+                            placeholder: L10n.tr("settings.connection.immich_url.placeholder", "https://immich.example.com", comment: "Immich URL field placeholder"),
                             text: $immichURL,
                             disableAutocorrect: true,
                             focus: .immichURL
                         )
                         labeledField(
-                            "Immich API key",
-                            placeholder: "API key",
+                            L10n.tr("settings.connection.api_key", "Immich API key", comment: "Immich API key field label"),
+                            placeholder: L10n.tr("settings.connection.api_key.short_placeholder", "API key", comment: "Immich API key field placeholder"),
                             text: $apiKey,
                             disableAutocorrect: true,
                             focus: .apiKey
                         )
-                        Text("Required permissions: asset.read, asset.view, asset.update, album.read.")
+                        Text(L10n.tr("settings.connection.permissions", "Required permissions: asset.read, asset.view, asset.update, album.read.", comment: "Required API key permissions for Immich"))
                             .font(.caption)
                             .foregroundStyle(.white.opacity(0.68))
                         HStack(spacing: 14) {
                             actionButton(
-                                testInProgress ? "Testing..." : "Test Connection",
+                                testInProgress
+                                    ? L10n.tr("settings.connection.testing", "Testing...", comment: "Connection test button while loading")
+                                    : L10n.tr("settings.connection.test", "Test Connection", comment: "Connection test button"),
                                 focus: .testConnection,
                                 disabled: testInProgress
                             ) {
                                 testImmichConnection()
                             }
                         }
-                        Text("Changes save automatically when values are valid.")
+                        Text(L10n.tr("settings.autosave_hint", "Changes save automatically when values are valid.", comment: "Settings auto-save helper text"))
                             .font(.caption)
                             .foregroundStyle(.white.opacity(0.68))
                         if !testMessage.isEmpty {
@@ -300,20 +329,20 @@ struct SetupView: View {
                 HStack(alignment: .top, spacing: 24) {
                     card {
                         VStack(alignment: .leading, spacing: 14) {
-                            sectionHeading("Playback")
-                            labeledField("Minimum Duration (seconds)", placeholder: "10", text: $minDuration, focus: .minDuration)
-                            labeledField("Random Batch Size", placeholder: "20", text: $randomBatchSize, focus: .randomBatchSize)
-                            choiceRow("Order", value: playbackOrderDisplayValue, focus: .playbackOrder) {
+                            sectionHeading(L10n.tr("playback.section", "Playback", comment: "Playback settings section title"))
+                            labeledField(L10n.tr("playback.minimum_duration", "Minimum Duration (seconds)", comment: "Playback setting label"), placeholder: "10", text: $minDuration, focus: .minDuration)
+                            labeledField(L10n.tr("playback.random_batch_size", "Random Batch Size", comment: "Playback setting label"), placeholder: "20", text: $randomBatchSize, focus: .randomBatchSize)
+                            choiceRow(L10n.tr("playback.order", "Order", comment: "Playback setting label"), value: playbackOrderDisplayValue, focus: .playbackOrder) {
                                 cyclePlaybackOrder()
                             }
-                            choiceRow("Picture Quality", value: playbackQualityDisplayValue, focus: .playbackQuality) {
+                            choiceRow(L10n.tr("playback.picture_quality", "Picture Quality", comment: "Playback setting label"), value: playbackQualityDisplayValue, focus: .playbackQuality) {
                                 cyclePlaybackQuality()
                             }
-                            booleanPicker("Show Month/Year + Location", isOn: $showDateLocationOverlay, focus: .showDateLocationOverlay)
-                            booleanPicker("Show People In Overlay", isOn: $showPeopleOverlay, focus: .showPeopleOverlay)
-                            booleanPicker("Only Favorites", isOn: $onlyFavorites, focus: .onlyFavorites)
+                            booleanPicker(L10n.tr("playback.overlay_date_location", "Show Month/Year + Location", comment: "Playback setting label"), isOn: $showDateLocationOverlay, focus: .showDateLocationOverlay)
+                            booleanPicker(L10n.tr("playback.overlay_people", "Show People In Overlay", comment: "Playback setting label"), isOn: $showPeopleOverlay, focus: .showPeopleOverlay)
+                            booleanPicker(L10n.tr("playback.only_favorites", "Only Favorites", comment: "Playback setting label"), isOn: $onlyFavorites, focus: .onlyFavorites)
                             if onResetPlaybackProgress != nil {
-                                actionButton("Reset Playback Progress", focus: .resetPlayback) {
+                                actionButton(L10n.tr("playback.reset_progress", "Reset Playback Progress", comment: "Reset playback progress action"), focus: .resetPlayback) {
                                     onResetPlaybackProgress?()
                                 }
                             }
@@ -322,20 +351,24 @@ struct SetupView: View {
 
                     card {
                         VStack(alignment: .leading, spacing: 14) {
-                            sectionHeading("Smooth Channel")
-                            booleanPicker("Crossfade Enabled", isOn: $crossfadeEnabled, focus: .crossfadeEnabled)
-                            labeledField("Crossfade Duration (ms)", placeholder: "450", text: $crossfadeDuration, focus: .crossfadeDuration)
-                            labeledField("Preload Seconds Before End", placeholder: "4", text: $preloadSeconds, focus: .preloadSeconds)
-                            labeledField("Queue Target Size", placeholder: "2", text: $queueTarget, focus: .queueTarget)
+                            sectionHeading(L10n.tr("playback.smooth_channel.section", "Smooth Channel", comment: "Smooth playback section title"))
+                            booleanPicker(L10n.tr("playback.crossfade_enabled", "Crossfade Enabled", comment: "Playback setting label"), isOn: $crossfadeEnabled, focus: .crossfadeEnabled)
+                            labeledField(L10n.tr("playback.crossfade_duration_ms", "Crossfade Duration (ms)", comment: "Playback setting label"), placeholder: "450", text: $crossfadeDuration, focus: .crossfadeDuration)
+                            labeledField(L10n.tr("playback.preload_seconds", "Preload Seconds Before End", comment: "Playback setting label"), placeholder: "4", text: $preloadSeconds, focus: .preloadSeconds)
+                            labeledField(L10n.tr("playback.queue_target", "Queue Target Size", comment: "Playback setting label"), placeholder: "2", text: $queueTarget, focus: .queueTarget)
                         }
                     }
                 }
 
                 card {
                     VStack(alignment: .leading, spacing: 16) {
-                        sectionHeading("Feedback")
+                        sectionHeading(L10n.tr("feedback.section", "Feedback", comment: "Feedback section title"))
 
-                        Text("We love making this app better for our users. If you have suggestions, bug reports, or feature ideas, we want to hear them.")
+                        Text(L10n.tr(
+                            "feedback.section.description",
+                            "We love making this app better for our users. If you have suggestions, bug reports, or feature ideas, we want to hear them.",
+                            comment: "Feedback section description"
+                        ))
                             .font(.body)
                             .foregroundStyle(.white.opacity(0.82))
                             .fixedSize(horizontal: false, vertical: true)
@@ -344,34 +377,34 @@ struct SetupView: View {
                             FeedbackView(config: configStore.config)
                         } label: {
                             detailedSettingRowLabel(
-                                "Send Feedback",
-                                subtitle: "Scan a QR code to report a bug or request a feature",
-                                value: "Open",
+                                L10n.tr("feedback.title", "Send Feedback", comment: "Feedback screen title"),
+                                subtitle: L10n.tr("feedback.open.subtitle", "Scan a QR code to report a bug or request a feature", comment: "Feedback row subtitle"),
+                                value: L10n.tr("common.open", "Open", comment: "Generic open action"),
                                 isFocused: focusedSetting == .sendFeedback
                             )
                         }
                         .buttonStyle(.plain)
                         .focused($focusedSetting, equals: .sendFeedback)
 
-                        booleanPicker("Include Diagnostics In Feedback", isOn: $includeDiagnosticsInFeedback, focus: .includeDiagnosticsInFeedback)
+                        booleanPicker(L10n.tr("feedback.include_diagnostics", "Include Diagnostics In Feedback", comment: "Feedback setting toggle"), isOn: $includeDiagnosticsInFeedback, focus: .includeDiagnosticsInFeedback)
                     }
                 }
 
                 HStack(alignment: .top, spacing: 24) {
                     card {
                         VStack(alignment: .leading, spacing: 14) {
-                            sectionHeading("Local Cache")
-                            booleanPicker("Use SQLite Cache", isOn: $useSQLiteCache, focus: .useSQLiteCache)
-                            booleanPicker("Sync On Startup", isOn: $syncOnStartup, focus: .syncOnStartup)
-                            labeledField("Sync Page Size", placeholder: "200", text: $syncPageSize, focus: .syncPageSize)
-                            labeledField("Sync Max Pages", placeholder: "200", text: $syncMaxPages, focus: .syncMaxPages)
+                            sectionHeading(L10n.tr("library.cache.section", "Local Cache", comment: "Local cache section title"))
+                            booleanPicker(L10n.tr("library.cache.use_sqlite", "Use SQLite Cache", comment: "Cache setting label"), isOn: $useSQLiteCache, focus: .useSQLiteCache)
+                            booleanPicker(L10n.tr("library.cache.sync_on_startup", "Sync On Startup", comment: "Cache setting label"), isOn: $syncOnStartup, focus: .syncOnStartup)
+                            labeledField(L10n.tr("library.cache.sync_page_size", "Sync Page Size", comment: "Cache setting label"), placeholder: "200", text: $syncPageSize, focus: .syncPageSize)
+                            labeledField(L10n.tr("library.cache.sync_max_pages", "Sync Max Pages", comment: "Cache setting label"), placeholder: "200", text: $syncMaxPages, focus: .syncMaxPages)
 
                             if syncIsSyncing != nil || syncLastSyncAt != nil {
                                 infoPillGroup(values: [
-                                    "Syncing: \(syncIsSyncing?.wrappedValue == true ? "yes" : "no")",
-                                    "Pages: \(syncPagesFetched?.wrappedValue ?? 0)",
-                                    "Rows: \(syncRowsUpserted?.wrappedValue ?? 0)",
-                                    "Last Sync: \(syncLastSyncAt?.wrappedValue ?? "-")"
+                                    String(format: L10n.tr("library.cache.syncing.value", "Syncing: %@", comment: "Current sync active state"), syncIsSyncing?.wrappedValue == true ? L10n.tr("common.yes", "yes", comment: "Yes value") : L10n.tr("common.no", "no", comment: "No value")),
+                                    String(format: L10n.tr("library.cache.pages.value", "Pages: %@", comment: "Sync pages value"), (syncPagesFetched?.wrappedValue ?? 0).formatted()),
+                                    String(format: L10n.tr("library.cache.rows.value", "Rows: %@", comment: "Sync rows value"), (syncRowsUpserted?.wrappedValue ?? 0).formatted()),
+                                    String(format: L10n.tr("library.cache.last_sync.value", "Last Sync: %@", comment: "Last sync timestamp value"), syncLastSyncAt?.wrappedValue ?? L10n.unknownDash)
                                 ])
                                 if let err = syncLastError?.wrappedValue, !err.isEmpty {
                                     Text(err)
@@ -380,7 +413,7 @@ struct SetupView: View {
                             }
 
                             if onForceSync != nil {
-                                actionButton("Force Sync Now", focus: .forceSync, disabled: syncIsSyncing?.wrappedValue == true) {
+                                actionButton(L10n.tr("library.cache.force_sync_now", "Force Sync Now", comment: "Force sync action"), focus: .forceSync, disabled: syncIsSyncing?.wrappedValue == true) {
                                     onForceSync?()
                                 }
                             }
@@ -389,7 +422,7 @@ struct SetupView: View {
 
                     card {
                         VStack(alignment: .leading, spacing: 14) {
-                            sectionHeading("Tools")
+                            sectionHeading(L10n.tr("settings.tools.section", "Tools", comment: "Tools section title"))
                             NavigationLink {
                                 LibraryStatsView(
                                     onRefreshStats: onRefreshStats,
@@ -416,20 +449,24 @@ struct SetupView: View {
                                     statsLastError: statsLastError
                                 )
                             } label: {
-                                settingRowLabel("Open Library Stats", value: "View", isFocused: focusedSetting == .openLibraryStats)
+                                settingRowLabel(
+                                    L10n.tr("library.stats.open", "Open Library Stats", comment: "Open library stats action"),
+                                    value: L10n.tr("common.view", "View", comment: "Generic view action"),
+                                    isFocused: focusedSetting == .openLibraryStats
+                                )
                             }
                             .buttonStyle(.plain)
                             .focused($focusedSetting, equals: .openLibraryStats)
 
-                            booleanPicker("Debug Logging", isOn: $debugEnabled, focus: .debugLogging)
+                            booleanPicker(L10n.tr("settings.debug_logging", "Debug Logging", comment: "Debug logging toggle"), isOn: $debugEnabled, focus: .debugLogging)
 
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("About")
+                                Text(L10n.tr("about.section", "About", comment: "About section title"))
                                     .font(.headline)
-                                aboutRow("Maintained By", value: "bananasystems.co.uk")
+                                aboutRow(L10n.tr("about.maintained_by", "Maintained By", comment: "About row label"), value: "bananasystems.co.uk")
                                 Link("zedster/ImmichVideoSlideshow", destination: URL(string: "https://github.com/zedster/ImmichVideoSlideshow")!)
                                     .font(.caption)
-                                aboutRow("Build", value: buildNumber)
+                                aboutRow(L10n.tr("about.build", "Build", comment: "Build label in about section"), value: buildNumber)
                             }
                             .padding(.top, 8)
                         }
@@ -509,7 +546,11 @@ struct SetupView: View {
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if requireCredentials && (trimmedURL.isEmpty || trimmedKey.isEmpty) {
-            validationError = "Immich URL and API key are required."
+            validationError = L10n.tr(
+                "errors.settings.missing_url_or_key",
+                "Immich URL and API key are required.",
+                comment: "Validation error when connection details are missing"
+            )
             return nil
         }
 
@@ -520,7 +561,11 @@ struct SetupView: View {
               let queueValue = Int(queueTarget), queueValue > 0,
               let syncPageValue = Int(syncPageSize), syncPageValue > 0,
               let syncMaxValue = Int(syncMaxPages), syncMaxValue > 0 else {
-            validationError = "Please enter valid numeric values."
+            validationError = L10n.tr(
+                "errors.settings.invalid_numeric_values",
+                "Please enter valid numeric values.",
+                comment: "Validation error when numeric settings are invalid"
+            )
             return nil
         }
 
@@ -590,7 +635,11 @@ struct SetupView: View {
 
         guard !trimmedURL.isEmpty, !trimmedKey.isEmpty else {
             testFailed = true
-            testMessage = "Enter your server URL and API key first."
+            testMessage = L10n.tr(
+                "errors.connection.enter_url_and_key_first",
+                "Enter your server URL and API key first.",
+                comment: "Message shown before testing connection without required fields"
+            )
             return
         }
 
@@ -609,12 +658,20 @@ struct SetupView: View {
                 await MainActor.run {
                     persistImmichCredentialsFromInputs()
                     testFailed = false
-                    testMessage = "Connection successful. Server URL and API key saved."
+                    testMessage = L10n.tr(
+                        "settings.connection.test.success",
+                        "Connection successful. Server URL and API key saved.",
+                        comment: "Message shown when test connection succeeds"
+                    )
                 }
             } catch {
                 await MainActor.run {
                     testFailed = true
-                    testMessage = "Connection failed: \(error.localizedDescription)"
+                    testMessage = String(format: L10n.tr(
+                        "errors.connection.test_failed_with_reason",
+                        "Connection failed: %@",
+                        comment: "Connection test failure message with reason"
+                    ), error.localizedDescription)
                 }
             }
 
@@ -718,7 +775,7 @@ struct SetupView: View {
         Button {
             isOn.wrappedValue.toggle()
         } label: {
-            settingRowLabel(label, value: isOn.wrappedValue ? "On" : "Off", isFocused: isFocused)
+            settingRowLabel(label, value: L10n.onOff(isOn.wrappedValue), isFocused: isFocused)
         }
         .buttonStyle(.plain)
         .focused($focusedSetting, equals: focus)
@@ -833,30 +890,30 @@ struct SetupView: View {
     private var buildNumber: String {
         let value = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
         let trimmed = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "-" : trimmed
+        return trimmed.isEmpty ? L10n.unknownDash : trimmed
     }
 
     private var playbackOrderDisplayValue: String {
         switch playbackOrder {
         case "sequential_oldest":
-            return "Sequential Oldest -> Newest"
+            return L10n.tr("playback.order.sequential_oldest", "Sequential Oldest -> Newest", comment: "Playback order value")
         case "sequential_newest":
-            return "Sequential Newest -> Oldest"
+            return L10n.tr("playback.order.sequential_newest", "Sequential Newest -> Oldest", comment: "Playback order value")
         default:
-            return "Random"
+            return L10n.tr("playback.order.random", "Random", comment: "Playback order value")
         }
     }
 
     private var playbackQualityDisplayValue: String {
         switch playbackQuality {
         case "high":
-            return "High"
+            return L10n.tr("playback.quality.high", "High", comment: "Playback quality value")
         case "medium":
-            return "Medium"
+            return L10n.tr("playback.quality.medium", "Medium", comment: "Playback quality value")
         case "low":
-            return "Low"
+            return L10n.tr("playback.quality.low", "Low", comment: "Playback quality value")
         default:
-            return "Auto"
+            return L10n.tr("playback.quality.auto", "Auto", comment: "Playback quality value")
         }
     }
 
@@ -929,76 +986,84 @@ private struct LibraryStatsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 30) {
                     VStack(alignment: .leading, spacing: 14) {
-                        Text("Library Stats")
+                        Text(L10n.tr("library.stats.title", "Library Stats", comment: "Library stats screen title"))
                             .font(.system(size: 42, weight: .bold, design: .rounded))
-                        Text("Stats are calculated from the local SQLite cache.")
+                        Text(L10n.tr(
+                            "library.stats.subtitle",
+                            "Stats are calculated from the local SQLite cache.",
+                            comment: "Library stats subtitle"
+                        ))
                             .font(.title3)
                             .foregroundStyle(.white.opacity(0.72))
                     }
                     .padding(.top, 10)
 
-                    focusSection(.totals, title: "Totals") {
+                    focusSection(.totals, title: L10n.tr("library.stats.section.totals", "Totals", comment: "Library stats section title")) {
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 18) {
                             summaryTile(
-                                "Total Videos",
+                                L10n.tr("library.stats.total_videos", "Total Videos", comment: "Library stats metric label"),
                                 value: "\(statsTotalVideos?.wrappedValue ?? 0)",
                                 detail: formattedDuration(statsTotalVideoDuration?.wrappedValue ?? 0)
                             )
                             summaryTile(
-                                "Total Watched Plays",
+                                L10n.tr("library.stats.total_watched_plays", "Total Watched Plays", comment: "Library stats metric label"),
                                 value: "\(statsTotalWatchedPlays?.wrappedValue ?? 0)",
                                 detail: formattedDuration(statsTotalWatchedDuration?.wrappedValue ?? 0)
                             )
                         }
                     }
 
-                    focusSection(.activity, title: "Viewing Activity") {
+                    focusSection(.activity, title: L10n.tr("library.stats.section.activity", "Viewing Activity", comment: "Library stats section title")) {
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 18) {
-                            summaryTile("Watched In 7 Days", value: "\(statsWatchedPlays7Days?.wrappedValue ?? 0)")
-                            summaryTile("Watched In 30 Days", value: "\(statsWatchedPlays30Days?.wrappedValue ?? 0)")
-                            summaryTile("Watched At Least Once", value: "\(statsVideosWatchedAtLeastOnce?.wrappedValue ?? 0)")
-                            summaryTile("Current Session", value: "\(sessionVideosWatchedCount?.wrappedValue ?? 0)")
+                            summaryTile(L10n.tr("library.stats.watched_7_days", "Watched In 7 Days", comment: "Library stats metric label"), value: "\(statsWatchedPlays7Days?.wrappedValue ?? 0)")
+                            summaryTile(L10n.tr("library.stats.watched_30_days", "Watched In 30 Days", comment: "Library stats metric label"), value: "\(statsWatchedPlays30Days?.wrappedValue ?? 0)")
+                            summaryTile(L10n.tr("library.stats.watched_at_least_once", "Watched At Least Once", comment: "Library stats metric label"), value: "\(statsVideosWatchedAtLeastOnce?.wrappedValue ?? 0)")
+                            summaryTile(L10n.tr("library.stats.current_session", "Current Session", comment: "Library stats metric label"), value: "\(sessionVideosWatchedCount?.wrappedValue ?? 0)")
                         }
                     }
 
-                    focusSection(.libraryState, title: "Library State") {
+                    focusSection(.libraryState, title: L10n.tr("library.stats.section.library_state", "Library State", comment: "Library stats section title")) {
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 18) {
-                            summaryTile("Favorites", value: "\(statsFavoritesCount?.wrappedValue ?? 0)")
-                            summaryTile("Hidden", value: "\(statsHiddenCount?.wrappedValue ?? 0)")
+                            summaryTile(L10n.tr("library.stats.favorites", "Favorites", comment: "Library stats metric label"), value: "\(statsFavoritesCount?.wrappedValue ?? 0)")
+                            summaryTile(L10n.tr("library.stats.hidden", "Hidden", comment: "Library stats metric label"), value: "\(statsHiddenCount?.wrappedValue ?? 0)")
                         }
                     }
 
-                    focusSection(.popular, title: "Most Popular") {
-                        detailRow("Camera", value: statsMostPopularCamera?.wrappedValue ?? "-")
-                        detailRow("Codec", value: statsMostPopularCodec?.wrappedValue ?? "-")
-                        detailRow("File Type", value: statsMostPopularFileType?.wrappedValue ?? "-")
-                        detailRow("Place", value: statsMostPopularPlace?.wrappedValue ?? "-")
-                        detailRow("Year", value: statsMostPopularYear?.wrappedValue ?? "-")
+                    focusSection(.popular, title: L10n.tr("library.stats.section.most_popular", "Most Popular", comment: "Library stats section title")) {
+                        detailRow(L10n.tr("library.stats.camera", "Camera", comment: "Library stats field label"), value: statsMostPopularCamera?.wrappedValue ?? L10n.unknownDash)
+                        detailRow(L10n.tr("library.stats.codec", "Codec", comment: "Library stats field label"), value: statsMostPopularCodec?.wrappedValue ?? L10n.unknownDash)
+                        detailRow(L10n.tr("library.stats.file_type", "File Type", comment: "Library stats field label"), value: statsMostPopularFileType?.wrappedValue ?? L10n.unknownDash)
+                        detailRow(L10n.tr("library.stats.place", "Place", comment: "Library stats field label"), value: statsMostPopularPlace?.wrappedValue ?? L10n.unknownDash)
+                        detailRow(L10n.tr("library.stats.year", "Year", comment: "Library stats field label"), value: statsMostPopularYear?.wrappedValue ?? L10n.unknownDash)
                     }
 
-                    focusSection(.topCameras, title: "Top Cameras") {
-                        rankedList(value: statsTopCamerasSummary?.wrappedValue ?? "-")
+                    focusSection(.topCameras, title: L10n.tr("library.stats.section.top_cameras", "Top Cameras", comment: "Library stats section title")) {
+                        rankedList(value: statsTopCamerasSummary?.wrappedValue ?? L10n.unknownDash)
                     }
 
-                    focusSection(.topCodecs, title: "Top Codecs") {
-                        rankedList(value: statsTopCodecsSummary?.wrappedValue ?? "-")
+                    focusSection(.topCodecs, title: L10n.tr("library.stats.section.top_codecs", "Top Codecs", comment: "Library stats section title")) {
+                        rankedList(value: statsTopCodecsSummary?.wrappedValue ?? L10n.unknownDash)
                     }
 
-                    focusSection(.topFileTypes, title: "Top File Types") {
-                        rankedList(value: statsTopFileTypesSummary?.wrappedValue ?? "-")
+                    focusSection(.topFileTypes, title: L10n.tr("library.stats.section.top_file_types", "Top File Types", comment: "Library stats section title")) {
+                        rankedList(value: statsTopFileTypesSummary?.wrappedValue ?? L10n.unknownDash)
                     }
 
-                    focusSection(.topPlaces, title: "Top Places") {
-                        rankedList(value: statsTopPlacesSummary?.wrappedValue ?? "-")
+                    focusSection(.topPlaces, title: L10n.tr("library.stats.section.top_places", "Top Places", comment: "Library stats section title")) {
+                        rankedList(value: statsTopPlacesSummary?.wrappedValue ?? L10n.unknownDash)
                     }
 
-                    focusSection(.topYears, title: "Top Years") {
-                        rankedList(value: statsTopYearsSummary?.wrappedValue ?? "-")
+                    focusSection(.topYears, title: L10n.tr("library.stats.section.top_years", "Top Years", comment: "Library stats section title")) {
+                        rankedList(value: statsTopYearsSummary?.wrappedValue ?? L10n.unknownDash)
                     }
 
                     if let err = statsLastError?.wrappedValue, !err.isEmpty {
-                        focusSection(.error, title: "Error", tint: Color.red.opacity(0.14)) {
-                            Text("Stats Error: \(err)")
+                        focusSection(.error, title: L10n.tr("errors.title", "Error", comment: "Error section title"), tint: Color.red.opacity(0.14)) {
+                            Text(String(format: L10n.tr(
+                                "errors.library.stats",
+                                "Stats Error: %@",
+                                comment: "Library stats error message with reason"
+                            ), err))
                                 .font(.title3)
                                 .foregroundStyle(.red)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -1019,7 +1084,7 @@ private struct LibraryStatsView: View {
                 }
             }
         }
-        .navigationTitle("Library Stats")
+        .navigationTitle(L10n.tr("library.stats.title", "Library Stats", comment: "Library stats navigation title"))
     }
 
     @ViewBuilder
@@ -1107,7 +1172,9 @@ private struct LibraryStatsView: View {
 
     private func expandedRows(from value: String) -> [String] {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed != "-" else { return ["No data"] }
+        guard !trimmed.isEmpty, trimmed != L10n.unknownDash else {
+            return [L10n.tr("library.stats.no_data", "No data", comment: "Fallback row when no ranked data exists")]
+        }
 
         let pattern = #".+? \(\d+\)(?:,|$)"#
         if let regex = try? NSRegularExpression(pattern: pattern) {
@@ -1130,17 +1197,11 @@ private struct LibraryStatsView: View {
     }
 
     private func formattedDuration(_ totalSeconds: Double) -> String {
-        let seconds = max(0, Int(totalSeconds.rounded()))
-        let days = seconds / 86_400
-        let hours = (seconds % 86_400) / 3_600
-        let minutes = (seconds % 3_600) / 60
-
-        if days > 0 {
-            return "\(days)d \(hours)h \(minutes)m"
-        }
-        if hours > 0 {
-            return "\(hours)h \(minutes)m"
-        }
-        return "\(minutes)m"
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = [.day, .hour, .minute]
+        formatter.unitsStyle = .abbreviated
+        formatter.maximumUnitCount = 3
+        formatter.zeroFormattingBehavior = [.dropLeading, .dropMiddle]
+        return formatter.string(from: max(0, totalSeconds)) ?? "0m"
     }
 }

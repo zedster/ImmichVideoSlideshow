@@ -21,89 +21,153 @@ enum WhatsNewContentProvider {
     static let entriesByVersion: [String: WhatsNewEntry] = [
         "2": WhatsNewEntry(
             version: "2",
-            title: "What's New",
-            subtitle: "Home Video Channel got a proper identity refresh and a cleaner setup experience.",
+            title: L10n.tr("whatsnew.common.title", "What's New", comment: "Title of the release notes screen"),
+            subtitle: L10n.tr(
+                "whatsnew.2.subtitle",
+                "Home Video Channel got a proper identity refresh and a cleaner setup experience.",
+                comment: "Subtitle for version 2 What's New entry"
+            ),
             items: [
                 WhatsNewItem(
                     icon: "tv.fill",
-                    title: "New app identity",
-                    description: "The app name, iconography, and presentation were refreshed around the new Home Video Channel branding."
+                    title: L10n.tr("whatsnew.2.item1.title", "New app identity", comment: "What's New item title"),
+                    description: L10n.tr(
+                        "whatsnew.2.item1.description",
+                        "The app name, iconography, and presentation were refreshed around the new Home Video Channel branding.",
+                        comment: "What's New item description"
+                    )
                 ),
                 WhatsNewItem(
                     icon: "wand.and.stars",
-                    title: "Cleaner overall experience",
-                    description: "This release focused on making the Apple TV app feel more polished and easier to navigate."
+                    title: L10n.tr("whatsnew.2.item2.title", "Cleaner overall experience", comment: "What's New item title"),
+                    description: L10n.tr(
+                        "whatsnew.2.item2.description",
+                        "This release focused on making the Apple TV app feel more polished and easier to navigate.",
+                        comment: "What's New item description"
+                    )
                 ),
                 WhatsNewItem(
                     icon: "play.rectangle.fill",
-                    title: "More living-room friendly",
-                    description: "Playback and navigation were shaped more around a simple lean-back TV experience."
+                    title: L10n.tr("whatsnew.2.item3.title", "More living-room friendly", comment: "What's New item title"),
+                    description: L10n.tr(
+                        "whatsnew.2.item3.description",
+                        "Playback and navigation were shaped more around a simple lean-back TV experience.",
+                        comment: "What's New item description"
+                    )
                 )
             ]
         ),
         "2.1": WhatsNewEntry(
             version: "2.1",
-            title: "What's New",
-            subtitle: "Setup and diagnostics got much easier from the sofa.",
+            title: L10n.tr("whatsnew.common.title", "What's New", comment: "Title of the release notes screen"),
+            subtitle: L10n.tr(
+                "whatsnew.2_1.subtitle",
+                "Setup and diagnostics got much easier from the sofa.",
+                comment: "Subtitle for version 2.1 What's New entry"
+            ),
             items: [
                 WhatsNewItem(
                     icon: "qrcode",
-                    title: "QR-guided setup",
-                    description: "The app added a friendlier setup flow with QR help so it is easier to get connected without typing everything on Apple TV."
+                    title: L10n.tr("whatsnew.2_1.item1.title", "QR-guided setup", comment: "What's New item title"),
+                    description: L10n.tr(
+                        "whatsnew.2_1.item1.description",
+                        "The app added a friendlier setup flow with QR help so it is easier to get connected without typing everything on Apple TV.",
+                        comment: "What's New item description"
+                    )
                 ),
                 WhatsNewItem(
                     icon: "gearshape.2.fill",
-                    title: "Nicer settings",
-                    description: "Settings were reorganized into a cleaner TV-first layout that is easier to scan and adjust."
+                    title: L10n.tr("whatsnew.2_1.item2.title", "Nicer settings", comment: "What's New item title"),
+                    description: L10n.tr(
+                        "whatsnew.2_1.item2.description",
+                        "Settings were reorganized into a cleaner TV-first layout that is easier to scan and adjust.",
+                        comment: "What's New item description"
+                    )
                 ),
                 WhatsNewItem(
                     icon: "chart.bar.xaxis",
-                    title: "Better debugging and stats",
-                    description: "Extra playback diagnostics landed to help track down high bitrate and library issues."
+                    title: L10n.tr("whatsnew.2_1.item3.title", "Better debugging and stats", comment: "What's New item title"),
+                    description: L10n.tr(
+                        "whatsnew.2_1.item3.description",
+                        "Extra playback diagnostics landed to help track down high bitrate and library issues.",
+                        comment: "What's New item description"
+                    )
                 )
             ]
         ),
         "2.2": WhatsNewEntry(
             version: "2.2",
-            title: "What's New",
-            subtitle: "Playback and library tools became more reliable and easier to use.",
+            title: L10n.tr("whatsnew.common.title", "What's New", comment: "Title of the release notes screen"),
+            subtitle: L10n.tr(
+                "whatsnew.2_2.subtitle",
+                "Playback and library tools became more reliable and easier to use.",
+                comment: "Subtitle for version 2.2 What's New entry"
+            ),
             items: [
                 WhatsNewItem(
                     icon: "list.bullet.rectangle.portrait",
-                    title: "Improved library stats",
-                    description: "The library stats screen was cleaned up and fixed so it scrolls properly and surfaces more useful viewing info."
+                    title: L10n.tr("whatsnew.2_2.item1.title", "Improved library stats", comment: "What's New item title"),
+                    description: L10n.tr(
+                        "whatsnew.2_2.item1.description",
+                        "The library stats screen was cleaned up and fixed so it scrolls properly and surfaces more useful viewing info.",
+                        comment: "What's New item description"
+                    )
                 ),
                 WhatsNewItem(
                     icon: "slider.horizontal.3",
-                    title: "Playback control fixes",
-                    description: "The video seeker and related focus behavior were refined so playback controls feel more predictable on the Siri Remote."
+                    title: L10n.tr("whatsnew.2_2.item2.title", "Playback control fixes", comment: "What's New item title"),
+                    description: L10n.tr(
+                        "whatsnew.2_2.item2.description",
+                        "The video seeker and related focus behavior were refined so playback controls feel more predictable on the Siri Remote.",
+                        comment: "What's New item description"
+                    )
                 ),
                 WhatsNewItem(
                     icon: "hammer.fill",
-                    title: "Stability improvements",
-                    description: "This release focused on reliability work across settings, stats, and everyday playback."
+                    title: L10n.tr("whatsnew.2_2.item3.title", "Stability improvements", comment: "What's New item title"),
+                    description: L10n.tr(
+                        "whatsnew.2_2.item3.description",
+                        "This release focused on reliability work across settings, stats, and everyday playback.",
+                        comment: "What's New item description"
+                    )
                 )
             ]
         ),
-        "2.4": WhatsNewEntry(
-            version: "2.4",
-            title: "What's New",
-            subtitle: "A bigger upgrade for channels, feedback, and metadata-rich playback.",
+        "2.5": WhatsNewEntry(
+            version: "2.5",
+            title: L10n.tr("whatsnew.common.title", "What's New", comment: "Title of the release notes screen"),
+            subtitle: L10n.tr(
+                "whatsnew.2_5.subtitle",
+                "A bigger upgrade for channels, feedback, and metadata-rich playback.",
+                comment: "Subtitle for version 2.5 What's New entry"
+            ),
             items: [
                 WhatsNewItem(
                     icon: "square.grid.2x2.fill",
-                    title: "Smarter channel tabs",
-                    description: "Browse channels by time and place, then switch across albums and people right from the selector."
+                    title: L10n.tr("whatsnew.2_5.item1.title", "Smarter channel tabs", comment: "What's New item title"),
+                    description: L10n.tr(
+                        "whatsnew.2_5.item1.description",
+                        "Browse channels by time and place, then switch across albums and people right from the selector.",
+                        comment: "What's New item description"
+                    )
                 ),
                 WhatsNewItem(
                     icon: "person.2.crop.square.stack.fill",
-                    title: "Richer synced metadata",
-                    description: "Album and people data now sync from Immich, with better artwork, people labels, and more useful browsing context."
+                    title: L10n.tr("whatsnew.2_5.item2.title", "Richer synced metadata", comment: "What's New item title"),
+                    description: L10n.tr(
+                        "whatsnew.2_5.item2.description",
+                        "Album and people data now sync from Immich, with better artwork, people labels, and more useful browsing context.",
+                        comment: "What's New item description"
+                    )
                 ),
                 WhatsNewItem(
                     icon: "qrcode",
-                    title: "QR feedback and polish",
-                    description: "Send feedback from your phone with the new QR screen, plus a round of playback, focus, and stability fixes."
+                    title: L10n.tr("whatsnew.2_5.item3.title", "QR feedback and polish", comment: "What's New item title"),
+                    description: L10n.tr(
+                        "whatsnew.2_5.item3.description",
+                        "Send feedback from your phone with the new QR screen, plus a round of playback, focus, and stability fixes.",
+                        comment: "What's New item description"
+                    )
                 )
             ]
         )
