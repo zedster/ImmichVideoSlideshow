@@ -1,11 +1,17 @@
 import SwiftUI
 
 struct SupportAppView: View {
+    private enum SectionID: Hashable {
+        case support
+        case details
+    }
+
     private let supportBaseURL = URL(string: "https://bananasystems.co.uk/home-video-channel/support")!
     private let supportDisplayURL = "bananasystems.co.uk/home-video-channel/support"
 
     // Keep this easy to disable if you only want a plain URL QR.
     private let includeTrackingParameters = true
+    @FocusState private var focusedSection: SectionID?
 
     private var supportURL: URL {
         guard includeTrackingParameters else { return supportBaseURL }
@@ -64,91 +70,114 @@ struct SupportAppView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 30) {
-                VStack(spacing: 12) {
-                    Text(L10n.tr(
-                        "support.title",
-                        "Support the App",
-                        comment: "Support screen title"
-                    ))
-                    .font(.system(size: 52, weight: .bold, design: .rounded))
-                    .multilineTextAlignment(.center)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 30) {
+                    supportSection(.support) {
+                        HStack(alignment: .center, spacing: 34) {
+                            QRCodeView(
+                                value: supportURL.absoluteString,
+                                size: 360,
+                                accessibilityLabelText: L10n.tr(
+                                    "support.qr.accessibility_label",
+                                    "Support QR code",
+                                    comment: "Accessibility label for the support QR code"
+                                )
+                            )
 
-                    Text(L10n.tr(
-                        "support.description.primary",
-                        "If you've enjoyed Home Video Channel, you can support development by scanning this QR code on your phone.",
-                        comment: "Primary support screen description"
-                    ))
-                    .font(.title3.weight(.medium))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.white.opacity(0.84))
-                    .frame(maxWidth: 980)
+                            VStack(alignment: .leading, spacing: 18) {
+                                Text(L10n.tr(
+                                    "support.title",
+                                    "Support the App",
+                                    comment: "Support screen title"
+                                ))
+                                    .font(.system(size: 52, weight: .bold, design: .rounded))
 
-                    Text(L10n.tr(
-                        "support.description.secondary",
-                        "Your support helps fund updates and future features.",
-                        comment: "Secondary support screen description"
-                    ))
-                    .font(.headline)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.white.opacity(0.76))
-                }
+                                Text(L10n.tr(
+                                    "support.description.primary",
+                                    "If you've enjoyed Home Video Channel, you can support development by scanning this QR code on your phone.",
+                                    comment: "Primary support screen description"
+                                ))
+                                    .font(.title3.weight(.medium))
+                                    .multilineTextAlignment(.leading)
+                                    .foregroundStyle(.white.opacity(0.84))
 
-                VStack(spacing: 16) {
-                    QRCodeView(
-                        value: supportURL.absoluteString,
-                        size: 420,
-                        accessibilityLabelText: L10n.tr(
-                            "support.qr.accessibility_label",
-                            "Support QR code",
-                            comment: "Accessibility label for the support QR code"
-                        )
-                    )
+                                Text(L10n.tr(
+                                    "support.description.secondary",
+                                    "Your support helps fund updates and future features.",
+                                    comment: "Secondary support screen description"
+                                ))
+                                    .font(.headline)
+                                    .multilineTextAlignment(.leading)
+                                    .foregroundStyle(.white.opacity(0.76))
 
-                    VStack(spacing: 8) {
-                        Text(L10n.tr(
-                            "support.fallback_url.label",
-                            "Support URL",
-                            comment: "Label shown above support fallback URL"
-                        ))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.66))
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text(L10n.tr(
+                                        "support.fallback_url.label",
+                                        "Support URL",
+                                        comment: "Label shown above support fallback URL"
+                                    ))
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.white.opacity(0.66))
 
-                        Text(supportDisplayURL)
-                            .font(.system(size: 24, weight: .semibold, design: .monospaced))
-                            .multilineTextAlignment(.center)
-                            .foregroundStyle(.white.opacity(0.94))
+                                    Text(supportDisplayURL)
+                                        .font(.system(size: 24, weight: .semibold, design: .monospaced))
+                                        .multilineTextAlignment(.leading)
+                                        .foregroundStyle(.white.opacity(0.94))
 
-                        Text(L10n.tr(
-                            "support.secure_note",
-                            "This opens a secure support page on your phone.",
-                            comment: "Note below support fallback URL"
-                        ))
-                        .font(.caption)
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(.white.opacity(0.72))
+                                    Text(L10n.tr(
+                                        "support.secure_note",
+                                        "This opens a secure support page on your phone.",
+                                        comment: "Note below support fallback URL"
+                                    ))
+                                        .font(.caption)
+                                        .multilineTextAlignment(.leading)
+                                        .foregroundStyle(.white.opacity(0.72))
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
-                }
-                .padding(28)
-                .frame(maxWidth: 760)
-                .background(
-                    RoundedRectangle(cornerRadius: 30, style: .continuous)
-                        .fill(Color.white.opacity(0.09))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                                .stroke(Color.white.opacity(0.10), lineWidth: 1)
-                        )
-                )
-                .shadow(color: Color.black.opacity(0.20), radius: 24, y: 10)
+                    .frame(maxWidth: 1040)
 
-                Text(versionSummary)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.white.opacity(0.62))
+                    supportSection(.details) {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Support Details")
+                                .font(.title3.weight(.semibold))
+
+                            VStack(alignment: .leading, spacing: 14) {
+                                detailRow(
+                                    title: "App Version",
+                                    value: versionSummary
+                                )
+                                detailRow(
+                                    title: "Support URL",
+                                    value: supportDisplayURL
+                                )
+                                detailRow(
+                                    title: "How it works",
+                                    value: "Scan the QR code with your phone to open the support page and contribute there."
+                                )
+                            }
+                        }
+                    }
+                    .frame(maxWidth: 980)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 56)
+                .padding(.vertical, 40)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 56)
-            .padding(.vertical, 40)
+            .onAppear {
+                if focusedSection == nil {
+                    focusedSection = .support
+                }
+            }
+            .onChange(of: focusedSection) { target in
+                guard let target else { return }
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    proxy.scrollTo(target, anchor: .center)
+                }
+            }
         }
         .background(backgroundGradient.ignoresSafeArea())
         .navigationTitle(L10n.tr(
@@ -168,6 +197,59 @@ struct SupportAppView: View {
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
+    }
+
+    @ViewBuilder
+    private func supportSection<Content: View>(_ id: SectionID, @ViewBuilder content: () -> Content) -> some View {
+        let isFocused = focusedSection == id
+
+        supportCard {
+            content()
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .stroke(isFocused ? Color.white.opacity(0.92) : Color.white.opacity(0.10), lineWidth: isFocused ? 3 : 1)
+        )
+        .scaleEffect(isFocused ? 1.02 : 1.0)
+        .shadow(color: Color.black.opacity(isFocused ? 0.30 : 0.18), radius: isFocused ? 30 : 24, y: 10)
+        .animation(.easeInOut(duration: 0.18), value: isFocused)
+        .focusable(true)
+        .focused($focusedSection, equals: id)
+        .id(id)
+    }
+
+    @ViewBuilder
+    private func supportCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding(30)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .fill(Color.white.opacity(0.09))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 30, style: .continuous)
+                            .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                    )
+            )
+            .shadow(color: Color.black.opacity(0.18), radius: 24, y: 10)
+    }
+
+    @ViewBuilder
+    private func detailRow(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.64))
+            Text(value)
+                .font(.headline)
+                .foregroundStyle(.white.opacity(0.92))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 16)
+        .background(Color.white.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     private func nonEmpty(_ value: String) -> String? {
