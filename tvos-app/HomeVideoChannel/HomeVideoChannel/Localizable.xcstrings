@@ -9163,8 +9163,8 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Stability improvements"
+            "state" : "translated",
+            "value" : "Stabilitätsverbesserungen"
           }
         },
         "en" : {
@@ -9175,20 +9175,20 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Stability improvements"
+            "state" : "translated",
+            "value" : "Mejoras de estabilidad"
           }
         },
         "fr" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Stability improvements"
+            "state" : "translated",
+            "value" : "Améliorations de stabilité"
           }
         },
         "ja" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Stability improvements"
+            "state" : "translated",
+            "value" : "安定性の向上"
           }
         }
       }
@@ -9199,8 +9199,8 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Playback and library tools became more reliable and easier to use."
+            "state" : "translated",
+            "value" : "Wiedergabe und Bibliothekswerkzeuge wurden zuverlässiger und einfacher zu bedienen."
           }
         },
         "en" : {
@@ -9211,20 +9211,20 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Playback and library tools became more reliable and easier to use."
+            "state" : "translated",
+            "value" : "La reproducción y las herramientas de biblioteca ahora son más fiables y fáciles de usar."
           }
         },
         "fr" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Playback and library tools became more reliable and easier to use."
+            "state" : "translated",
+            "value" : "La lecture et les outils de bibliothèque sont devenus plus fiables et plus simples à utiliser."
           }
         },
         "ja" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Playback and library tools became more reliable and easier to use."
+            "state" : "translated",
+            "value" : "再生機能とライブラリツールの信頼性と使いやすさが向上しました。"
           }
         }
       }
@@ -9235,8 +9235,8 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Browse channels by time and place, then switch across albums and people right from the selector."
+            "state" : "translated",
+            "value" : "Durchsuche Kanäle nach Zeit und Ort und wechsle direkt im Auswahlmenü zwischen Alben und Personen."
           }
         },
         "en" : {
@@ -9247,20 +9247,20 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Browse channels by time and place, then switch across albums and people right from the selector."
+            "state" : "translated",
+            "value" : "Explora canales por fecha y lugar y cambia entre álbumes y personas directamente desde el selector."
           }
         },
         "fr" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Browse channels by time and place, then switch across albums and people right from the selector."
+            "state" : "translated",
+            "value" : "Parcourez les chaînes par date et lieu, puis passez aux albums et aux personnes directement depuis le sélecteur."
           }
         },
         "ja" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Browse channels by time and place, then switch across albums and people right from the selector."
+            "state" : "translated",
+            "value" : "日時や場所でチャンネルを選び、セレクターからそのままアルバムや人物にも切り替えられます。"
           }
         }
       }
@@ -9271,8 +9271,8 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Smarter channel tabs"
+            "state" : "translated",
+            "value" : "Intelligentere Kanaltabs"
           }
         },
         "en" : {
@@ -9283,20 +9283,20 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Smarter channel tabs"
+            "state" : "translated",
+            "value" : "Pestañas de canal más inteligentes"
           }
         },
         "fr" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Smarter channel tabs"
+            "state" : "translated",
+            "value" : "Onglets de chaînes plus intelligents"
           }
         },
         "ja" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Smarter channel tabs"
+            "state" : "translated",
+            "value" : "より使いやすいチャンネルタブ"
           }
         }
       }
@@ -9307,8 +9307,8 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Album and people data now sync from Immich, with better artwork, people labels, and more useful browsing context."
+            "state" : "translated",
+            "value" : "Album- und Personendaten werden jetzt aus Immich synchronisiert, mit besserem Artwork, Personenbeschriftungen und nützlicherem Browsing-Kontext."
           }
         },
         "en" : {
@@ -9319,20 +9319,20 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Album and people data now sync from Immich, with better artwork, people labels, and more useful browsing context."
+            "state" : "translated",
+            "value" : "Los datos de álbumes y personas ahora se sincronizan desde Immich, con mejor arte, etiquetas de personas y un contexto de exploración más útil."
           }
         },
         "fr" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Album and people data now sync from Immich, with better artwork, people labels, and more useful browsing context."
+            "state" : "translated",
+            "value" : "Les données d’albums et de personnes se synchronisent désormais depuis Immich, avec de meilleurs visuels, libellés et contexte de navigation."
           }
         },
         "ja" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Album and people data now sync from Immich, with better artwork, people labels, and more useful browsing context."
+            "state" : "translated",
+            "value" : "アルバムと人物のデータを Immich から同期し、アートワークや人物ラベル、閲覧時の情報が改善されました。"
           }
         }
       }
@@ -9343,8 +9343,8 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Richer synced metadata"
+            "state" : "translated",
+            "value" : "Umfangreichere synchronisierte Metadaten"
           }
         },
         "en" : {
@@ -9355,20 +9355,20 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Richer synced metadata"
+            "state" : "translated",
+            "value" : "Metadatos sincronizados más completos"
           }
         },
         "fr" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Richer synced metadata"
+            "state" : "translated",
+            "value" : "Métadonnées synchronisées enrichies"
           }
         },
         "ja" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Richer synced metadata"
+            "state" : "translated",
+            "value" : "より豊富な同期メタデータ"
           }
         }
       }
@@ -9379,8 +9379,8 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Send feedback from your phone with the new QR screen, plus a round of playback, focus, and stability fixes."
+            "state" : "translated",
+            "value" : "Sende Feedback vom Handy über den neuen QR-Bildschirm, zusätzlich zu einer Runde von Wiedergabe-, Fokus- und Stabilitätsverbesserungen."
           }
         },
         "en" : {
@@ -9391,20 +9391,20 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Send feedback from your phone with the new QR screen, plus a round of playback, focus, and stability fixes."
+            "state" : "translated",
+            "value" : "Envía comentarios desde tu teléfono con la nueva pantalla QR, junto con una ronda de mejoras de reproducción, enfoque y estabilidad."
           }
         },
         "fr" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Send feedback from your phone with the new QR screen, plus a round of playback, focus, and stability fixes."
+            "state" : "translated",
+            "value" : "Envoyez des retours depuis votre téléphone avec le nouvel écran QR, avec en plus des améliorations de lecture, de focus et de stabilité."
           }
         },
         "ja" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Send feedback from your phone with the new QR screen, plus a round of playback, focus, and stability fixes."
+            "state" : "translated",
+            "value" : "新しい QR 画面からスマートフォンでフィードバックを送れるようになり、再生・フォーカス・安定性も改善しました。"
           }
         }
       }
@@ -9415,8 +9415,8 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "QR feedback and polish"
+            "state" : "translated",
+            "value" : "QR-Feedback und Feinschliff"
           }
         },
         "en" : {
@@ -9427,20 +9427,20 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "QR feedback and polish"
+            "state" : "translated",
+            "value" : "Comentarios por QR y pulido"
           }
         },
         "fr" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "QR feedback and polish"
+            "state" : "translated",
+            "value" : "Retour QR et finitions"
           }
         },
         "ja" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "QR feedback and polish"
+            "state" : "translated",
+            "value" : "QRフィードバックと仕上げ改善"
           }
         }
       }
@@ -9451,8 +9451,8 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "A bigger upgrade for channels, feedback, and metadata-rich playback."
+            "state" : "translated",
+            "value" : "Ein größeres Upgrade für Kanäle, Feedback und metadatenreiche Wiedergabe."
           }
         },
         "en" : {
@@ -9463,20 +9463,20 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "A bigger upgrade for channels, feedback, and metadata-rich playback."
+            "state" : "translated",
+            "value" : "Una actualización importante para canales, comentarios y reproducción con más metadatos."
           }
         },
         "fr" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "A bigger upgrade for channels, feedback, and metadata-rich playback."
+            "state" : "translated",
+            "value" : "Une mise à jour plus importante pour les chaînes, les retours et une lecture enrichie en métadonnées."
           }
         },
         "ja" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "A bigger upgrade for channels, feedback, and metadata-rich playback."
+            "state" : "translated",
+            "value" : "チャンネル、フィードバック、メタデータ豊富な再生体験を大きく強化したアップデートです。"
           }
         }
       }
