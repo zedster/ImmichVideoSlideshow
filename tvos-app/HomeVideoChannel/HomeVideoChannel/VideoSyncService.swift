@@ -19,6 +19,7 @@ final class VideoSyncService {
         config: AppConfig,
         onProgress: ((Int, Int) -> Void)? = nil
     ) async throws -> SyncRunResult {
+        try Task.checkCancellation()
         try await store.initializeSchema()
 
         var pagesFetched = 0
@@ -31,6 +32,7 @@ final class VideoSyncService {
 
         for page in 1...maxPages {
             let pageItems = try await client.fetchMetadataPage(config: config, page: page, size: pageSize)
+            try Task.checkCancellation()
             if pageItems.isEmpty {
                 break
             }
@@ -49,15 +51,19 @@ final class VideoSyncService {
                     )
                 }
             }
+            try Task.checkCancellation()
             onProgress?(pagesFetched, rowsUpserted)
         }
 
+        try Task.checkCancellation()
         try await store.refreshPeople(Array(peopleByID.values), replacingAssetIDs: syncedAssetIDs)
 
         if let albums = try? await client.fetchAlbumsWithVideoAssets(config: config) {
+            try Task.checkCancellation()
             try await store.replaceAlbums(albums)
         }
 
+        try Task.checkCancellation()
         let now = ISO8601DateFormatter().string(from: Date())
         try await store.setSyncState(key: "last_sync_at", value: now)
 

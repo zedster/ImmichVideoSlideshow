@@ -45,6 +45,7 @@ struct ChannelView: View {
         case settings
     }
 
+    @Environment(\.scenePhase) private var scenePhase
     @ObservedObject private var configStore: ConfigStore
     @StateObject private var coordinator: ChannelCoordinator
     @State private var showSetup = false
@@ -84,7 +85,13 @@ struct ChannelView: View {
     @ViewBuilder
     private func mainContent(in geo: GeometryProxy) -> some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            // Keep a full-screen focus target mounted even while the toolbar changes.
+            // A tiny, nearly transparent view can be excluded from tvOS focus routing.
+            Color.black
+                .ignoresSafeArea()
+                .focusable(shouldFocusInputAnchor)
+                .focused($inputAnchorFocused)
+                .modifier(TVFocusEffectDisabled())
 
                 PlayerSurfaceView(player: coordinator.playerA)
                     .ignoresSafeArea()
@@ -95,14 +102,6 @@ struct ChannelView: View {
                     .ignoresSafeArea()
                     .opacity(coordinator.opacityB)
                     .allowsHitTesting(false)
-
-                if !controlsVisible && !showInfo && !showSetup {
-                    Color.clear
-                        .frame(width: 1, height: 1)
-                        .focusable(true)
-                        .focused($inputAnchorFocused)
-                        .opacity(0.001)
-                }
 
                 VStack {
                     if !coordinator.fallbackMessage.isEmpty {
@@ -191,8 +190,11 @@ struct ChannelView: View {
                 infoOverlay(in: geo)
         }
         .onAppear {
-            coordinator.start()
+            coordinator.handleScenePhase(scenePhase)
             recordInteraction()
+        }
+        .onChange(of: scenePhase) { phase in
+            coordinator.handleScenePhase(phase)
         }
         .onDisappear {
             coordinator.stop()
@@ -272,14 +274,22 @@ struct ChannelView: View {
             focusFirstOptionInSelectedTab()
         }
         .onChange(of: controlsVisible) { _ in
+            logRemoteDebug("controls visibility changed")
             refreshInputAnchorFocus()
             if controlsVisible && !showChannelList {
                 restoreLastFocusedControl()
             }
         }
         .onChange(of: focusedControl) { target in
+            logRemoteDebug("toolbar focus changed")
             guard let target else { return }
             lastFocusedControl = target
+        }
+        .onChange(of: inputAnchorFocused) { _ in
+            logRemoteDebug("input anchor focus changed")
+        }
+        .onChange(of: scrubBarFocused) { _ in
+            logRemoteDebug("scrubber focus changed")
         }
         .onChange(of: configStore.config.debug) { debugEnabled in
             if !debugEnabled {
@@ -287,6 +297,7 @@ struct ChannelView: View {
             }
         }
         .onExitCommand {
+            logRemoteDebug("exit received")
             recordInteraction()
             if showChannelList {
                 showChannelList = false
@@ -295,15 +306,18 @@ struct ChannelView: View {
             }
         }
         .onPlayPauseCommand {
+            logRemoteDebug("play/pause received")
             recordInteraction()
             if !showSetup && !showChannelList {
                 coordinator.togglePlayPause()
             }
         }
         .onTapGesture {
+            logRemoteDebug("select/tap received")
             recordInteraction()
         }
         .onMoveCommand { direction in
+            logRemoteDebug("move received: \(direction)")
             recordInteraction()
             guard showInfo else { return }
             let maxIndex = coordinator.currentInfoFields.count
@@ -773,6 +787,11 @@ struct ChannelView: View {
         }
     }
 
+    private func logRemoteDebug(_ event: String) {
+        guard configStore.config.debug else { return }
+        print("[RemoteInput] \(Date().timeIntervalSince1970) \(event) | controls=\(controlsVisible) anchor=\(inputAnchorFocused) anchorEligible=\(shouldFocusInputAnchor) toolbar=\(String(describing: focusedControl)) scrubber=\(scrubBarFocused) info=\(showInfo) setup=\(showSetup) channels=\(showChannelList)")
+    }
+
     private func recordInteraction() {
         showControls()
         hideControlsTask?.cancel()
@@ -792,19 +811,38 @@ struct ChannelView: View {
     }
 
     private func hideControls() {
+        logRemoteDebug("inactivity timeout: hiding controls")
         withAnimation(.easeInOut(duration: 0.2)) {
             controlsVisible = false
         }
     }
 
+    private var shouldFocusInputAnchor: Bool {
+        !controlsVisible && !showInfo && !showSetup && !showChannelList
+    }
+
     private func refreshInputAnchorFocus() {
-        inputAnchorFocused = !controlsVisible && !showInfo && !showSetup && !showChannelList
+        guard shouldFocusInputAnchor else {
+            logRemoteDebug("releasing input anchor focus")
+            inputAnchorFocused = false
+            return
+        }
+        // Let SwiftUI enable the background's focusability before requesting focus.
+        DispatchQueue.main.async {
+            guard shouldFocusInputAnchor else { return }
+            focusedControl = nil
+            scrubBarFocused = false
+            logRemoteDebug("requesting input anchor focus")
+            inputAnchorFocused = true
+        }
     }
 
     private func restoreLastFocusedControl() {
         guard controlsVisible, !showInfo, !showSetup, !showChannelList else { return }
         let target = resolvedFocusTarget(from: lastFocusedControl)
         DispatchQueue.main.async {
+            guard controlsVisible, !showInfo, !showSetup, !showChannelList else { return }
+            logRemoteDebug("restoring toolbar focus: \(target)")
             focusedControl = target
         }
     }
@@ -840,6 +878,15 @@ struct ChannelView: View {
                 fallbackSymbol: "calendar"
             )
         ]
+
+        options += TimeChannel.allCases.map { channel in
+            ChannelOption(id: channel.rawValue, title: channel.title,
+                          subtitle: channel.months.isEmpty
+                            ? L10n.tr("library.channels.rolling.subtitle", "Play videos filmed in this period, ending today.", comment: "Rolling period subtitle")
+                            : L10n.tr("library.channels.season.configured.subtitle", "Play videos filmed in this season across all years, using the hemisphere selected in Settings.", comment: "Season subtitle"),
+                          count: channelCount(for: channel.rawValue), artworkURL: nil,
+                          fallbackSymbol: channel.symbol)
+        }
 
         if hasCurrentCaptureDate {
             options.append(
@@ -915,6 +962,7 @@ struct ChannelView: View {
     }
 
     private var selectedChannelID: String {
+        if let channel = configStore.config.timeChannel { return channel.rawValue }
         if configStore.config.hasSearchFilter {
             return "search"
         }
@@ -979,6 +1027,7 @@ struct ChannelView: View {
 
         var nextConfig = configStore.config
         nextConfig.onlyFavorites = false
+        nextConfig.timeChannel = nil
         nextConfig.onlyThisMonth = false
         nextConfig.onlyThisDay = false
         nextConfig.onlyThisWeek = false
@@ -991,6 +1040,7 @@ struct ChannelView: View {
         nextConfig.personFilterName = ""
         nextConfig.searchQuery = ""
 
+        nextConfig.timeChannel = TimeChannel(rawValue: channelID)
         switch channelID {
         case "favorites":
             nextConfig.onlyFavorites = true
@@ -1031,6 +1081,7 @@ struct ChannelView: View {
 
         var nextConfig = configStore.config
         nextConfig.onlyFavorites = false
+        nextConfig.timeChannel = nil
         nextConfig.onlyThisMonth = false
         nextConfig.onlyThisDay = false
         nextConfig.onlyThisWeek = false
@@ -1273,6 +1324,14 @@ struct ChannelView: View {
         channelDataTask = Task { @MainActor in
             var nextCounts: [String: Int] = [:]
             try? await channelStore.initializeSchema()
+
+            for channel in TimeChannel.allCases {
+                nextCounts[channel.rawValue] = (try? await channelStore.countQualifying(
+                    minDuration: configStore.config.minDuration, onlyFavorites: false,
+                    timeChannel: channel, seasonHemisphere: configStore.config.seasonHemisphere, onlyThisMonth: false, onlyThisDay: false,
+                    onlyThisWeek: false, referenceCaptureDate: "", placeCity: "", placeCountry: ""
+                )) ?? 0
+            }
 
             nextCounts["all"] = (try? await channelStore.countQualifying(
                 minDuration: configStore.config.minDuration,

@@ -458,6 +458,8 @@ actor SQLiteVideoStore {
     func countQualifying(
         minDuration: Double,
         onlyFavorites: Bool,
+        timeChannel: TimeChannel? = nil,
+        seasonHemisphere: SeasonHemisphere = .northern,
         onlyThisMonth: Bool,
         onlyThisDay: Bool,
         onlyThisWeek: Bool,
@@ -470,6 +472,8 @@ actor SQLiteVideoStore {
         try withDatabase { db in
             let filters = selectionFilters(
                 onlyFavorites: onlyFavorites,
+                timeChannel: timeChannel,
+                seasonHemisphere: seasonHemisphere,
                 onlyThisMonth: onlyThisMonth,
                 onlyThisDay: onlyThisDay,
                 onlyThisWeek: onlyThisWeek,
@@ -766,6 +770,8 @@ actor SQLiteVideoStore {
     func selectRandom(
         minDuration: Double,
         onlyFavorites: Bool,
+        timeChannel: TimeChannel? = nil,
+        seasonHemisphere: SeasonHemisphere = .northern,
         onlyThisMonth: Bool,
         onlyThisDay: Bool,
         onlyThisWeek: Bool,
@@ -778,6 +784,8 @@ actor SQLiteVideoStore {
         try withDatabase { db in
             let filters = selectionFilters(
                 onlyFavorites: onlyFavorites,
+                timeChannel: timeChannel,
+                seasonHemisphere: seasonHemisphere,
                 onlyThisMonth: onlyThisMonth,
                 onlyThisDay: onlyThisDay,
                 onlyThisWeek: onlyThisWeek,
@@ -816,6 +824,8 @@ actor SQLiteVideoStore {
         newestFirst: Bool,
         minDuration: Double,
         onlyFavorites: Bool,
+        timeChannel: TimeChannel? = nil,
+        seasonHemisphere: SeasonHemisphere = .northern,
         onlyThisMonth: Bool,
         onlyThisDay: Bool,
         onlyThisWeek: Bool,
@@ -828,6 +838,8 @@ actor SQLiteVideoStore {
         try withDatabase { db in
             let filters = selectionFilters(
                 onlyFavorites: onlyFavorites,
+                timeChannel: timeChannel,
+                seasonHemisphere: seasonHemisphere,
                 onlyThisMonth: onlyThisMonth,
                 onlyThisDay: onlyThisDay,
                 onlyThisWeek: onlyThisWeek,
@@ -1128,6 +1140,8 @@ actor SQLiteVideoStore {
 
     private func selectionFilters(
         onlyFavorites: Bool,
+        timeChannel: TimeChannel? = nil,
+        seasonHemisphere: SeasonHemisphere = .northern,
         onlyThisMonth: Bool,
         onlyThisDay: Bool,
         onlyThisWeek: Bool,
@@ -1142,6 +1156,16 @@ actor SQLiteVideoStore {
 
         if onlyFavorites {
             clauses.append("is_favorite = 1")
+        }
+        if let timeChannel {
+            if let bounds = timeChannel.dateBounds() {
+                clauses.append("SUBSTR(COALESCE(capture_date, ''), 1, 10) >= ? AND SUBSTR(COALESCE(capture_date, ''), 1, 10) < ?")
+                bindings.append(.text(bounds.start))
+                bindings.append(.text(bounds.end))
+            } else {
+                let months = timeChannel.months(in: seasonHemisphere).map { String(format: "'%02d'", $0) }.joined(separator: ",")
+                clauses.append("SUBSTR(COALESCE(capture_date, ''), 6, 2) IN (\(months))")
+            }
         }
         if onlyThisMonth {
             clauses.append(currentMonthSQLCondition(column: "capture_date"))

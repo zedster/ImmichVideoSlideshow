@@ -6,6 +6,8 @@ struct AppConfig: Codable, Equatable {
     var minDuration: Double = 10
     var randomBatchSize: Int = 20
     var onlyFavorites: Bool = false
+    var seasonHemisphere: SeasonHemisphere = .northern
+    var timeChannel: TimeChannel? = nil
     var onlyThisMonth: Bool = false
     var onlyThisDay: Bool = false
     var onlyThisWeek: Bool = false
@@ -38,6 +40,8 @@ struct AppConfig: Codable, Equatable {
         case minDuration
         case randomBatchSize
         case onlyFavorites
+        case seasonHemisphere
+        case timeChannel
         case onlyThisMonth
         case onlyThisDay
         case onlyThisWeek
@@ -74,6 +78,8 @@ struct AppConfig: Codable, Equatable {
         minDuration = try c.decodeIfPresent(Double.self, forKey: .minDuration) ?? 10
         randomBatchSize = try c.decodeIfPresent(Int.self, forKey: .randomBatchSize) ?? 20
         onlyFavorites = try c.decodeIfPresent(Bool.self, forKey: .onlyFavorites) ?? false
+        seasonHemisphere = try c.decodeIfPresent(SeasonHemisphere.self, forKey: .seasonHemisphere) ?? .northern
+        timeChannel = try c.decodeIfPresent(TimeChannel.self, forKey: .timeChannel)
         onlyThisMonth = try c.decodeIfPresent(Bool.self, forKey: .onlyThisMonth) ?? false
         onlyThisDay = try c.decodeIfPresent(Bool.self, forKey: .onlyThisDay) ?? false
         onlyThisWeek = try c.decodeIfPresent(Bool.self, forKey: .onlyThisWeek) ?? false
@@ -121,6 +127,10 @@ struct AppConfig: Codable, Equatable {
 
     var hasSearchFilter: Bool {
         !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    func includesDuration(_ duration: Double) -> Bool {
+        duration.isFinite && duration >= minDuration
     }
 
     var normalizedImmichBaseURL: String {
@@ -184,5 +194,94 @@ final class ConfigStore: ObservableObject {
         if let data = try? JSONEncoder().encode(config) {
             UserDefaults.standard.set(data, forKey: defaultsKey)
         }
+    }
+}
+
+enum SeasonHemisphere: String, Codable, CaseIterable {
+    case northern, southern
+
+    var title: String {
+        switch self {
+        case .northern: return L10n.tr("settings.hemisphere.northern", "Northern", comment: "Hemisphere setting option")
+        case .southern: return L10n.tr("settings.hemisphere.southern", "Southern", comment: "Hemisphere setting option")
+        }
+    }
+}
+
+// Rolling calendar periods and meteorological seasons.
+enum TimeChannel: String, Codable, CaseIterable {
+    case lastMonth = "last_month"
+    case lastThreeMonths = "last_3_months"
+    case lastYear = "last_year"
+    case lastFiveYears = "last_5_years"
+    case winter, summer, spring, autumn
+
+    var title: String {
+        switch self {
+        case .lastMonth: return L10n.tr("library.channels.last_month.title", "Last month", comment: "Channel title")
+        case .lastThreeMonths: return L10n.tr("library.channels.last_3_months.title", "Last 3 months", comment: "Channel title")
+        case .lastYear: return L10n.tr("library.channels.last_year.title", "Last Year", comment: "Channel title")
+        case .lastFiveYears: return L10n.tr("library.channels.last_5_years.title", "Last 5 years", comment: "Channel title")
+        case .winter: return L10n.tr("library.channels.winter.title", "Winter", comment: "Channel title")
+        case .summer: return L10n.tr("library.channels.summer.title", "Summer", comment: "Channel title")
+        case .spring: return L10n.tr("library.channels.spring.title", "Spring", comment: "Channel title")
+        case .autumn: return L10n.tr("library.channels.autumn.title", "Autumn", comment: "Channel title")
+        }
+    }
+
+    var months: [Int] {
+        switch self {
+        case .winter: return [12, 1, 2]
+        case .spring: return [3, 4, 5]
+        case .summer: return [6, 7, 8]
+        case .autumn: return [9, 10, 11]
+        default: return []
+        }
+    }
+
+    func months(in hemisphere: SeasonHemisphere) -> [Int] {
+        hemisphere == .northern ? months : months.map { (($0 + 5) % 12) + 1 }
+    }
+
+    var symbol: String {
+        switch self {
+        case .winter: return "snowflake"
+        case .spring: return "leaf.fill"
+        case .summer: return "sun.max.fill"
+        case .autumn: return "leaf"
+        default: return "calendar"
+        }
+    }
+
+    func dateBounds(now: Date = Date(), calendar: Calendar = .current) -> (start: String, end: String)? {
+        let component: Calendar.Component
+        let offset: Int
+        switch self {
+        case .lastMonth: (component, offset) = (.month, -1)
+        case .lastThreeMonths: (component, offset) = (.month, -3)
+        case .lastYear: (component, offset) = (.year, -1)
+        case .lastFiveYears: (component, offset) = (.year, -5)
+        default: return nil
+        }
+        var gregorian = Calendar(identifier: .gregorian)
+        gregorian.timeZone = calendar.timeZone
+        let today = gregorian.startOfDay(for: now)
+        guard let start = gregorian.date(byAdding: component, value: offset, to: today),
+              let end = gregorian.date(byAdding: .day, value: 1, to: today) else { return nil }
+        let formatter = DateFormatter()
+        formatter.calendar = gregorian
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = gregorian.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        return (formatter.string(from: start), formatter.string(from: end))
+    }
+
+    func includes(_ captureDate: String, hemisphere: SeasonHemisphere = .northern, now: Date = Date(), calendar: Calendar = .current) -> Bool {
+        let day = String(captureDate.prefix(10))
+        guard day.count == 10, let month = Int(day.dropFirst(5).prefix(2)), (1...12).contains(month) else { return false }
+        if let bounds = dateBounds(now: now, calendar: calendar) {
+            return day >= bounds.start && day < bounds.end
+        }
+        return months(in: hemisphere).contains(month)
     }
 }

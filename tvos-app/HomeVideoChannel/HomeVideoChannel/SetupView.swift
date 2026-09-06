@@ -8,6 +8,7 @@ struct SetupView: View {
         case minDuration
         case randomBatchSize
         case playbackOrder
+        case seasonHemisphere
         case playbackQuality
         case showDateLocationOverlay
         case showPeopleOverlay
@@ -68,6 +69,7 @@ struct SetupView: View {
     @State private var minDuration = "10"
     @State private var randomBatchSize = "20"
     @State private var playbackOrder = "random"
+    @State private var seasonHemisphere: SeasonHemisphere = .northern
     @State private var playbackQuality = "auto"
     @State private var showDateLocationOverlay = true
     @State private var showPeopleOverlay = true
@@ -134,6 +136,7 @@ struct SetupView: View {
             .onChange(of: minDuration) { _ in autoSaveSettingsIfNeeded() }
             .onChange(of: randomBatchSize) { _ in autoSaveSettingsIfNeeded() }
             .onChange(of: playbackOrder) { _ in autoSaveSettingsIfNeeded() }
+            .onChange(of: seasonHemisphere) { _ in autoSaveSettingsIfNeeded() }
             .onChange(of: playbackQuality) { _ in autoSaveSettingsIfNeeded() }
             .onChange(of: showDateLocationOverlay) { _ in autoSaveSettingsIfNeeded() }
             .onChange(of: showPeopleOverlay) { _ in autoSaveSettingsIfNeeded() }
@@ -336,6 +339,9 @@ struct SetupView: View {
                             choiceRow(L10n.tr("playback.order", "Order", comment: "Playback setting label"), value: playbackOrderDisplayValue, focus: .playbackOrder) {
                                 cyclePlaybackOrder()
                             }
+                            choiceRow(L10n.tr("settings.season_hemisphere", "Season Hemisphere", comment: "Season hemisphere setting label"), value: seasonHemisphere.title, focus: .seasonHemisphere) {
+                                seasonHemisphere = seasonHemisphere == .northern ? .southern : .northern
+                            }
                             choiceRow(L10n.tr("playback.picture_quality", "Picture Quality", comment: "Playback setting label"), value: playbackQualityDisplayValue, focus: .playbackQuality) {
                                 cyclePlaybackQuality()
                             }
@@ -530,6 +536,7 @@ struct SetupView: View {
         default:
             playbackOrder = "random"
         }
+        seasonHemisphere = cfg.seasonHemisphere
         playbackQuality = cfg.playbackQuality
         showDateLocationOverlay = cfg.showDateLocationOverlay
         showPeopleOverlay = cfg.showPeopleOverlay
@@ -606,12 +613,14 @@ struct SetupView: View {
         default:
             next.playbackOrder = "random"
         }
+        next.seasonHemisphere = seasonHemisphere
         next.playbackQuality = playbackQuality
         next.showDateLocationOverlay = showDateLocationOverlay
         next.showPeopleOverlay = showPeopleOverlay
         next.includeDiagnosticsInFeedback = includeDiagnosticsInFeedback
         next.onlyFavorites = onlyFavorites
         if onlyFavorites {
+            next.timeChannel = nil
             next.onlyThisMonth = false
             next.onlyThisDay = false
             next.onlyThisWeek = false

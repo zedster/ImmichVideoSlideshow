@@ -171,10 +171,11 @@ final class ImmichAPIClient {
                 guard !seen.contains(item.id) else { continue }
                 seen.insert(item.id)
 
-                guard item.duration >= config.minDuration else { continue }
+                guard config.includesDuration(item.duration) else { continue }
                 if config.onlyFavorites && !item.isFavorite {
                     continue
                 }
+                if let channel = config.timeChannel, !channel.includes(item.captureDate, hemisphere: config.seasonHemisphere) { continue }
                 if config.onlyThisMonth && !captureDateMatchesCurrentMonth(item.captureDate) {
                     continue
                 }

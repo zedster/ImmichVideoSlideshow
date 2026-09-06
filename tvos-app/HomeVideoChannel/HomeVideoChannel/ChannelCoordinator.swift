@@ -1,6 +1,27 @@
 import AVFoundation
 import SwiftUI
 
+private enum PlaybackDurationValidationError: Error {
+    case belowMinimum
+}
+
+struct PlaybackProgressWatchdog {
+    private var position: Double = 0
+    private var lastProgressAt: TimeInterval = 0
+
+    mutating func reset(position: Double, now: TimeInterval) {
+        self.position = position.isFinite ? position : 0
+        lastProgressAt = now
+    }
+
+    mutating func isStalled(position: Double, now: TimeInterval) -> Bool {
+        if position.isFinite, abs(position - self.position) > 0.1 {
+            reset(position: position, now: now)
+        }
+        return now - lastProgressAt >= 20
+    }
+}
+
 struct VideoInfoField: Identifiable, Equatable {
     let id: String
     let label: String
@@ -81,6 +102,14 @@ final class ChannelCoordinator: ObservableObject {
     private var nextPreparedId = ""
     private var inflightQueueFetches = 0
     private var started = false
+    private var sceneIsActive = true
+    private var playbackTasks: [UUID: Task<Void, Never>] = [:]
+    private var playbackGeneration = UUID()
+    private var bootstrapping = false
+    private var sessionStartedAt: String?
+    private var resumePosition: Double = 0
+    private var progressWatchdog = PlaybackProgressWatchdog()
+
     private var consecutivePlaybackFailures = 0
     private let maxConsecutivePlaybackFailures = 5
     private var hiddenAlbumId = ""
@@ -126,6 +155,103 @@ final class ChannelCoordinator: ObservableObject {
         recoveryTimer?.invalidate()
     }
 
+    private func launch(requiresPlayback: Bool = true, _ operation: @escaping @MainActor () async -> Void) {
+        let id = UUID()
+        let generation = playbackGeneration
+        playbackTasks[id] = Task { [weak self] in
+            guard let self else { return }
+            guard self.sceneIsActive, (!requiresPlayback || self.started),
+                  self.playbackGeneration == generation else {
+                self.playbackTasks[id] = nil
+                return
+            }
+            await operation()
+            self.playbackTasks[id] = nil
+        }
+    }
+
+    // AVFoundation callbacks can arrive off the main actor. Only the enqueue
+    // hop is unowned; all playback work is registered and cancelled by stop().
+    private nonisolated func enqueue(_ operation: @escaping @MainActor () async -> Void) {
+        Task { @MainActor [weak self] in
+            self?.launch(operation)
+        }
+    }
+
+    func handleScenePhase(_ phase: ScenePhase) {
+        sceneIsActive = phase == .active
+        if sceneIsActive {
+            start()
+        } else {
+            stop()
+        }
+    }
+
+    private func resetProgressWatchdog() {
+        progressWatchdog.reset(position: CMTimeGetSeconds(activePlayer().currentTime()),
+                               now: ProcessInfo.processInfo.systemUptime)
+    }
+
+    private func recoverPlaybackIfNeeded() async {
+        guard started, !Task.isCancelled, !isPlaybackPaused, !bootstrapping else { return }
+        let player = activePlayer()
+        let position = CMTimeGetSeconds(player.currentTime())
+        let now = ProcessInfo.processInfo.systemUptime
+        let stalled = progressWatchdog.isStalled(position: position, now: now)
+        if currentItem == nil {
+            await bootstrapPlayback()
+            guard !Task.isCancelled else { return }
+        } else if player.error != nil || player.currentItem?.status == .failed || stalled {
+            addDebugMessage("Recovering failed or stalled playback")
+            stop()
+            start()
+        } else if !transitionInProgress,
+                  let item = player.currentItem,
+                  CMTimeGetSeconds(item.duration).isFinite,
+                  position >= CMTimeGetSeconds(item.duration) - 0.1 {
+            await transitionToNext(reason: "recovery_ended")
+        } else if !transitionInProgress, player.timeControlStatus == .paused {
+            player.play()
+        }
+    }
+
+    private func resumePlayback() async {
+        guard !Task.isCancelled else { return }
+        guard let candidate = currentItem else { return }
+        bootstrapping = true
+        let generation = playbackGeneration
+        defer { if generation == playbackGeneration { bootstrapping = false } }
+        do {
+            let player = activePlayer()
+            let item = try client.makePlaybackItem(candidate: candidate, config: configStore.config)
+            player.replaceCurrentItem(with: item)
+            _ = try await waitUntilReadyToPlay(item: item, timeoutSeconds: 12)
+            guard !Task.isCancelled else { return }
+            try validatePlaybackDuration(item, for: candidate)
+            let duration = CMTimeGetSeconds(item.duration)
+            if resumePosition > 0, resumePosition < duration - 0.25 {
+                await player.seek(to: CMTime(seconds: resumePosition, preferredTimescale: 600))
+                guard !Task.isCancelled else { return }
+            }
+            installTimeObserver()
+            resetProgressWatchdog()
+            if !isPlaybackPaused { try await playWithAutoplayFallback(player: player) }
+            try Task.checkCancellation()
+            if isPlaybackPaused { player.pause() }
+            clearPlaybackFailureState()
+            addDebugMessage("Playback restored after suspension")
+        } catch {
+            guard !Task.isCancelled else { return }
+            currentItem = nil
+            resumePosition = 0
+            registerPlaybackFailure(L10n.tr(
+                "errors.playback.initial_load_retry",
+                "Could not load initial video. Retrying...",
+                comment: "Playback failure message when initial video loading fails"
+            ), error: error)
+        }
+    }
+
     func start() {
         guard configStore.config.isConfigured else {
             fallbackMessage = L10n.tr(
@@ -136,29 +262,39 @@ final class ChannelCoordinator: ObservableObject {
             addDebugMessage("Start blocked: app not configured")
             return
         }
-        guard !started else { return }
+        guard sceneIsActive, !started else { return }
         started = true
+        playerA = AVPlayer()
+        playerB = AVPlayer()
+        activeIndex = 0
+        opacityA = 1
+        opacityB = 0
+        resetProgressWatchdog()
         addDebugMessage("Channel start")
 
         setupEndObserver()
         applyMuteState(readMutedPreference())
         updateStatus()
-        Task {
-            let startedAt = ISO8601DateFormatter().string(from: Date())
+        let startedAt = sessionStartedAt ?? ISO8601DateFormatter().string(from: Date())
+        sessionStartedAt = startedAt
+        launch { [self] in
             try? await store.setSyncState(key: "session_started_at", value: startedAt)
         }
-        Task {
+        launch { [self] in
             await checkHiddenAlbumAccessAtStartup()
         }
 
-        Task {
-            await bootstrapPlayback()
+        launch { [self] in
+            if currentItem != nil { await resumePlayback() }
+            else { await bootstrapPlayback() }
         }
 
+        let generation = playbackGeneration
         queueTimer?.invalidate()
         queueTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             guard let self else { return }
-            Task { @MainActor in
+            self.enqueue { [self] in
+                guard generation == self.playbackGeneration else { return }
                 await self.fillQueueIfNeeded()
             }
         }
@@ -166,16 +302,33 @@ final class ChannelCoordinator: ObservableObject {
         recoveryTimer?.invalidate()
         recoveryTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
             guard let self else { return }
-            Task { @MainActor in
-                guard self.currentItem == nil, !self.transitionInProgress else { return }
-                await self.bootstrapPlayback()
+            self.enqueue { [self] in
+                guard generation == self.playbackGeneration else { return }
+                await self.recoverPlaybackIfNeeded()
             }
         }
     }
 
     func stop() {
+        guard started || !playbackTasks.isEmpty else { return }
         addDebugMessage("Channel stop")
+        if started {
+            let position = CMTimeGetSeconds(activePlayer().currentTime())
+            if position.isFinite { resumePosition = max(0, position) }
+        }
         started = false
+        playbackGeneration = UUID()
+        playbackTasks.values.forEach { $0.cancel() }
+        playbackTasks.removeAll()
+        transitionInProgress = false
+        preparingNext = false
+        bootstrapping = false
+        inflightQueueFetches = 0
+        nextPreparedId = ""
+        isSyncing = false
+        favoriteUpdateInProgress = false
+        hideUpdateInProgress = false
+        isBuffering = false
         queueTimer?.invalidate()
         recoveryTimer?.invalidate()
         queueTimer = nil
@@ -183,6 +336,8 @@ final class ChannelCoordinator: ObservableObject {
         teardownObservers()
         playerA.pause()
         playerB.pause()
+        playerA.replaceCurrentItem(with: nil)
+        playerB.replaceCurrentItem(with: nil)
         debugTelemetryText = ""
     }
 
@@ -191,7 +346,9 @@ final class ChannelCoordinator: ObservableObject {
         stop()
         queue = []
         history = []
+        sessionStartedAt = nil
         currentItem = nil
+        resumePosition = 0
         nextPreparedId = ""
         sequentialLastAssetId = nil
         sequentialStateLoaded = false
@@ -260,7 +417,7 @@ final class ChannelCoordinator: ObservableObject {
 
     func skip() {
         addDebugMessage("Skip requested")
-        Task {
+        launch { [self] in
             await transitionToNext(reason: "manual_skip")
         }
     }
@@ -305,19 +462,19 @@ final class ChannelCoordinator: ObservableObject {
 
     func forceSyncNow() {
         addDebugMessage("Manual sync requested")
-        Task {
+        launch(requiresPlayback: false) { [self] in
             await runForceSync()
         }
     }
 
     func resetPlaybackProgress() {
-        Task {
+        launch(requiresPlayback: false) { [self] in
             await resetSequentialProgress()
         }
     }
 
     func refreshLibraryStats() {
-        Task {
+        launch(requiresPlayback: false) { [self] in
             await loadLibraryStats()
         }
     }
@@ -341,6 +498,7 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     func togglePlayPause() {
+        resetProgressWatchdog()
         let player = activePlayer()
         if isPlaybackPaused {
             player.play()
@@ -357,7 +515,7 @@ final class ChannelCoordinator: ObservableObject {
 
     func goBack() {
         addDebugMessage("Back requested")
-        Task {
+        launch { [self] in
             await transitionToPrevious(reason: "manual_back")
         }
     }
@@ -368,7 +526,7 @@ final class ChannelCoordinator: ObservableObject {
             return
         }
         let nextValue = !currentItem.isFavorite
-        Task {
+        launch { [self] in
             await setFavorite(for: currentItem, to: nextValue)
         }
     }
@@ -389,8 +547,9 @@ final class ChannelCoordinator: ObservableObject {
 
         hideUpdateInProgress = true
         let target = currentItem
-        Task {
-            defer { self.hideUpdateInProgress = false }
+        launch { [self] in
+            let generation = playbackGeneration
+            defer { if generation == playbackGeneration { self.hideUpdateInProgress = false } }
             addDebugMessage("Hide requested: \(target.title)")
 
             do {
@@ -399,6 +558,7 @@ final class ChannelCoordinator: ObservableObject {
                     try await store.initializeSchema()
                     try await store.setHidden(assetId: target.id, isHidden: true)
                 }
+                guard !Task.isCancelled else { return }
                 applyHiddenStateLocally(assetId: target.id, isHidden: true)
                 fallbackMessage = String(format: L10n.tr(
                     "playback.hide_forever.success",
@@ -408,6 +568,7 @@ final class ChannelCoordinator: ObservableObject {
                 addDebugMessage("Archived (locked): \(target.title)")
                 await transitionToNext(reason: "manual_hide")
             } catch {
+                guard !Task.isCancelled else { return }
                 fallbackMessage = String(format: L10n.tr(
                     "errors.playback.hide_failed",
                     "Hide failed: %@",
@@ -422,14 +583,23 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func bootstrapPlayback() async {
+        guard started, !Task.isCancelled, !bootstrapping, !transitionInProgress else { return }
+        bootstrapping = true
+        let generation = playbackGeneration
+        defer { if generation == playbackGeneration { bootstrapping = false } }
         do {
             if shouldUseSQLiteSelection() {
                 try await store.initializeSchema()
-                syncLastSyncAt = (try await store.getSyncState(key: "last_sync_at")) ?? L10n.unknownDash
+                guard !Task.isCancelled else { return }
+                let loadedSyncAt = (try await store.getSyncState(key: "last_sync_at")) ?? L10n.unknownDash
+                guard !Task.isCancelled else { return }
+                syncLastSyncAt = loadedSyncAt
                 if configStore.config.syncOnStartup {
                     let count = try await store.countQualifying(
                         minDuration: configStore.config.minDuration,
                         onlyFavorites: configStore.config.onlyFavorites,
+                        timeChannel: configStore.config.timeChannel,
+                        seasonHemisphere: configStore.config.seasonHemisphere,
                         onlyThisMonth: configStore.config.onlyThisMonth,
                         onlyThisDay: configStore.config.onlyThisDay,
                         onlyThisWeek: configStore.config.onlyThisWeek,
@@ -439,19 +609,26 @@ final class ChannelCoordinator: ObservableObject {
                         albumID: configStore.config.albumFilterID,
                         personID: configStore.config.personFilterID
                     )
+                    guard !Task.isCancelled else { return }
                     if count == 0 {
                         await runForceSync(silent: true)
+                        guard !Task.isCancelled else { return }
                     }
                 }
             }
 
             let first = try await fetchNextCandidate()
+            guard !Task.isCancelled else { return }
             try await playOnActivePlayer(first)
+            guard !Task.isCancelled else { return }
             clearPlaybackFailureState()
             await fillQueueIfNeeded()
+            guard !Task.isCancelled else { return }
             await loadLibraryStats()
+            guard !Task.isCancelled else { return }
             addDebugMessage("Bootstrap playback started")
         } catch {
+            guard !Task.isCancelled else { return }
             registerPlaybackFailure(L10n.tr(
                 "errors.playback.initial_load_retry",
                 "Could not load initial video. Retrying...",
@@ -465,12 +642,14 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func checkHiddenAlbumAccessAtStartup() async {
+        guard !Task.isCancelled else { return }
         canHideToAlbum = true
         hiddenAlbumId = ""
         addDebugMessage("Hide capability: archive/locked mode enabled")
     }
 
     private func runForceSync(silent: Bool = false) async {
+        guard !Task.isCancelled else { return }
         guard shouldUseSQLiteSelection() else {
             addDebugMessage("Sync skipped: SQLite cache disabled")
             return
@@ -498,15 +677,18 @@ final class ChannelCoordinator: ObservableObject {
             let result = try await syncService.forceSync(
                 config: configStore.config,
                 onProgress: { [weak self] pages, rows in
-                    guard let self else { return }
+                    guard let self, !Task.isCancelled else { return }
                     self.syncPagesFetched = pages
                     self.syncRowsUpserted = rows
                     self.updateStatus()
                 }
             )
+            guard !Task.isCancelled else { return }
             syncPagesFetched = result.pagesFetched
             syncRowsUpserted = result.rowsUpserted
-            syncLastSyncAt = (try await store.getSyncState(key: "last_sync_at")) ?? L10n.unknownDash
+            let loadedSyncAt = (try await store.getSyncState(key: "last_sync_at")) ?? L10n.unknownDash
+            guard !Task.isCancelled else { return }
+            syncLastSyncAt = loadedSyncAt
             if configStore.config.debug {
                 print("[ChannelCoordinator] sync done pages=\(result.pagesFetched) upserted=\(result.rowsUpserted)")
             }
@@ -521,8 +703,11 @@ final class ChannelCoordinator: ObservableObject {
                 }
             }
             await fillQueueIfNeeded()
+            guard !Task.isCancelled else { return }
             await loadLibraryStats()
+            guard !Task.isCancelled else { return }
         } catch {
+            guard !Task.isCancelled else { return }
             syncLastError = error.localizedDescription
             fallbackMessage = String(format: L10n.tr(
                 "errors.library.sync_failed",
@@ -540,6 +725,7 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func setupEndObserver() {
+        let generation = playbackGeneration
         endObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: nil,
@@ -547,7 +733,8 @@ final class ChannelCoordinator: ObservableObject {
         ) { [weak self] note in
             guard let self else { return }
             guard let item = note.object as? AVPlayerItem else { return }
-            Task { @MainActor in
+            self.enqueue { [self] in
+                guard generation == self.playbackGeneration else { return }
                 guard item === self.activePlayer().currentItem else { return }
                 await self.transitionToNext(reason: "ended")
             }
@@ -565,13 +752,16 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func installTimeObserver() {
+        let generation = playbackGeneration
         removeTimeObserverIfNeeded()
 
         let interval = CMTime(seconds: 0.25, preferredTimescale: 600)
         let player = activePlayer()
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             guard let self else { return }
-            Task { @MainActor in
+            self.enqueue { [self] in
+                guard generation == self.playbackGeneration else { return }
+                guard player === self.activePlayer() else { return }
                 self.onTick(current: CMTimeGetSeconds(time))
             }
         }
@@ -580,11 +770,14 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func installPlaybackStateObserver() {
+        let generation = playbackGeneration
         timeControlObservation?.invalidate()
         let player = activePlayer()
         timeControlObservation = player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] observed, _ in
             guard let self else { return }
-            Task { @MainActor in
+            self.enqueue { [self] in
+                guard generation == self.playbackGeneration else { return }
+                guard observed === self.activePlayer() else { return }
                 self.updateBufferingState(for: observed)
             }
         }
@@ -618,16 +811,16 @@ final class ChannelCoordinator: ObservableObject {
         elapsedText = formatDuration(clampedCurrent)
         totalDurationText = formatDuration(duration)
         secondsLeftText = "-\(formatDuration(max(0, remaining)))"
-        if remaining <= configStore.config.preloadSecondsBeforeEnd {
-            Task { @MainActor in
+        if !isPlaybackPaused, remaining <= configStore.config.preloadSecondsBeforeEnd {
+            launch { [self] in
                 await maybePrepareNext()
             }
         }
 
-        if configStore.config.crossfadeEnabled,
+        if !isPlaybackPaused, configStore.config.crossfadeEnabled,
            remaining <= max(0.15, Double(configStore.config.crossfadeDurationMs) / 1000.0),
            !queue.isEmpty {
-            Task { @MainActor in
+            launch { [self] in
                 await transitionToNext(reason: "near_end_crossfade")
             }
         }
@@ -639,6 +832,7 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func fetchNextCandidate() async throws -> VideoCandidate {
+        try Task.checkCancellation()
         if configStore.config.hasSearchFilter {
             return try await fetchNextSearchCandidate()
         }
@@ -647,11 +841,14 @@ final class ChannelCoordinator: ObservableObject {
         if isSequentialOrder(order) {
             let newestFirst = (order == "sequential_newest")
             await ensureSequentialStateLoaded()
+            try Task.checkCancellation()
             if let fromDB = try await store.selectSequential(
                 afterAssetId: sequentialLastAssetId,
                 newestFirst: newestFirst,
                 minDuration: configStore.config.minDuration,
                 onlyFavorites: configStore.config.onlyFavorites,
+                timeChannel: configStore.config.timeChannel,
+                seasonHemisphere: configStore.config.seasonHemisphere,
                 onlyThisMonth: configStore.config.onlyThisMonth,
                 onlyThisDay: configStore.config.onlyThisDay,
                 onlyThisWeek: configStore.config.onlyThisWeek,
@@ -661,14 +858,18 @@ final class ChannelCoordinator: ObservableObject {
                 albumID: configStore.config.albumFilterID,
                 personID: configStore.config.personFilterID
             ) {
+                try Task.checkCancellation()
                 return fromDB
             }
             await runForceSync(silent: true)
+            try Task.checkCancellation()
             if let fromDB = try await store.selectSequential(
                 afterAssetId: sequentialLastAssetId,
                 newestFirst: newestFirst,
                 minDuration: configStore.config.minDuration,
                 onlyFavorites: configStore.config.onlyFavorites,
+                timeChannel: configStore.config.timeChannel,
+                seasonHemisphere: configStore.config.seasonHemisphere,
                 onlyThisMonth: configStore.config.onlyThisMonth,
                 onlyThisDay: configStore.config.onlyThisDay,
                 onlyThisWeek: configStore.config.onlyThisWeek,
@@ -678,12 +879,15 @@ final class ChannelCoordinator: ObservableObject {
                 albumID: configStore.config.albumFilterID,
                 personID: configStore.config.personFilterID
             ) {
+                try Task.checkCancellation()
                 return fromDB
             }
         } else if configStore.config.useSQLiteCache {
             if let fromDB = try await store.selectRandom(
                 minDuration: configStore.config.minDuration,
                 onlyFavorites: configStore.config.onlyFavorites,
+                timeChannel: configStore.config.timeChannel,
+                seasonHemisphere: configStore.config.seasonHemisphere,
                 onlyThisMonth: configStore.config.onlyThisMonth,
                 onlyThisDay: configStore.config.onlyThisDay,
                 onlyThisWeek: configStore.config.onlyThisWeek,
@@ -693,12 +897,16 @@ final class ChannelCoordinator: ObservableObject {
                 albumID: configStore.config.albumFilterID,
                 personID: configStore.config.personFilterID
             ) {
+                try Task.checkCancellation()
                 return fromDB
             }
             await runForceSync(silent: true)
+            try Task.checkCancellation()
             if let fromDB = try await store.selectRandom(
                 minDuration: configStore.config.minDuration,
                 onlyFavorites: configStore.config.onlyFavorites,
+                timeChannel: configStore.config.timeChannel,
+                seasonHemisphere: configStore.config.seasonHemisphere,
                 onlyThisMonth: configStore.config.onlyThisMonth,
                 onlyThisDay: configStore.config.onlyThisDay,
                 onlyThisWeek: configStore.config.onlyThisWeek,
@@ -708,12 +916,14 @@ final class ChannelCoordinator: ObservableObject {
                 albumID: configStore.config.albumFilterID,
                 personID: configStore.config.personFilterID
             ) {
+                try Task.checkCancellation()
                 return fromDB
             }
         }
 
         for _ in 0..<10 {
             let candidate = try await client.fetchRandomEligibleVideo(config: configStore.config)
+            try Task.checkCancellation()
             if hiddenAssetIds.contains(candidate.id) {
                 addDebugMessage("Skipped hidden candidate: \(candidate.title)")
                 continue
@@ -724,6 +934,7 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func fetchNextSearchCandidate() async throws -> VideoCandidate {
+        try Task.checkCancellation()
         let query = configStore.config.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else {
             throw ImmichAPIError.noEligibleVideo
@@ -736,12 +947,14 @@ final class ChannelCoordinator: ObservableObject {
 
         if searchPool.isEmpty {
             try await refillSearchPool(minimumCount: 12)
+            try Task.checkCancellation()
         }
 
         if searchPool.isEmpty {
             resetSearchState()
             searchLoadedQuery = query
             try await refillSearchPool(minimumCount: 12)
+            try Task.checkCancellation()
         }
 
         guard !searchPool.isEmpty else {
@@ -760,6 +973,7 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func refillSearchPool(minimumCount: Int) async throws {
+        try Task.checkCancellation()
         let target = max(1, minimumCount)
         let query = configStore.config.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return }
@@ -771,11 +985,12 @@ final class ChannelCoordinator: ObservableObject {
                 page: searchNextPage,
                 size: 100
             )
+            try Task.checkCancellation()
             searchNextPage += 1
             searchHasMorePages = !pageResults.isEmpty
 
             let filtered = pageResults.filter { candidate in
-                guard candidate.duration >= configStore.config.minDuration else { return false }
+                guard configStore.config.includesDuration(candidate.duration) else { return false }
                 guard !hiddenAssetIds.contains(candidate.id) else { return false }
                 guard !searchSeenIDs.contains(candidate.id) else { return false }
                 guard candidate.id != currentItem?.id else { return false }
@@ -800,20 +1015,26 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func fillQueueIfNeeded() async {
+        guard started, !Task.isCancelled else { return }
+        let generation = playbackGeneration
         let target = max(1, min(configStore.config.queueTargetSize, 5))
         addDebugMessage("Queue check \(queue.count)/\(target)")
-        while (queue.count + inflightQueueFetches) < target {
+        var attempts = 0
+        while (queue.count + inflightQueueFetches) < target, attempts < target * 4 {
+            attempts += 1
             inflightQueueFetches += 1
-            defer { inflightQueueFetches -= 1 }
+            defer { if generation == playbackGeneration { inflightQueueFetches -= 1 } }
 
             do {
                 let item = try await fetchNextCandidate()
+                guard !Task.isCancelled else { return }
                 if currentItem?.id == item.id { continue }
                 if hiddenAssetIds.contains(item.id) { continue }
                 if queue.contains(where: { $0.id == item.id }) { continue }
                 queue.append(item)
                 updateStatus()
                 await maybePrepareNext()
+                guard !Task.isCancelled else { return }
                 if fallbackMessage == L10n.tr(
                     "errors.playback.fetch_next_retry",
                     "Could not fetch next video. Retrying...",
@@ -823,6 +1044,7 @@ final class ChannelCoordinator: ObservableObject {
                 }
                 addDebugMessage("Queued \(item.title)")
             } catch {
+                guard !Task.isCancelled else { return }
                 if configStore.config.debug {
                     print("[ChannelCoordinator] queue fetch failed: \(error)")
                 }
@@ -839,19 +1061,23 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func maybePrepareNext() async {
-        guard !preparingNext, !transitionInProgress else { return }
+        guard started, !Task.isCancelled else { return }
+        let generation = playbackGeneration
+        guard !preparingNext, !transitionInProgress, !bootstrapping else { return }
         guard let next = queue.first else { return }
         guard nextPreparedId != next.id else { return }
 
         preparingNext = true
-        defer { preparingNext = false }
+        defer { if generation == playbackGeneration { preparingNext = false } }
         addDebugMessage("Preparing next: \(next.title)")
 
         do {
             try await prepareHiddenPlayer(with: next)
+            guard !Task.isCancelled else { return }
             nextPreparedId = next.id
             addDebugMessage("Prepared next: \(next.title)")
         } catch {
+            guard !Task.isCancelled else { return }
             addDebugMessage("Prepare failed: \(next.title)")
             if configStore.config.debug {
                 print("[ChannelCoordinator] prepare failed: \(error)")
@@ -860,60 +1086,51 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func prepareHiddenPlayer(with candidate: VideoCandidate) async throws {
+        try Task.checkCancellation()
         let hidden = hiddenPlayer()
         let item = try client.makePlaybackItem(candidate: candidate, config: configStore.config)
         hidden.replaceCurrentItem(with: item)
         hidden.isMuted = activePlayer().isMuted
         _ = try await waitUntilReadyToPlay(item: item, timeoutSeconds: 12)
+        try Task.checkCancellation()
+        try validatePlaybackDuration(item, for: candidate)
     }
 
-    private func waitUntilReadyToPlay(item: AVPlayerItem, timeoutSeconds: TimeInterval) async throws -> AVPlayerItem {
-        if item.status == .readyToPlay {
-            return item
-        }
-
-        return try await withThrowingTaskGroup(of: AVPlayerItem.self) { group in
-            group.addTask {
-                try await withCheckedThrowingContinuation { continuation in
-                    var observation: NSKeyValueObservation?
-                    observation = item.observe(\.status, options: [.new]) { observed, _ in
-                        switch observed.status {
-                        case .readyToPlay:
-                            observation?.invalidate()
-                            continuation.resume(returning: observed)
-                        case .failed:
-                            observation?.invalidate()
-                            continuation.resume(throwing: observed.error ?? ImmichAPIError.invalidResponse)
-                        default:
-                            break
-                        }
-                    }
-                }
+    // Poll only during loading: a cancelled task or expired deadline always exits,
+    // even if AVFoundation never emits another status notification.
+    func waitUntilReadyToPlay(item: AVPlayerItem, timeoutSeconds: TimeInterval) async throws -> AVPlayerItem {
+        let deadline = ProcessInfo.processInfo.systemUptime + timeoutSeconds
+        while true {
+            try Task.checkCancellation()
+            switch item.status {
+            case .readyToPlay: return item
+            case .failed: throw item.error ?? ImmichAPIError.invalidResponse
+            default: break
             }
-
-            group.addTask {
-                try await Task.sleep(nanoseconds: UInt64(timeoutSeconds * 1_000_000_000))
+            guard ProcessInfo.processInfo.systemUptime < deadline else {
                 throw ImmichAPIError.invalidResponse
             }
-
-            let result = try await group.next()!
-            group.cancelAll()
-            return result
+            try await Task.sleep(nanoseconds: 50_000_000)
         }
     }
 
     private func playOnActivePlayer(_ candidate: VideoCandidate) async throws {
+        try Task.checkCancellation()
         let player = activePlayer()
         let item = try client.makePlaybackItem(candidate: candidate, config: configStore.config)
         player.replaceCurrentItem(with: item)
         player.isMuted = readMutedPreference()
         _ = try await waitUntilReadyToPlay(item: item, timeoutSeconds: 12)
+        try Task.checkCancellation()
+        try validatePlaybackDuration(item, for: candidate)
         try await playWithAutoplayFallback(player: player)
+        try Task.checkCancellation()
 
+        if isPlaybackPaused { player.pause() }
+        resetProgressWatchdog()
         currentItem = candidate
         canGoBack = !history.isEmpty
         currentIsFavorite = candidate.isFavorite
-        isPlaybackPaused = false
         playbackProgress = 0
         elapsedText = "0:00"
         totalDurationText = formatDuration(candidate.duration)
@@ -921,30 +1138,48 @@ final class ChannelCoordinator: ObservableObject {
         currentImmichAssetURL = buildImmichAssetURL(for: candidate)
         updateCurrentChannelContext(for: candidate)
         await refreshCurrentMetadata(for: candidate)
+        try Task.checkCancellation()
         await resetDebugPlaybackTelemetry(for: item)
+        try Task.checkCancellation()
         let overlay = overlayTexts(for: candidate)
         dateLocationText = overlayDateLocationText(for: candidate)
         title = overlay.title
         captionText = overlay.caption
         clearPlaybackFailureState()
         await recordWatchStart(for: candidate)
+        try Task.checkCancellation()
         await persistSequentialProgress(for: candidate)
+        try Task.checkCancellation()
         installTimeObserver()
         updateStatus()
         addDebugMessage("Playing: \(candidate.title)")
     }
 
+    private func validatePlaybackDuration(_ item: AVPlayerItem, for candidate: VideoCandidate) throws {
+        let actualDuration = CMTimeGetSeconds(item.duration)
+        guard configStore.config.includesDuration(actualDuration) else {
+            addDebugMessage("Skipped short playback: \(candidate.title) metadata=\(String(format: "%.2f", candidate.duration))s actual=\(actualDuration.isFinite ? String(format: "%.2f", actualDuration) : "unknown")s")
+            throw PlaybackDurationValidationError.belowMinimum
+        }
+    }
+
     private func playWithAutoplayFallback(player: AVPlayer) async throws {
+        try Task.checkCancellation()
+        guard !isPlaybackPaused else { return }
         let wasMuted = player.isMuted
         do {
             try await player.playAsync()
+            try Task.checkCancellation()
         } catch {
+            try Task.checkCancellation()
             addDebugMessage("Autoplay fallback: mute and retry")
             player.isMuted = true
             do {
                 try await player.playAsync()
+                try Task.checkCancellation()
                 player.isMuted = wasMuted
             } catch {
+                try Task.checkCancellation()
                 player.isMuted = wasMuted
                 throw error
             }
@@ -952,16 +1187,19 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func transitionToNext(reason: String) async {
-        guard !transitionInProgress else {
+        guard started, !Task.isCancelled else { return }
+        let generation = playbackGeneration
+        guard !transitionInProgress, !bootstrapping else {
             addDebugMessage("Transition skipped: already in progress")
             return
         }
         transitionInProgress = true
-        defer { transitionInProgress = false }
+        defer { if generation == playbackGeneration { transitionInProgress = false } }
         addDebugMessage("Transition start: \(reason)")
 
         if queue.isEmpty {
             await fillQueueIfNeeded()
+            guard !Task.isCancelled else { return }
         }
 
         guard !queue.isEmpty else {
@@ -978,14 +1216,20 @@ final class ChannelCoordinator: ObservableObject {
         updateStatus()
 
         do {
+            while preparingNext {
+                try await Task.sleep(nanoseconds: 50_000_000)
+                guard !Task.isCancelled else { return }
+            }
             if nextPreparedId != next.id {
                 try await prepareHiddenPlayer(with: next)
+                guard !Task.isCancelled else { return }
             }
 
             let outgoing = activePlayer()
             let incoming = hiddenPlayer()
             incoming.isMuted = outgoing.isMuted
             try await playWithAutoplayFallback(player: incoming)
+            guard !Task.isCancelled else { return }
 
             if configStore.config.crossfadeEnabled && configStore.config.crossfadeDurationMs > 0 {
                 withAnimation(.linear(duration: Double(configStore.config.crossfadeDurationMs) / 1000.0)) {
@@ -997,7 +1241,8 @@ final class ChannelCoordinator: ObservableObject {
                         opacityB = 0
                     }
                 }
-                try? await Task.sleep(nanoseconds: UInt64(Double(configStore.config.crossfadeDurationMs) * 1_000_000))
+                try await Task.sleep(nanoseconds: UInt64(Double(configStore.config.crossfadeDurationMs) * 1_000_000))
+                guard !Task.isCancelled else { return }
             } else {
                 if activeIndex == 0 {
                     opacityA = 0
@@ -1008,10 +1253,12 @@ final class ChannelCoordinator: ObservableObject {
                 }
             }
 
+            if isPlaybackPaused { incoming.pause() }
             outgoing.pause()
             outgoing.replaceCurrentItem(with: nil)
 
             activeIndex = 1 - activeIndex
+            resetProgressWatchdog()
             if let previous {
                 history.append(previous)
                 if history.count > 100 {
@@ -1021,7 +1268,6 @@ final class ChannelCoordinator: ObservableObject {
             currentItem = next
             canGoBack = !history.isEmpty
             currentIsFavorite = next.isFavorite
-            isPlaybackPaused = false
             playbackProgress = 0
             elapsedText = "0:00"
             totalDurationText = formatDuration(next.duration)
@@ -1029,6 +1275,7 @@ final class ChannelCoordinator: ObservableObject {
             currentImmichAssetURL = buildImmichAssetURL(for: next)
             updateCurrentChannelContext(for: next)
             await refreshCurrentMetadata(for: next)
+            guard !Task.isCancelled else { return }
             let overlay = overlayTexts(for: next)
             dateLocationText = overlayDateLocationText(for: next)
             title = overlay.title
@@ -1036,17 +1283,30 @@ final class ChannelCoordinator: ObservableObject {
             nextPreparedId = ""
             clearPlaybackFailureState()
             await recordWatchStart(for: next)
+            guard !Task.isCancelled else { return }
             await persistSequentialProgress(for: next)
+            guard !Task.isCancelled else { return }
 
             installTimeObserver()
             await fillQueueIfNeeded()
+            guard !Task.isCancelled else { return }
             await maybePrepareNext()
+            guard !Task.isCancelled else { return }
 
             if configStore.config.debug {
                 print("[ChannelCoordinator] transitioned: \(reason) -> \(next.id)")
             }
             addDebugMessage("Next: \(next.title)")
         } catch {
+            guard !Task.isCancelled else { return }
+            if error is PlaybackDurationValidationError {
+                addDebugMessage("Transition skipped short playback: \(next.title)")
+                nextPreparedId = ""
+                transitionInProgress = false
+                await transitionToNext(reason: "short_duration_skip")
+                guard !Task.isCancelled else { return }
+                return
+            }
             registerPlaybackFailure(L10n.tr(
                 "errors.playback.transition_failed_skipping",
                 "Transition failed. Skipping...",
@@ -1061,7 +1321,9 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func transitionToPrevious(reason: String) async {
-        guard !transitionInProgress else {
+        guard started, !Task.isCancelled else { return }
+        let generation = playbackGeneration
+        guard !transitionInProgress, !bootstrapping else {
             addDebugMessage("Back skipped: transition already in progress")
             return
         }
@@ -1072,17 +1334,23 @@ final class ChannelCoordinator: ObservableObject {
         addDebugMessage("Transition back start: \(reason)")
 
         transitionInProgress = true
-        defer { transitionInProgress = false }
+        defer { if generation == playbackGeneration { transitionInProgress = false } }
 
         let outgoingCurrent = currentItem
 
         do {
+            while preparingNext {
+                try await Task.sleep(nanoseconds: 50_000_000)
+                guard !Task.isCancelled else { return }
+            }
             try await prepareHiddenPlayer(with: previous)
+            guard !Task.isCancelled else { return }
 
             let outgoing = activePlayer()
             let incoming = hiddenPlayer()
             incoming.isMuted = outgoing.isMuted
             try await playWithAutoplayFallback(player: incoming)
+            guard !Task.isCancelled else { return }
 
             if configStore.config.crossfadeEnabled && configStore.config.crossfadeDurationMs > 0 {
                 withAnimation(.linear(duration: Double(configStore.config.crossfadeDurationMs) / 1000.0)) {
@@ -1094,7 +1362,8 @@ final class ChannelCoordinator: ObservableObject {
                         opacityB = 0
                     }
                 }
-                try? await Task.sleep(nanoseconds: UInt64(Double(configStore.config.crossfadeDurationMs) * 1_000_000))
+                try await Task.sleep(nanoseconds: UInt64(Double(configStore.config.crossfadeDurationMs) * 1_000_000))
+                guard !Task.isCancelled else { return }
             } else {
                 if activeIndex == 0 {
                     opacityA = 0
@@ -1105,14 +1374,15 @@ final class ChannelCoordinator: ObservableObject {
                 }
             }
 
+            if isPlaybackPaused { incoming.pause() }
             outgoing.pause()
             outgoing.replaceCurrentItem(with: nil)
 
             activeIndex = 1 - activeIndex
+            resetProgressWatchdog()
             currentItem = previous
             canGoBack = !history.isEmpty
             currentIsFavorite = previous.isFavorite
-            isPlaybackPaused = false
             playbackProgress = 0
             elapsedText = "0:00"
             totalDurationText = formatDuration(previous.duration)
@@ -1120,6 +1390,7 @@ final class ChannelCoordinator: ObservableObject {
             currentImmichAssetURL = buildImmichAssetURL(for: previous)
             updateCurrentChannelContext(for: previous)
             await refreshCurrentMetadata(for: previous)
+            guard !Task.isCancelled else { return }
             let overlay = overlayTexts(for: previous)
             dateLocationText = overlayDateLocationText(for: previous)
             title = overlay.title
@@ -1127,7 +1398,9 @@ final class ChannelCoordinator: ObservableObject {
             nextPreparedId = ""
             clearPlaybackFailureState()
             await recordWatchStart(for: previous)
+            guard !Task.isCancelled else { return }
             await persistSequentialProgress(for: previous)
+            guard !Task.isCancelled else { return }
 
             if let outgoingCurrent, !queue.contains(where: { $0.id == outgoingCurrent.id }) {
                 queue.insert(outgoingCurrent, at: 0)
@@ -1135,13 +1408,16 @@ final class ChannelCoordinator: ObservableObject {
 
             installTimeObserver()
             await fillQueueIfNeeded()
+            guard !Task.isCancelled else { return }
             await maybePrepareNext()
+            guard !Task.isCancelled else { return }
 
             if configStore.config.debug {
                 print("[ChannelCoordinator] transitioned: \(reason) -> \(previous.id)")
             }
             addDebugMessage("Back: \(previous.title)")
         } catch {
+            guard !Task.isCancelled else { return }
             history.append(previous)
             canGoBack = !history.isEmpty
             fallbackMessage = String(format: L10n.tr(
@@ -1206,6 +1482,7 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func setFavorite(for candidate: VideoCandidate, to isFavorite: Bool) async {
+        guard !Task.isCancelled else { return }
         guard !favoriteUpdateInProgress else { return }
 
         favoriteUpdateInProgress = true
@@ -1215,10 +1492,14 @@ final class ChannelCoordinator: ObservableObject {
 
         do {
             try await client.updateFavorite(assetId: candidate.id, isFavorite: isFavorite, config: configStore.config)
+            guard !Task.isCancelled else { return }
             try await store.initializeSchema()
+            guard !Task.isCancelled else { return }
             try await store.setFavorite(assetId: candidate.id, isFavorite: isFavorite)
+            guard !Task.isCancelled else { return }
             addDebugMessage("\(isFavorite ? "Favorited" : "Unfavorited"): \(candidate.title)")
         } catch {
+            guard !Task.isCancelled else { return }
             applyFavoriteStateLocally(assetId: candidate.id, isFavorite: previous)
             fallbackMessage = "Favorite update failed: \(error.localizedDescription)"
             if configStore.config.debug {
@@ -1279,9 +1560,11 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func recordWatchStart(for candidate: VideoCandidate) async {
+        guard !Task.isCancelled else { return }
         guard shouldUseSQLiteSelection() else { return }
         do {
             let count = try await store.incrementWatchCount(assetId: candidate.id)
+            guard !Task.isCancelled else { return }
             sessionVideosWatchedCount += 1
             applyWatchCountLocally(assetId: candidate.id, timesWatched: count)
             if currentItem?.id == candidate.id {
@@ -1289,6 +1572,7 @@ final class ChannelCoordinator: ObservableObject {
             }
             addDebugMessage("Watch count \(count): \(candidate.title)")
         } catch {
+            guard !Task.isCancelled else { return }
             if configStore.config.debug {
                 print("[ChannelCoordinator] watch count update failed: \(error)")
             }
@@ -1297,9 +1581,12 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func ensureSequentialStateLoaded() async {
+        guard !Task.isCancelled else { return }
         guard !sequentialStateLoaded else { return }
         do {
-            sequentialLastAssetId = try await store.getSequentialLastAssetId()
+            let loadedAssetId = try await store.getSequentialLastAssetId()
+            guard !Task.isCancelled else { return }
+            sequentialLastAssetId = loadedAssetId
             sequentialStateLoaded = true
             if let sequentialLastAssetId {
                 addDebugMessage("Seq resume at \(sequentialLastAssetId)")
@@ -1307,33 +1594,42 @@ final class ChannelCoordinator: ObservableObject {
                 addDebugMessage("Seq resume at start")
             }
         } catch {
+            guard !Task.isCancelled else { return }
             sequentialStateLoaded = true
             addDebugMessage("Seq state load failed: \(error.localizedDescription)")
         }
     }
 
     private func persistSequentialProgress(for candidate: VideoCandidate) async {
+        guard !Task.isCancelled else { return }
         guard isSequentialOrder(configStore.config.playbackOrder) else { return }
         sequentialLastAssetId = candidate.id
         sequentialStateLoaded = true
         do {
             try await store.setSequentialLastAssetId(candidate.id)
+            guard !Task.isCancelled else { return }
         } catch {
+            guard !Task.isCancelled else { return }
             addDebugMessage("Seq progress save failed: \(error.localizedDescription)")
         }
     }
 
     private func resetSequentialProgress() async {
+        guard !Task.isCancelled else { return }
         do {
             try await store.clearSequentialLastAssetId()
+            guard !Task.isCancelled else { return }
             sequentialLastAssetId = nil
             sequentialStateLoaded = true
             nextPreparedId = ""
             queue.removeAll()
             addDebugMessage("Sequential progress reset")
             await fillQueueIfNeeded()
+            guard !Task.isCancelled else { return }
             await loadLibraryStats()
+            guard !Task.isCancelled else { return }
         } catch {
+            guard !Task.isCancelled else { return }
             addDebugMessage("Seq progress reset failed: \(error.localizedDescription)")
         }
     }
@@ -1343,6 +1639,7 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func loadLibraryStats() async {
+        guard !Task.isCancelled else { return }
         guard shouldUseSQLiteSelection() else {
             statsLastError = L10n.tr(
                 "errors.library.sqlite_cache_disabled",
@@ -1354,7 +1651,9 @@ final class ChannelCoordinator: ObservableObject {
 
         do {
             try await store.initializeSchema()
+            guard !Task.isCancelled else { return }
             let stats = try await store.getLibraryStats()
+            guard !Task.isCancelled else { return }
             statsTotalVideos = stats.totalVideos
             statsTotalVideoDuration = stats.totalVideoDuration
             statsTotalWatchedPlays = stats.totalWatchedPlays
@@ -1380,6 +1679,7 @@ final class ChannelCoordinator: ObservableObject {
                 currentInfoFields = buildInfoFields(for: currentItem, peopleText: currentPeopleText)
             }
         } catch {
+            guard !Task.isCancelled else { return }
             statsLastError = error.localizedDescription
             addDebugMessage("Library stats failed: \(error.localizedDescription)")
         }
@@ -1515,7 +1815,9 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func refreshCurrentMetadata(for candidate: VideoCandidate) async {
+        guard !Task.isCancelled else { return }
         let peopleText = await resolvePeopleText(for: candidate)
+        guard !Task.isCancelled else { return }
         currentPeopleText = peopleText
         currentInfoFields = buildInfoFields(for: candidate, peopleText: peopleText)
     }
@@ -1739,9 +2041,12 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func resetDebugPlaybackTelemetry(for item: AVPlayerItem) async {
+        guard !Task.isCancelled else { return }
         debugHistorySamples = []
         lastDebugHistorySampleTime = 0
-        currentFormatDebugText = await debugFormatText(for: item)
+        let formatText = await debugFormatText(for: item)
+        guard !Task.isCancelled else { return }
+        currentFormatDebugText = formatText
         if configStore.config.debug {
             updateStatus()
         }
@@ -1811,16 +2116,11 @@ final class ChannelCoordinator: ObservableObject {
 }
 
 private extension AVPlayer {
+    @MainActor
     func playAsync() async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            play()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                if self.error != nil {
-                    continuation.resume(throwing: self.error!)
-                } else {
-                    continuation.resume(returning: ())
-                }
-            }
-        }
+        try Task.checkCancellation()
+        play()
+        try await Task.sleep(nanoseconds: 200_000_000)
+        if let error { throw error }
     }
 }
