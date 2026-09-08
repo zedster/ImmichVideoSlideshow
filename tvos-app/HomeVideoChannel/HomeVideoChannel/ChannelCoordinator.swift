@@ -22,6 +22,26 @@ struct PlaybackProgressWatchdog {
     }
 }
 
+struct PlaybackWaitMetrics {
+    private(set) var episodes = 0
+    private var startedAt: TimeInterval?
+    private var accumulated: TimeInterval = 0
+
+    mutating func update(waiting: Bool, now: TimeInterval) {
+        if waiting, startedAt == nil {
+            episodes += 1
+            startedAt = now
+        } else if !waiting, let start = startedAt {
+            accumulated += max(0, now - start)
+            startedAt = nil
+        }
+    }
+
+    func duration(now: TimeInterval) -> TimeInterval {
+        accumulated + (startedAt.map { max(0, now - $0) } ?? 0)
+    }
+}
+
 struct VideoInfoField: Identifiable, Equatable {
     let id: String
     let label: String
@@ -57,6 +77,10 @@ final class ChannelCoordinator: ObservableObject {
     @Published var canGoBack: Bool = false
     @Published var currentIsFavorite: Bool = false
     @Published var canHideToAlbum: Bool = false
+    enum NavigationAction { case previous, next }
+    @Published private(set) var navigationAction: NavigationAction?
+
+    @Published var actionFeedback: String = ""
     @Published var hideUpdateInProgress: Bool = false
     @Published var isPlaybackPaused: Bool = false
     @Published var favoriteUpdateInProgress: Bool = false
@@ -132,6 +156,9 @@ final class ChannelCoordinator: ObservableObject {
     private var debugHistorySamples: [String] = []
     private var lastDebugHistorySampleTime: Double = 0
     private var currentFormatDebugText: String = "-"
+    private weak var diagnosticItem: AVPlayerItem?
+    private var waitMetrics = PlaybackWaitMetrics()
+    private var lastDiagnosticLogAt: TimeInterval = 0
 
     init(configStore: ConfigStore, client: ImmichAPIClient = ImmichAPIClient(), store: SQLiteVideoStore = SQLiteVideoStore()) {
         self.configStore = configStore
@@ -193,6 +220,9 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func recoverPlaybackIfNeeded() async {
+        if configStore.config.debug, let item = activePlayer().currentItem {
+            updateDebugTelemetry(current: CMTimeGetSeconds(activePlayer().currentTime()), item: item)
+        }
         guard started, !Task.isCancelled, !isPlaybackPaused, !bootstrapping else { return }
         let player = activePlayer()
         let position = CMTimeGetSeconds(player.currentTime())
@@ -225,6 +255,7 @@ final class ChannelCoordinator: ObservableObject {
             let player = activePlayer()
             let item = try client.makePlaybackItem(candidate: candidate, config: configStore.config)
             player.replaceCurrentItem(with: item)
+            beginPlaybackDiagnostics(for: item)
             _ = try await waitUntilReadyToPlay(item: item, timeoutSeconds: 12)
             guard !Task.isCancelled else { return }
             try validatePlaybackDuration(item, for: candidate)
@@ -311,6 +342,10 @@ final class ChannelCoordinator: ObservableObject {
 
     func stop() {
         guard started || !playbackTasks.isEmpty else { return }
+        if let item = activePlayer().currentItem {
+            waitMetrics.update(waiting: false, now: ProcessInfo.processInfo.systemUptime)
+            logPlaybackSnapshot("stop", item: item)
+        }
         addDebugMessage("Channel stop")
         if started {
             let position = CMTimeGetSeconds(activePlayer().currentTime())
@@ -321,6 +356,7 @@ final class ChannelCoordinator: ObservableObject {
         playbackTasks.values.forEach { $0.cancel() }
         playbackTasks.removeAll()
         transitionInProgress = false
+        navigationAction = nil
         preparingNext = false
         bootstrapping = false
         inflightQueueFetches = 0
@@ -418,6 +454,10 @@ final class ChannelCoordinator: ObservableObject {
     func skip() {
         addDebugMessage("Skip requested")
         launch { [self] in
+            guard navigationAction == nil, !transitionInProgress, !bootstrapping else { return }
+            let generation = playbackGeneration
+            navigationAction = .next
+            defer { if generation == playbackGeneration { navigationAction = nil } }
             await transitionToNext(reason: "manual_skip")
         }
     }
@@ -516,6 +556,10 @@ final class ChannelCoordinator: ObservableObject {
     func goBack() {
         addDebugMessage("Back requested")
         launch { [self] in
+            guard navigationAction == nil, !transitionInProgress, !bootstrapping else { return }
+            let generation = playbackGeneration
+            navigationAction = .previous
+            defer { if generation == playbackGeneration { navigationAction = nil } }
             await transitionToPrevious(reason: "manual_back")
         }
     }
@@ -560,7 +604,7 @@ final class ChannelCoordinator: ObservableObject {
                 }
                 guard !Task.isCancelled else { return }
                 applyHiddenStateLocally(assetId: target.id, isHidden: true)
-                fallbackMessage = String(format: L10n.tr(
+                actionFeedback = String(format: L10n.tr(
                     "playback.hide_forever.success",
                     "Hidden: %@",
                     comment: "Confirmation after hiding current video"
@@ -607,7 +651,9 @@ final class ChannelCoordinator: ObservableObject {
                         placeCity: configStore.config.placeFilterCity,
                         placeCountry: configStore.config.placeFilterCountry,
                         albumID: configStore.config.albumFilterID,
-                        personID: configStore.config.personFilterID
+                        personID: configStore.config.personFilterID,
+                        cameraMake: configStore.config.cameraFilterMake,
+                        cameraModel: configStore.config.cameraFilterModel
                     )
                     guard !Task.isCancelled else { return }
                     if count == 0 {
@@ -751,7 +797,25 @@ final class ChannelCoordinator: ObservableObject {
         removeTimeObserverIfNeeded()
     }
 
+    private func beginPlaybackDiagnostics(for item: AVPlayerItem) {
+        if item !== diagnosticItem {
+            diagnosticItem = item
+            currentFormatDebugText = "loading"
+            debugTelemetryText = ""
+            debugHistorySamples = []
+            lastDebugHistorySampleTime = 0
+            lastDiagnosticLogAt = 0
+            waitMetrics = PlaybackWaitMetrics()
+            if configStore.config.debug {
+                launch { [self] in
+                    await resetDebugPlaybackTelemetry(for: item)
+                }
+            }
+        }
+    }
+
     private func installTimeObserver() {
+        if let item = activePlayer().currentItem { beginPlaybackDiagnostics(for: item) }
         let generation = playbackGeneration
         removeTimeObserverIfNeeded()
 
@@ -787,7 +851,11 @@ final class ChannelCoordinator: ObservableObject {
         let next = !isPlaybackPaused && player.timeControlStatus == .waitingToPlayAtSpecifiedRate
         let changed = next != isBuffering
         isBuffering = next
+        waitMetrics.update(waiting: next, now: ProcessInfo.processInfo.systemUptime)
         if changed {
+            if let item = player.currentItem, item === diagnosticItem {
+                logPlaybackSnapshot(next ? "wait-start" : "wait-end", item: item)
+            }
             addDebugMessage(bufferingStateText(next))
         }
     }
@@ -817,7 +885,7 @@ final class ChannelCoordinator: ObservableObject {
             }
         }
 
-        if !isPlaybackPaused, configStore.config.crossfadeEnabled,
+        if !isPlaybackPaused, configStore.config.preloadEnabled, configStore.config.crossfadeEnabled,
            remaining <= max(0.15, Double(configStore.config.crossfadeDurationMs) / 1000.0),
            !queue.isEmpty {
             launch { [self] in
@@ -856,7 +924,9 @@ final class ChannelCoordinator: ObservableObject {
                 placeCity: configStore.config.placeFilterCity,
                 placeCountry: configStore.config.placeFilterCountry,
                 albumID: configStore.config.albumFilterID,
-                personID: configStore.config.personFilterID
+                personID: configStore.config.personFilterID,
+                cameraMake: configStore.config.cameraFilterMake,
+                cameraModel: configStore.config.cameraFilterModel
             ) {
                 try Task.checkCancellation()
                 return fromDB
@@ -877,7 +947,9 @@ final class ChannelCoordinator: ObservableObject {
                 placeCity: configStore.config.placeFilterCity,
                 placeCountry: configStore.config.placeFilterCountry,
                 albumID: configStore.config.albumFilterID,
-                personID: configStore.config.personFilterID
+                personID: configStore.config.personFilterID,
+                cameraMake: configStore.config.cameraFilterMake,
+                cameraModel: configStore.config.cameraFilterModel
             ) {
                 try Task.checkCancellation()
                 return fromDB
@@ -895,7 +967,9 @@ final class ChannelCoordinator: ObservableObject {
                 placeCity: configStore.config.placeFilterCity,
                 placeCountry: configStore.config.placeFilterCountry,
                 albumID: configStore.config.albumFilterID,
-                personID: configStore.config.personFilterID
+                personID: configStore.config.personFilterID,
+                cameraMake: configStore.config.cameraFilterMake,
+                cameraModel: configStore.config.cameraFilterModel
             ) {
                 try Task.checkCancellation()
                 return fromDB
@@ -914,7 +988,9 @@ final class ChannelCoordinator: ObservableObject {
                 placeCity: configStore.config.placeFilterCity,
                 placeCountry: configStore.config.placeFilterCountry,
                 albumID: configStore.config.albumFilterID,
-                personID: configStore.config.personFilterID
+                personID: configStore.config.personFilterID,
+                cameraMake: configStore.config.cameraFilterMake,
+                cameraModel: configStore.config.cameraFilterModel
             ) {
                 try Task.checkCancellation()
                 return fromDB
@@ -1018,7 +1094,6 @@ final class ChannelCoordinator: ObservableObject {
         guard started, !Task.isCancelled else { return }
         let generation = playbackGeneration
         let target = max(1, min(configStore.config.queueTargetSize, 5))
-        addDebugMessage("Queue check \(queue.count)/\(target)")
         var attempts = 0
         while (queue.count + inflightQueueFetches) < target, attempts < target * 4 {
             attempts += 1
@@ -1063,7 +1138,7 @@ final class ChannelCoordinator: ObservableObject {
     private func maybePrepareNext() async {
         guard started, !Task.isCancelled else { return }
         let generation = playbackGeneration
-        guard !preparingNext, !transitionInProgress, !bootstrapping else { return }
+        guard configStore.config.preloadEnabled, !preparingNext, !transitionInProgress, !bootstrapping else { return }
         guard let next = queue.first else { return }
         guard nextPreparedId != next.id else { return }
 
@@ -1129,6 +1204,7 @@ final class ChannelCoordinator: ObservableObject {
         if isPlaybackPaused { player.pause() }
         resetProgressWatchdog()
         currentItem = candidate
+        if let item = activePlayer().currentItem { beginPlaybackDiagnostics(for: item) }
         canGoBack = !history.isEmpty
         currentIsFavorite = candidate.isFavorite
         playbackProgress = 0
@@ -1138,8 +1214,6 @@ final class ChannelCoordinator: ObservableObject {
         currentImmichAssetURL = buildImmichAssetURL(for: candidate)
         updateCurrentChannelContext(for: candidate)
         await refreshCurrentMetadata(for: candidate)
-        try Task.checkCancellation()
-        await resetDebugPlaybackTelemetry(for: item)
         try Task.checkCancellation()
         let overlay = overlayTexts(for: candidate)
         dateLocationText = overlayDateLocationText(for: candidate)
@@ -1266,6 +1340,7 @@ final class ChannelCoordinator: ObservableObject {
                 }
             }
             currentItem = next
+            if let item = activePlayer().currentItem { beginPlaybackDiagnostics(for: item) }
             canGoBack = !history.isEmpty
             currentIsFavorite = next.isFavorite
             playbackProgress = 0
@@ -1381,6 +1456,7 @@ final class ChannelCoordinator: ObservableObject {
             activeIndex = 1 - activeIndex
             resetProgressWatchdog()
             currentItem = previous
+            if let item = activePlayer().currentItem { beginPlaybackDiagnostics(for: item) }
             canGoBack = !history.isEmpty
             currentIsFavorite = previous.isFavorite
             playbackProgress = 0
@@ -1459,8 +1535,7 @@ final class ChannelCoordinator: ObservableObject {
         }
         let syncText = isSyncing ? " · syncing p\(syncPagesFetched) r\(syncRowsUpserted)" : ""
         let debugQuality = configStore.config.debug ? " · q \(configStore.config.playbackQualityLabel)" : ""
-        let bitrateText = configStore.config.debug ? " · \(currentBitrateStatus())" : ""
-        statusText = "Queue \(queue.count)/\(configStore.config.queueTargetSize) · \(orderLabel) · \(mode)\(syncText)\(debugQuality)\(bitrateText)"
+        statusText = "Queue \(queue.count)/\(configStore.config.queueTargetSize) · \(orderLabel) · \(mode)\(syncText)\(debugQuality)"
     }
 
     private func applyMuteState(_ muted: Bool) {
@@ -1497,6 +1572,9 @@ final class ChannelCoordinator: ObservableObject {
             guard !Task.isCancelled else { return }
             try await store.setFavorite(assetId: candidate.id, isFavorite: isFavorite)
             guard !Task.isCancelled else { return }
+            actionFeedback = isFavorite
+                ? L10n.tr("playback.favorite.saved", "Added to favourites", comment: "Favourite success feedback")
+                : L10n.tr("playback.favorite.removed", "Removed from favourites", comment: "Favourite removal feedback")
             addDebugMessage("\(isFavorite ? "Favorited" : "Unfavorited"): \(candidate.title)")
         } catch {
             guard !Task.isCancelled else { return }
@@ -1936,6 +2014,7 @@ final class ChannelCoordinator: ObservableObject {
             recentDebugMessages = []
             return
         }
+        print("[ChannelCoordinator] \(message)")
         let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
         recentDebugMessages.append("[\(timestamp)] \(message)")
         if recentDebugMessages.count > 3 {
@@ -1951,14 +2030,14 @@ final class ChannelCoordinator: ObservableObject {
 
     private func currentBitrateStatus() -> String {
         guard let event = activePlayer().currentItem?.accessLog()?.events.last else {
-            return "br -"
+            return "download - · stream -"
         }
 
         let observed = event.observedBitrate
         let indicated = event.indicatedBitrate
         let observedText = observed > 0 ? formatBitrate(observed) : "-"
         let indicatedText = indicated > 0 ? formatBitrate(indicated) : "-"
-        return "br \(observedText)/\(indicatedText)"
+        return "download \(observedText) · stream \(indicatedText)"
     }
 
     private func formatBitrate(_ bitsPerSecond: Double) -> String {
@@ -1972,19 +2051,81 @@ final class ChannelCoordinator: ObservableObject {
         return String(format: "%.2fMbps", megabitsPerSecond)
     }
 
-    private func updateDebugTelemetry(current: Double, item: AVPlayerItem) {
-        let bufferAheadSeconds = currentBufferAheadSeconds(current: current, item: item)
-        let bitrateText = currentBitrateStatus()
-        let modeText = currentPlaybackModeStatus(item: item)
-        let historyText = historyStatus(current: current, bufferAheadSeconds: bufferAheadSeconds, item: item)
+    private var diagnosticCamera: String {
+        guard let candidate = currentItem else { return "unknown camera" }
+        let make = candidate.cameraMake.trimmingCharacters(in: .whitespacesAndNewlines)
+        let model = candidate.cameraModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        if model.localizedCaseInsensitiveContains(make), !make.isEmpty { return model }
+        let name = [make, model].filter { !$0.isEmpty }.joined(separator: " ")
+        return name.isEmpty ? "unknown camera" : name
+    }
 
+    private var preloadDiagnosticState: String {
+        if !configStore.config.preloadEnabled { return "off" }
+        if preparingNext { return "loading" }
+        return nextPreparedId.isEmpty ? "idle" : "ready"
+    }
+
+    private func updateDebugTelemetry(current: Double, item: AVPlayerItem) {
+        guard item === diagnosticItem else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        let waiting = !isPlaybackPaused && activePlayer().timeControlStatus == .waitingToPlayAtSpecifiedRate
+        waitMetrics.update(waiting: waiting, now: now)
+        let ahead = currentBufferAheadSeconds(current: current, item: item)
+        let stalls = item.accessLog()?.events.reduce(0) { $0 + max(0, $1.numberOfStalls) }
         debugTelemetryText = [
-            "buf \(String(format: "%.1fs", bufferAheadSeconds))",
-            bitrateText,
-            "fmt \(currentFormatDebugText)",
-            "src \(modeText)",
-            historyText
+            "camera \(diagnosticCamera)",
+            "file \(currentItem?.title ?? "-")",
+            currentBitrateStatus(),
+            "buffer \(String(format: "%.1fs", ahead)) · stalls \(stalls.map(String.init) ?? "-") · wait \(String(format: "%.1fs", waitMetrics.duration(now: now)))",
+            "\(currentFormatDebugText) · preload \(preloadDiagnosticState)"
         ].joined(separator: "\n")
+        _ = historyStatus(current: current, bufferAheadSeconds: ahead, item: item)
+        if now - lastDiagnosticLogAt >= (waiting || ahead < 2 ? 3 : 15) {
+            lastDiagnosticLogAt = now
+            logPlaybackSnapshot(waiting ? "waiting" : "sample", item: item)
+        }
+    }
+
+    private func logPlaybackSnapshot(_ reason: String, item: AVPlayerItem) {
+        guard configStore.config.debug, item === diagnosticItem else { return }
+        let player = activePlayer()
+        let current = CMTimeGetSeconds(player.currentTime())
+        let events = item.accessLog()?.events ?? []
+        let error = item.errorLog()?.events.last
+        // Structured JSON keeps filenames on one line. Avoid URLs, headers and
+        // server error comments, which may contain authentication information.
+        let payload: [String: Any] = [
+            "event": reason, "time": ISO8601DateFormatter().string(from: Date()),
+            "asset": currentItem?.id ?? "-", "file": currentItem?.title ?? "-",
+            "camera": diagnosticCamera, "format": currentFormatDebugText,
+            "positionSeconds": current.isFinite ? current : -1,
+            "bufferSeconds": currentBufferAheadSeconds(current: current, item: item),
+            "bitrates": currentBitrateStatus(),
+            "observedDownloadBitsPerSecond": events.last?.observedBitrate ?? -1,
+            "advertisedStreamBitsPerSecond": events.last?.indicatedBitrate ?? -1,
+            "waitReason": player.reasonForWaitingToPlay?.rawValue ?? "none",
+            "playerState": player.timeControlStatus.rawValue, "itemState": item.status.rawValue,
+            "bufferEmpty": item.isPlaybackBufferEmpty, "likelyToKeepUp": item.isPlaybackLikelyToKeepUp,
+            "waitEpisodes": waitMetrics.episodes,
+            "waitSeconds": waitMetrics.duration(now: ProcessInfo.processInfo.systemUptime),
+            "avStalls": events.reduce(0) { $0 + max(0, $1.numberOfStalls) },
+            "droppedFrames": events.reduce(0) { $0 + max(0, $1.numberOfDroppedVideoFrames) },
+            "bytesTransferred": events.reduce(Int64(0)) { $0 + max(0, $1.numberOfBytesTransferred) },
+            "transferSeconds": events.reduce(0.0) { $0 + max(0, $1.transferDuration) },
+            "preload": preloadDiagnosticState, "syncing": isSyncing,
+            "qualityPreference": configStore.config.playbackQuality,
+            "peakBitRatePreference": configStore.config.playbackPeakBitRate,
+            "crossfadeEnabled": configStore.config.crossfadeEnabled,
+            "hiddenBufferSeconds": hiddenPlayer().currentItem.map { currentBufferAheadSeconds(current: 0, item: $0) } ?? 0,
+            "source": currentPlaybackModeStatus(item: item),
+            "errorCode": error?.errorStatusCode ?? 0,
+            "history": debugHistorySamples
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]),
+           let text = String(data: data, encoding: .utf8) {
+            print("[PlaybackDiagnostics] \(text)")
+        }
     }
 
     private func currentBufferAheadSeconds(current: Double, item: AVPlayerItem) -> Double {
@@ -2000,8 +2141,9 @@ final class ChannelCoordinator: ObservableObject {
     }
 
     private func historyStatus(current: Double, bufferAheadSeconds: Double, item: AVPlayerItem) -> String {
-        if current - lastDebugHistorySampleTime >= 5 || debugHistorySamples.isEmpty {
-            lastDebugHistorySampleTime = current
+        let now = ProcessInfo.processInfo.systemUptime
+        if now - lastDebugHistorySampleTime >= 5 || debugHistorySamples.isEmpty {
+            lastDebugHistorySampleTime = now
             debugHistorySamples.append("\(formatDuration(current)) \(shortBitrateStatus()) \(String(format: "%.1fs", bufferAheadSeconds))")
             if debugHistorySamples.count > 5 {
                 debugHistorySamples.removeFirst(debugHistorySamples.count - 5)
@@ -2042,11 +2184,11 @@ final class ChannelCoordinator: ObservableObject {
 
     private func resetDebugPlaybackTelemetry(for item: AVPlayerItem) async {
         guard !Task.isCancelled else { return }
-        debugHistorySamples = []
-        lastDebugHistorySampleTime = 0
         let formatText = await debugFormatText(for: item)
         guard !Task.isCancelled else { return }
+        guard item === diagnosticItem, item === activePlayer().currentItem else { return }
         currentFormatDebugText = formatText
+        logPlaybackSnapshot("format-ready", item: item)
         if configStore.config.debug {
             updateStatus()
         }

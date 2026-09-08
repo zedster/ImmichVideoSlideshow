@@ -57,6 +57,7 @@ struct ChannelView: View {
     @State private var scrubBarFocused = false
     @State private var channelCounts: [String: Int] = [:]
     @State private var albumChannelOptions: [ChannelOption] = []
+    @State private var cameraChannelOptions: [ChannelOption] = []
     @State private var peopleChannelOptions: [ChannelOption] = []
     @State private var searchQueryDraft = ""
     @State private var selectedChannelTab: ChannelSelectorTab = .timePlace
@@ -104,6 +105,15 @@ struct ChannelView: View {
                     .allowsHitTesting(false)
 
                 VStack {
+                    if !coordinator.actionFeedback.isEmpty {
+                        Label(coordinator.actionFeedback, systemImage: "checkmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.white)
+                            .padding(12)
+                            .background(.black.opacity(0.85), in: Capsule())
+                            .padding(.top, 28)
+                            .allowsHitTesting(false)
+                    }
                     if !coordinator.fallbackMessage.isEmpty {
                         Text(coordinator.fallbackMessage)
                             .font(.caption.monospaced())
@@ -201,6 +211,12 @@ struct ChannelView: View {
             hideControlsTask?.cancel()
             channelDataTask?.cancel()
         }
+        .task(id: coordinator.actionFeedback) {
+            guard !coordinator.actionFeedback.isEmpty else { return }
+            do { try await Task.sleep(nanoseconds: 3_000_000_000) }
+            catch { return }
+            coordinator.actionFeedback = ""
+        }
         .onChange(of: configStore.config) { _ in
             coordinator.restart()
         }
@@ -216,6 +232,10 @@ struct ChannelView: View {
             }
             recordInteraction()
             refreshInputAnchorFocus()
+            if !isVisible {
+                lastFocusedControl = .info
+                restoreLastFocusedControl()
+            }
         }
         .onChange(of: showSetup) { isPresented in
             if isPresented {
@@ -231,6 +251,8 @@ struct ChannelView: View {
             }
             if !isPresented {
                 coordinator.clearDebugMessages()
+                lastFocusedControl = .settings
+                restoreLastFocusedControl()
             }
             if isPresented {
                 showChannelList = false
@@ -256,6 +278,13 @@ struct ChannelView: View {
             }
             recordInteraction()
             refreshInputAnchorFocus()
+        }
+        .onChange(of: showHideForeverConfirmation) { isPresented in
+            recordInteraction()
+            if !isPresented {
+                lastFocusedControl = .playPause
+                restoreLastFocusedControl()
+            }
         }
         .onChange(of: coordinator.currentCaptureDateRaw) { _ in
             guard showChannelList else { return }
@@ -330,7 +359,7 @@ struct ChannelView: View {
                 break
             }
         }
-        .sheet(isPresented: $showSetup) {
+        .fullScreenCover(isPresented: $showSetup) {
             SetupView(onForceSync: {
                 coordinator.forceSyncNow()
             },
@@ -472,69 +501,90 @@ struct ChannelView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
 
-            if coordinator.canGoBack {
+            Group {
+                if coordinator.canGoBack || coordinator.navigationAction == .previous {
+                    Button {
+                        recordInteraction()
+                        coordinator.goBack()
+                    } label: {
+                        toolbarIcon("backward.end.fill", busy: coordinator.navigationAction == .previous)
+                    }
+                    .buttonStyle(PlaybackControlStyle())
+                    .focused($focusedControl, equals: .back)
+                    .accessibilityLabel(L10n.tr("playback.controls.back", "Back", comment: "Back control accessibility label"))
+                }
+
                 Button {
                     recordInteraction()
-                    coordinator.goBack()
+                    coordinator.togglePlayPause()
                 } label: {
-                    Image(systemName: "backward.end.fill")
+                    Image(systemName: coordinator.playPauseButtonSystemImage())
                 }
-                .buttonStyle(.bordered)
-                .focused($focusedControl, equals: .back)
-                .accessibilityLabel(L10n.tr("playback.controls.back", "Back", comment: "Back control accessibility label"))
+                .buttonStyle(PlaybackControlStyle())
+                .focused($focusedControl, equals: .playPause)
+                .accessibilityLabel(L10n.tr("playback.controls.play_pause", "Play Pause", comment: "Play/pause control accessibility label"))
+
+                Button {
+                    recordInteraction()
+                    coordinator.skip()
+                } label: {
+                    toolbarIcon("forward.end.fill", busy: coordinator.navigationAction == .next)
+                }
+                .buttonStyle(PlaybackControlStyle())
+                .focused($focusedControl, equals: .skip)
+                .accessibilityLabel(L10n.tr("playback.controls.skip", "Skip", comment: "Skip control accessibility label"))
+
             }
+            toolbarSeparator
+
+            Group {
+                Button {
+                    recordInteraction()
+                    guard !coordinator.favoriteUpdateInProgress else { return }
+                    coordinator.toggleFavorite()
+                } label: {
+                    toolbarIcon(coordinator.favoriteButtonSystemImage(), busy: coordinator.favoriteUpdateInProgress)
+                }
+                .buttonStyle(PlaybackControlStyle())
+                .focused($focusedControl, equals: .favorite)
+                .accessibilityLabel(coordinator.favoriteButtonLabel())
+
+                Button {
+                    recordInteraction()
+                    showInfo.toggle()
+                } label: {
+                    Image(systemName: "info.circle")
+                }
+                .buttonStyle(PlaybackControlStyle())
+                .focused($focusedControl, equals: .info)
+                .accessibilityLabel(L10n.tr("playback.controls.info", "Info", comment: "Info control accessibility label"))
+
+            }
+            toolbarSeparator
 
             Button {
                 recordInteraction()
-                coordinator.togglePlayPause()
-            } label: {
-                Image(systemName: coordinator.playPauseButtonSystemImage())
-            }
-            .buttonStyle(.bordered)
-            .focused($focusedControl, equals: .playPause)
-            .accessibilityLabel(L10n.tr("playback.controls.play_pause", "Play Pause", comment: "Play/pause control accessibility label"))
-
-            Button {
-                recordInteraction()
-                coordinator.skip()
-            } label: {
-                Image(systemName: "forward.end.fill")
-            }
-            .buttonStyle(.bordered)
-            .focused($focusedControl, equals: .skip)
-            .accessibilityLabel(L10n.tr("playback.controls.skip", "Skip", comment: "Skip control accessibility label"))
-
-            Button {
-                recordInteraction()
-                coordinator.toggleFavorite()
-            } label: {
-                Image(systemName: coordinator.favoriteButtonSystemImage())
-            }
-            .buttonStyle(.bordered)
-            .disabled(coordinator.favoriteUpdateInProgress)
-            .focused($focusedControl, equals: .favorite)
-            .accessibilityLabel(coordinator.favoriteButtonLabel())
-
-            Button(role: .destructive) {
-                recordInteraction()
+                guard !coordinator.hideUpdateInProgress else { return }
                 showHideForeverConfirmation = true
             } label: {
-                Image(systemName: coordinator.hideButtonSystemImage())
+                toolbarIcon(coordinator.hideButtonSystemImage(), busy: coordinator.hideUpdateInProgress)
             }
-            .buttonStyle(.bordered)
-            .disabled(!coordinator.canHideToAlbum || coordinator.hideUpdateInProgress)
+            .buttonStyle(PlaybackControlStyle())
+            .disabled(!coordinator.canHideToAlbum)
             .focused($focusedControl, equals: .hideForever)
-            .accessibilityLabel(L10n.tr("playback.hide_forever.action", "Hide Forever", comment: "Hide forever accessibility label"))
-
-            Button {
-                recordInteraction()
-                showInfo.toggle()
-            } label: {
-                Image(systemName: "info.circle")
+            .accessibilityLabel(L10n.tr("playback.controls.hide_in_immich", "Hide in Immich…", comment: "Toolbar hide action"))
+            .overlay(alignment: .top) {
+                if focusedControl == .hideForever {
+                    Text(L10n.tr("playback.controls.hide_in_immich", "Hide in Immich…", comment: "Toolbar hide action"))
+                        .font(.caption2)
+                        .foregroundStyle(.white)
+                        .padding(8)
+                        .background(.black.opacity(0.85), in: Capsule())
+                        .fixedSize()
+                        .offset(y: -48)
+                        .allowsHitTesting(false)
+                }
             }
-            .buttonStyle(.bordered)
-            .focused($focusedControl, equals: .info)
-            .accessibilityLabel(L10n.tr("playback.controls.info", "Info", comment: "Info control accessibility label"))
 
             Button {
                 recordInteraction()
@@ -542,13 +592,31 @@ struct ChannelView: View {
             } label: {
                 Image(systemName: "gearshape")
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(PlaybackControlStyle())
             .focused($focusedControl, equals: .settings)
             .accessibilityLabel(L10n.tr("settings.title", "Settings", comment: "Settings accessibility label"))
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
         .padding(.bottom, 0)
+    }
+
+
+    private var toolbarSeparator: some View {
+        Rectangle()
+            .fill(.white.opacity(0.3))
+            .frame(width: 1, height: 32)
+            .padding(.horizontal, 12)
+            .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private func toolbarIcon(_ symbol: String, busy: Bool) -> some View {
+        ZStack {
+            Image(systemName: symbol).opacity(busy ? 0 : 1)
+            if busy { ProgressView() }
+        }
+        .accessibilityValue(busy ? L10n.tr("playback.controls.updating", "Updating", comment: "Action in progress") : "")
     }
 
     @ViewBuilder
@@ -624,19 +692,20 @@ struct ChannelView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                         } else {
                             VStack(alignment: .leading, spacing: 14) {
-                                ForEach(channelOptionsForSelectedTab) { option in
-                                    Button {
-                                        selectChannel(option.id)
-                                    } label: {
-                                        ChannelOptionRow(
-                                            option: option,
-                                            isSelected: option.id == selectedChannelID,
-                                            apiKey: configStore.config.apiKey
-                                        )
+                                if selectedChannelTab == .albums {
+                                    ForEach(albumChannelOptions, content: channelOptionButton)
+                                    if !cameraChannelOptions.isEmpty {
+                                        Text("Automatic filters")
+                                            .font(.headline.weight(.semibold))
+                                            .foregroundStyle(.white.opacity(0.88))
+                                            .padding(.top, 18)
+                                        Text("By camera type")
+                                            .font(.caption)
+                                            .foregroundStyle(.white.opacity(0.62))
+                                        ForEach(cameraChannelOptions, content: channelOptionButton)
                                     }
-                                    .buttonStyle(.plain)
-                                    .modifier(TVFocusEffectDisabled())
-                                    .focused($focusedChannelID, equals: option.id)
+                                } else {
+                                    ForEach(channelOptionsForSelectedTab, content: channelOptionButton)
                                 }
                             }
                             .padding(.horizontal, 14)
@@ -795,11 +864,11 @@ struct ChannelView: View {
     private func recordInteraction() {
         showControls()
         hideControlsTask?.cancel()
-        guard !showInfo, !showSetup, !showChannelList else { return }
+        guard !showInfo, !showSetup, !showChannelList, !showHideForeverConfirmation else { return }
 
         hideControlsTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 10_000_000_000)
-            guard !Task.isCancelled, !showInfo, !showSetup, !showChannelList else { return }
+            guard !Task.isCancelled, !showInfo, !showSetup, !showChannelList, !showHideForeverConfirmation else { return }
             hideControls()
         }
     }
@@ -811,6 +880,7 @@ struct ChannelView: View {
     }
 
     private func hideControls() {
+        lastFocusedControl = .playPause
         logRemoteDebug("inactivity timeout: hiding controls")
         withAnimation(.easeInOut(duration: 0.2)) {
             controlsVisible = false
@@ -818,7 +888,7 @@ struct ChannelView: View {
     }
 
     private var shouldFocusInputAnchor: Bool {
-        !controlsVisible && !showInfo && !showSetup && !showChannelList
+        !controlsVisible && !showInfo && !showSetup && !showChannelList && !showHideForeverConfirmation
     }
 
     private func refreshInputAnchorFocus() {
@@ -838,10 +908,10 @@ struct ChannelView: View {
     }
 
     private func restoreLastFocusedControl() {
-        guard controlsVisible, !showInfo, !showSetup, !showChannelList else { return }
+        guard controlsVisible, !showInfo, !showSetup, !showChannelList, !showHideForeverConfirmation else { return }
         let target = resolvedFocusTarget(from: lastFocusedControl)
         DispatchQueue.main.async {
-            guard controlsVisible, !showInfo, !showSetup, !showChannelList else { return }
+            guard controlsVisible, !showInfo, !showSetup, !showChannelList, !showHideForeverConfirmation else { return }
             logRemoteDebug("restoring toolbar focus: \(target)")
             focusedControl = target
         }
@@ -953,12 +1023,26 @@ struct ChannelView: View {
         case .timePlace:
             return timePlaceChannelOptions
         case .albums:
-            return albumChannelOptions
+            return albumChannelOptions + cameraChannelOptions
         case .people:
             return peopleChannelOptions
         case .search:
             return []
         }
+    }
+
+    @ViewBuilder
+    private func channelOptionButton(_ option: ChannelOption) -> some View {
+        Button { selectChannel(option.id) } label: {
+            ChannelOptionRow(
+                option: option,
+                isSelected: option.id == selectedChannelID,
+                apiKey: configStore.config.apiKey
+            )
+        }
+        .buttonStyle(.plain)
+        .modifier(TVFocusEffectDisabled())
+        .focused($focusedChannelID, equals: option.id)
     }
 
     private var selectedChannelID: String {
@@ -971,6 +1055,13 @@ struct ChannelView: View {
         }
         if !configStore.config.personFilterID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return "person:\(configStore.config.personFilterID)"
+        }
+        if !configStore.config.cameraFilterMake.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+            !configStore.config.cameraFilterModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return cameraChannelID(
+                make: configStore.config.cameraFilterMake,
+                model: configStore.config.cameraFilterModel
+            )
         }
         if !configStore.config.placeFilterCity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return "place_city"
@@ -998,6 +1089,10 @@ struct ChannelView: View {
             return .search
         }
         if !configStore.config.albumFilterID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return .albums
+        }
+        if !configStore.config.cameraFilterMake.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+            !configStore.config.cameraFilterModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return .albums
         }
         if !configStore.config.personFilterID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -1038,6 +1133,8 @@ struct ChannelView: View {
         nextConfig.albumFilterName = ""
         nextConfig.personFilterID = ""
         nextConfig.personFilterName = ""
+        nextConfig.cameraFilterMake = ""
+        nextConfig.cameraFilterModel = ""
         nextConfig.searchQuery = ""
 
         nextConfig.timeChannel = TimeChannel(rawValue: channelID)
@@ -1068,6 +1165,12 @@ struct ChannelView: View {
                 nextConfig.personFilterID = personID
                 nextConfig.personFilterName = option.title
             }
+        case let value where value.hasPrefix("camera:"):
+            if let option = cameraChannelOptions.first(where: { $0.id == channelID }) {
+                let components = String(option.id.dropFirst("camera:".count)).components(separatedBy: "\u{1F}")
+                nextConfig.cameraFilterMake = components.first ?? ""
+                nextConfig.cameraFilterModel = components.dropFirst().first ?? ""
+            }
         default:
             break
         }
@@ -1092,6 +1195,8 @@ struct ChannelView: View {
         nextConfig.albumFilterName = ""
         nextConfig.personFilterID = ""
         nextConfig.personFilterName = ""
+        nextConfig.cameraFilterMake = ""
+        nextConfig.cameraFilterModel = ""
         nextConfig.searchQuery = query
         configStore.save(nextConfig)
         showChannelList = false
@@ -1451,13 +1556,42 @@ struct ChannelView: View {
                     fallbackSymbol: "person.crop.circle.fill"
                 )
             }
+            let storedCameraChannels = (try? await channelStore.listCameraChannels(minDuration: configStore.config.minDuration)) ?? []
+            let manufacturerOptions = Dictionary(grouping: storedCameraChannels.filter { !$0.make.isEmpty }, by: \.make)
+                .map { make, channels in
+                    ChannelOption(
+                        id: cameraChannelID(make: make, model: ""),
+                        title: "All \(make)",
+                        subtitle: "Play videos from any \(make) camera.",
+                        count: channels.reduce(0) { $0 + $1.count },
+                        artworkURL: nil,
+                        fallbackSymbol: "camera.fill"
+                    )
+                }
+                .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+            let modelOptions = storedCameraChannels.map {
+                ChannelOption(
+                    id: cameraChannelID(make: $0.make, model: $0.model),
+                    title: $0.title,
+                    subtitle: "Play videos from this camera model.",
+                    count: $0.count,
+                    artworkURL: nil,
+                    fallbackSymbol: "camera.fill"
+                )
+            }
+            let nextCameraOptions = manufacturerOptions + modelOptions
 
             guard !Task.isCancelled else { return }
             channelCounts = nextCounts
             albumChannelOptions = nextAlbumOptions
+            cameraChannelOptions = nextCameraOptions
             peopleChannelOptions = nextPeopleOptions
             focusFirstOptionInSelectedTab()
         }
+    }
+
+    private func cameraChannelID(make: String, model: String) -> String {
+        "camera:\(make)\u{1F}\(model)"
     }
 
     private func resolvedFocusTarget(from target: ControlsFocusTarget) -> ControlsFocusTarget {
@@ -1465,9 +1599,9 @@ struct ChannelView: View {
         case .back:
             return coordinator.canGoBack ? .back : .playPause
         case .favorite:
-            return coordinator.favoriteUpdateInProgress ? .playPause : .favorite
+            return .favorite
         case .hideForever:
-            return (coordinator.canHideToAlbum && !coordinator.hideUpdateInProgress) ? .hideForever : .favorite
+            return coordinator.canHideToAlbum ? .hideForever : .playPause
         case .playPause, .skip, .info, .settings:
             return target
         }
@@ -1720,6 +1854,7 @@ private struct ChannelOptionRow: View {
                 Text(L10n.tr("playback.live_badge", "Live", comment: "Badge shown for current live channel"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(isFocused ? Color.black : Color.white)
+                .tint(isFocused ? Color.black : Color.white)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(isFocused ? Color.white : Color.white.opacity(0.14))
@@ -1814,7 +1949,6 @@ private struct ChannelOptionRow: View {
 }
 
 private struct ScrubProgressBar: View {
-    private let focusedTint = Color(red: 0.78, green: 0.12, blue: 0.34)
 
     let progress: Double
     let onStep: (Double) -> Void
@@ -1835,7 +1969,7 @@ private struct ScrubProgressBar: View {
                             .fill(Color.white.opacity(0.22))
                             .frame(height: 8)
                         Capsule()
-                            .fill(isFocused ? focusedTint : Color.white)
+                            .fill(Color.white)
                             .frame(width: knobX, height: 8)
 
                         Circle()
@@ -1854,7 +1988,12 @@ private struct ScrubProgressBar: View {
             .frame(height: 52)
             .padding(.vertical, 2)
         }
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.white.opacity(isFocused ? 1 : 0), lineWidth: 2)
+        }
         .focusable(true)
+        .modifier(TVFocusEffectDisabled())
         .focused($isFocused)
         .onMoveCommand { direction in
             if isFocused {
@@ -1895,4 +2034,37 @@ private struct PlayerSurfaceView: UIViewRepresentable {
 private final class PlayerSurfaceUIView: UIView {
     override static var layerClass: AnyClass { AVPlayerLayer.self }
     var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+}
+
+private struct PlaybackControlStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        PlaybackControlBody(configuration: configuration)
+    }
+
+    private struct PlaybackControlBody: View {
+        let configuration: ButtonStyle.Configuration
+
+        private var lightSurface: Bool {
+            configuration.isPressed ? !isFocused : isFocused
+        }
+        @Environment(\.isFocused) private var isFocused
+        @Environment(\.isEnabled) private var isEnabled
+
+        var body: some View {
+            configuration.label
+                .font(.system(size: 26, weight: .semibold))
+                .frame(width: 64, height: 56)
+                .foregroundStyle(lightSurface ? Color.black : Color.white)
+                .tint(lightSurface ? Color.black : Color.white)
+                .background(lightSurface ? Color.white : Color.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 14))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.white.opacity(isFocused ? 1 : 0.35), lineWidth: isFocused ? 2 : 1)
+                }
+                .opacity(isEnabled ? 1 : 0.4)
+                .scaleEffect(configuration.isPressed ? 0.96 : (isFocused ? 1.08 : 1))
+                .animation(.easeOut(duration: 0.15), value: isFocused)
+                .modifier(TVFocusEffectDisabled())
+        }
+    }
 }

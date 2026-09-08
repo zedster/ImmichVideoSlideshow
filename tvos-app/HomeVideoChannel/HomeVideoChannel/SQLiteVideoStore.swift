@@ -8,6 +8,15 @@ struct StoredNamedChannel: Identifiable, Equatable {
     let artworkID: String
 }
 
+struct StoredCameraChannel: Identifiable, Equatable {
+    let make: String
+    let model: String
+    let count: Int
+
+    var id: String { "\(make)\u{1F}\(model)" }
+    var title: String { [make, model].filter { !$0.isEmpty }.joined(separator: " ") }
+}
+
 struct SyncedAlbumRecord: Equatable {
     let id: String
     let name: String
@@ -467,7 +476,9 @@ actor SQLiteVideoStore {
         placeCity: String,
         placeCountry: String,
         albumID: String = "",
-        personID: String = ""
+        personID: String = "",
+        cameraMake: String = "",
+        cameraModel: String = ""
     ) throws -> Int {
         try withDatabase { db in
             let filters = selectionFilters(
@@ -481,7 +492,9 @@ actor SQLiteVideoStore {
                 placeCity: placeCity,
                 placeCountry: placeCountry,
                 albumID: albumID,
-                personID: personID
+                personID: personID,
+                cameraMake: cameraMake,
+                cameraModel: cameraModel
             )
             let sql = """
             SELECT COUNT(*)
@@ -779,7 +792,9 @@ actor SQLiteVideoStore {
         placeCity: String,
         placeCountry: String,
         albumID: String = "",
-        personID: String = ""
+        personID: String = "",
+        cameraMake: String = "",
+        cameraModel: String = ""
     ) throws -> VideoCandidate? {
         try withDatabase { db in
             let filters = selectionFilters(
@@ -793,7 +808,9 @@ actor SQLiteVideoStore {
                 placeCity: placeCity,
                 placeCountry: placeCountry,
                 albumID: albumID,
-                personID: personID
+                personID: personID,
+                cameraMake: cameraMake,
+                cameraModel: cameraModel
             )
             let sql = """
             SELECT asset_id, title, duration, is_favorite, is_hidden, times_watched, capture_date, city, country, camera_make, camera_model, lens_model, f_number, focal_length, iso, exposure_time, latitude, longitude
@@ -833,7 +850,9 @@ actor SQLiteVideoStore {
         placeCity: String,
         placeCountry: String,
         albumID: String = "",
-        personID: String = ""
+        personID: String = "",
+        cameraMake: String = "",
+        cameraModel: String = ""
     ) throws -> VideoCandidate? {
         try withDatabase { db in
             let filters = selectionFilters(
@@ -847,7 +866,9 @@ actor SQLiteVideoStore {
                 placeCity: placeCity,
                 placeCountry: placeCountry,
                 albumID: albumID,
-                personID: personID
+                personID: personID,
+                cameraMake: cameraMake,
+                cameraModel: cameraModel
             )
             let baseWhere = "duration >= ? AND \(filters.whereClause) AND COALESCE(is_hidden, 0) = 0"
             let sortExpr = "CASE WHEN COALESCE(capture_date, '') = '' THEN 1 ELSE 0 END"
@@ -1044,6 +1065,32 @@ actor SQLiteVideoStore {
         )
     }
 
+    func listCameraChannels(minDuration: Double) throws -> [StoredCameraChannel] {
+        try withDatabase { db in
+            let sql = """
+            SELECT TRIM(COALESCE(camera_make, '')), TRIM(COALESCE(camera_model, '')), COUNT(*)
+            FROM videos
+            WHERE duration >= ? AND COALESCE(is_hidden, 0) = 0
+              AND (TRIM(COALESCE(camera_make, '')) != '' OR TRIM(COALESCE(camera_model, '')) != '')
+            GROUP BY TRIM(COALESCE(camera_make, '')), TRIM(COALESCE(camera_model, ''))
+            ORDER BY LOWER(TRIM(COALESCE(camera_make, ''))), LOWER(TRIM(COALESCE(camera_model, '')))
+            """
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+                throw storeError(db, fallback: "prepare listCameraChannels failed")
+            }
+            defer { sqlite3_finalize(stmt) }
+            sqlite3_bind_double(stmt, 1, minDuration)
+            var result: [StoredCameraChannel] = []
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                let make = sqlite3_column_text(stmt, 0).map { String(cString: $0) } ?? ""
+                let model = sqlite3_column_text(stmt, 1).map { String(cString: $0) } ?? ""
+                result.append(StoredCameraChannel(make: make, model: model, count: Int(sqlite3_column_int64(stmt, 2))))
+            }
+            return result
+        }
+    }
+
     func peopleNames(for assetId: String) throws -> [String] {
         try withDatabase { db in
             let sql = """
@@ -1149,7 +1196,9 @@ actor SQLiteVideoStore {
         placeCity: String,
         placeCountry: String,
         albumID: String,
-        personID: String
+        personID: String,
+        cameraMake: String = "",
+        cameraModel: String = ""
     ) -> (whereClause: String, bindings: [SQLiteBindValue]) {
         var clauses: [String] = []
         var bindings: [SQLiteBindValue] = []
@@ -1223,6 +1272,17 @@ actor SQLiteVideoStore {
             )
             """)
             bindings.append(.text(trimmedPersonID))
+        }
+
+        let trimmedCameraMake = cameraMake.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedCameraModel = cameraModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedCameraMake.isEmpty {
+            clauses.append("LOWER(TRIM(COALESCE(camera_make, ''))) = LOWER(?)")
+            bindings.append(.text(trimmedCameraMake))
+        }
+        if !trimmedCameraModel.isEmpty {
+            clauses.append("LOWER(TRIM(COALESCE(camera_model, ''))) = LOWER(?)")
+            bindings.append(.text(trimmedCameraModel))
         }
 
         return (clauses.isEmpty ? "1 = 1" : clauses.joined(separator: " AND "), bindings)

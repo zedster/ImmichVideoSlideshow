@@ -18,7 +18,10 @@ struct AppConfig: Codable, Equatable {
     var albumFilterName: String = ""
     var personFilterID: String = ""
     var personFilterName: String = ""
+    var cameraFilterMake: String = ""
+    var cameraFilterModel: String = ""
     var searchQuery: String = ""
+    var preloadEnabled: Bool = true
     var debug: Bool = false
     var crossfadeEnabled: Bool = true
     var crossfadeDurationMs: Int = 450
@@ -52,7 +55,10 @@ struct AppConfig: Codable, Equatable {
         case albumFilterName
         case personFilterID
         case personFilterName
+        case cameraFilterMake
+        case cameraFilterModel
         case searchQuery
+        case preloadEnabled
         case debug
         case crossfadeEnabled
         case crossfadeDurationMs
@@ -90,7 +96,10 @@ struct AppConfig: Codable, Equatable {
         albumFilterName = try c.decodeIfPresent(String.self, forKey: .albumFilterName) ?? ""
         personFilterID = try c.decodeIfPresent(String.self, forKey: .personFilterID) ?? ""
         personFilterName = try c.decodeIfPresent(String.self, forKey: .personFilterName) ?? ""
+        cameraFilterMake = try c.decodeIfPresent(String.self, forKey: .cameraFilterMake) ?? ""
+        cameraFilterModel = try c.decodeIfPresent(String.self, forKey: .cameraFilterModel) ?? ""
         searchQuery = try c.decodeIfPresent(String.self, forKey: .searchQuery) ?? ""
+        preloadEnabled = try c.decodeIfPresent(Bool.self, forKey: .preloadEnabled) ?? true
         debug = try c.decodeIfPresent(Bool.self, forKey: .debug) ?? false
         crossfadeEnabled = try c.decodeIfPresent(Bool.self, forKey: .crossfadeEnabled) ?? true
         crossfadeDurationMs = try c.decodeIfPresent(Int.self, forKey: .crossfadeDurationMs) ?? 450
@@ -122,7 +131,9 @@ struct AppConfig: Codable, Equatable {
 
     var hasCollectionFilter: Bool {
         !albumFilterID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-        !personFilterID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !personFilterID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+        !cameraFilterMake.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+        !cameraFilterModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var hasSearchFilter: Bool {

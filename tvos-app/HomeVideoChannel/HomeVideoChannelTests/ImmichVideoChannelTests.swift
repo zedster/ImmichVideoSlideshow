@@ -7,6 +7,8 @@
 
 import AVFoundation
 import Foundation
+import SwiftUI
+import UIKit
 import Testing
 @testable import HomeVideoChannel
 
@@ -239,5 +241,111 @@ extension PlaybackRecoveryTests {
         #expect(coordinator.fallbackMessage.isEmpty)
         #expect(!coordinator.shouldOpenSetup)
         #expect(coordinator.playerA.currentItem == nil)
+    }
+}
+
+
+@MainActor
+struct SettingsRenderingTests {
+    @Test func configuredSettingsBuildAndRender() async {
+        let store = ConfigStore()
+        store.config = AppConfig()
+        store.config.immichURL = "https://settings.test"
+        let controller = UIHostingController(rootView: SetupView().environmentObject(store))
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 1920, height: 1080))
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        controller.view.setNeedsLayout()
+        controller.view.layoutIfNeeded()
+        for _ in 0..<10 { await Task.yield() }
+        #expect(controller.view.subviews.count > 0)
+        #expect(store.config.immichURL == "https://settings.test")
+    }
+}
+
+
+struct SettingsValidationTests {
+    @Test func serverURLRequiresHTTPAndAHost() {
+        #expect(SettingsInputValidation.validServerURL("https://photos.example.com"))
+        #expect(SettingsInputValidation.validServerURL(" http://192.168.1.2:2283/ "))
+        #expect(!SettingsInputValidation.validServerURL("photos.example.com"))
+        #expect(!SettingsInputValidation.validServerURL("https://"))
+        #expect(!SettingsInputValidation.validServerURL("file:///tmp/photos"))
+    }
+
+    @Test func playbackNumbersMustBeFiniteAndWithinTheirBounds() {
+        #expect(SettingsInputValidation.validNumber("0", allowZero: true))
+        #expect(!SettingsInputValidation.validNumber("0", allowZero: false))
+        #expect(SettingsInputValidation.validNumber("4.5", allowZero: false))
+        for value in ["", "-1", "nan", "inf", "1e999"] {
+            #expect(!SettingsInputValidation.validNumber(value, allowZero: true))
+        }
+    }
+
+    @Test @MainActor func libraryStatsBuildsAndRenders() async {
+        let controller = UIHostingController(rootView: LibraryStatsView())
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 1920, height: 1080))
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        controller.view.layoutIfNeeded()
+        for _ in 0..<10 { await Task.yield() }
+        #expect(controller.view.subviews.count > 0)
+    }
+}
+
+
+struct PlaybackDiagnosticTests {
+    @Test func preloadDefaultsOnAndPersistsOptOut() throws {
+        #expect(AppConfig().preloadEnabled)
+        #expect(try JSONDecoder().decode(AppConfig.self, from: Data("{}".utf8)).preloadEnabled)
+        var config = AppConfig()
+        config.preloadEnabled = false
+        let restored = try JSONDecoder().decode(AppConfig.self, from: JSONEncoder().encode(config))
+        #expect(!restored.preloadEnabled)
+    }
+
+    @Test func waitingTimeAdvancesWhileThePlayheadIsFrozen() {
+        var metrics = PlaybackWaitMetrics()
+        metrics.update(waiting: true, now: 100)
+        metrics.update(waiting: true, now: 103)
+        #expect(metrics.episodes == 1)
+        #expect(metrics.duration(now: 105) == 5)
+        metrics.update(waiting: false, now: 106)
+        #expect(metrics.duration(now: 150) == 6)
+        metrics.update(waiting: true, now: 200)
+        #expect(metrics.episodes == 2)
+        #expect(metrics.duration(now: 203) == 9)
+    }
+
+    @Test func newVideoHasIndependentWaitCounters() {
+        var metrics = PlaybackWaitMetrics()
+        metrics.update(waiting: true, now: 10)
+        metrics = PlaybackWaitMetrics()
+        #expect(metrics.episodes == 0)
+        #expect(metrics.duration(now: 100) == 0)
+        metrics.update(waiting: false, now: 101)
+        #expect(metrics.episodes == 0)
+    }
+}
+
+struct CameraChannelTests {
+    @Test func cameraFilterPersistsAndMakesCacheSelectionRequired() throws {
+        var config = AppConfig()
+        config.cameraFilterMake = "GoPro"
+        config.cameraFilterModel = "HERO11 Black"
+        let restored = try JSONDecoder().decode(AppConfig.self, from: JSONEncoder().encode(config))
+
+        #expect(restored.cameraFilterMake == "GoPro")
+        #expect(restored.cameraFilterModel == "HERO11 Black")
+        #expect(restored.hasCollectionFilter)
+    }
+
+    @Test func olderConfigurationHasNoCameraFilter() throws {
+        let config = try JSONDecoder().decode(AppConfig.self, from: Data("{}".utf8))
+        #expect(config.cameraFilterMake.isEmpty)
+        #expect(config.cameraFilterModel.isEmpty)
+        #expect(!config.hasCollectionFilter)
     }
 }
